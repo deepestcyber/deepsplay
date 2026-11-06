@@ -15,6 +15,10 @@ defmodule Deepsplay.Application do
       {Phoenix.PubSub, name: Deepsplay.PubSub},
       {Registry, keys: :unique, name: Deepsplay.RevisionStore.Registry},
       {DynamicSupervisor, name: Deepsplay.RevisionStore.Supervisor, strategy: :one_for_one},
+      {Task.Supervisor, name: Deepsplay.TaskSupervisor},
+      # Fetches every configuration once at startup; periodic polling follows
+      # in the poller (ADR 7).
+      {Task, &Deepsplay.Revisions.refresh_all/0},
       # Start a worker by calling: Deepsplay.Worker.start_link(arg)
       # {Deepsplay.Worker, arg},
       # Start to serve requests, typically the last entry

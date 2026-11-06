@@ -26,3 +26,6 @@ config :deepsplay, :host_config_path, Path.expand("../test/support/fixtures/host
 
 # Tests use local repositories (ADR 6).
 config :deepsplay, :git_transports, ["https", "ssh", "file"]
+
+# Tests fetch explicitly; nothing is fetched at application start.
+config :deepsplay, :fetch_on_start, false

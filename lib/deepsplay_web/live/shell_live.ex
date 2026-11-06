@@ -2,14 +2,22 @@ defmodule DeepsplayWeb.ShellLive do
   @moduledoc """
   The screen shell: what a kiosk screen opens on `/` or `/c/<name>`.
 
-  Without a revision to show, the shell is the fallback page (ADR 9). It says
-  which configuration the screen asked for and what is missing.
+  With a revision, the shell sends the plan to the browser, where a hook
+  rotates the pages in iframes (ADR 9). `?page=<path>` pins the screen to one
+  file of `pages/` (ADR 11). New revisions arrive over PubSub and replace the
+  plan; the browser applies it at the next page change.
+
+  Without a revision to show, the shell is the fallback page. It says which
+  configuration the screen asked for and what is missing.
   """
 
   use DeepsplayWeb, :live_view
 
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.RepoUrl
+  alias Deepsplay.RevisionFile
+  alias Deepsplay.Revisions
+  alias DeepsplayWeb.ScreenPlan
 
   @impl true
   def mount(params, _session, socket) do
@@ -18,25 +26,79 @@ defmodule DeepsplayWeb.ShellLive do
     socket =
       case Store.lookup(requested) do
         {:ok, config} ->
-          assign(socket, fallback: :no_revision, config: config, page_title: config.name)
+          if connected?(socket), do: Revisions.subscribe(config.name)
+
+          socket
+          |> assign(config: config, pinned: params["page"])
+          |> load_revision()
 
         {:error, :unknown_config} ->
-          assign(socket, fallback: :unknown_config, name: requested, page_title: "Unknown")
+          assign(socket, state: :unknown_config, name: requested, page_title: "Unknown")
 
         {:error, {:host_config, errors}} ->
-          assign(socket, fallback: :host_config, errors: errors, page_title: "Error")
+          assign(socket, state: :host_config, errors: errors, page_title: "Error")
       end
 
     {:ok, socket}
   end
 
   @impl true
+  def handle_info({:revision_published, _name, _sha}, socket) do
+    {:noreply, load_revision(socket)}
+  end
+
+  defp load_revision(%{assigns: %{config: config, pinned: pinned}} = socket) do
+    case Revisions.current(config) do
+      {:ok, current} ->
+        title = current.screen.title || config.name
+
+        case plan(config, current, pinned) do
+          {:ok, plan} ->
+            socket
+            |> assign(state: :playing, plan: plan, page_title: title)
+            |> push_plan(plan)
+
+          {:error, :pinned_missing} ->
+            assign(socket, state: :pinned_missing, page_title: title)
+        end
+
+      :none ->
+        assign(socket, state: :no_revision, page_title: config.name)
+
+      {:error, errors} ->
+        assign(socket, state: :revision_error, errors: errors, page_title: config.name)
+    end
+  end
+
+  defp plan(config, current, nil),
+    do: {:ok, ScreenPlan.rotation(config.name, current.sha, current.screen)}
+
+  defp plan(config, current, pinned) do
+    case RevisionFile.resolve(current.pages_dir, pinned) do
+      {:ok, _file} -> {:ok, ScreenPlan.pinned(config.name, current.sha, pinned)}
+      :error -> {:error, :pinned_missing}
+    end
+  end
+
+  # The hook element is not re-rendered (phx-update="ignore"), so later plans
+  # are pushed as events; the hook ignores a plan it already has.
+  defp push_plan(socket, plan) do
+    if connected?(socket), do: push_event(socket, "plan", plan), else: socket
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.screen>
-      <%= case @fallback do %>
+      <%= case @state do %>
+        <% :playing -> %>
+          <.rotation plan={@plan} />
         <% :no_revision -> %>
           <.no_revision config={@config} />
+        <% :pinned_missing -> %>
+          <.pinned_missing config={@config} page={@pinned} />
+        <% :revision_error -> %>
+          <.revision_error config={@config} errors={@errors} />
         <% :unknown_config -> %>
           <.unknown_config name={@name} />
         <% :host_config -> %>
@@ -46,22 +108,199 @@ defmodule DeepsplayWeb.ShellLive do
     """
   end
 
+  attr :plan, :map, required: true
+
+  defp rotation(assigns) do
+    ~H"""
+    <div
+      id="screen-rotation"
+      phx-hook=".Rotation"
+      phx-update="ignore"
+      data-plan={Jason.encode!(@plan)}
+      class="relative h-full w-full"
+    >
+    </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Rotation">
+      // Rotates the pages of a plan in two iframes (ADR 9): the visible one,
+      // and a hidden one where the next page is preloaded.
+      //
+      // Plan: {sha, mode: "sequential" | "random" | "pinned", pages: [{url, duration, weight}]}
+      const LOAD_TIMEOUT = 10000
+
+      export default {
+        mounted() {
+          this.frames = [this.createFrame(), this.createFrame()]
+          this.active = 0
+          this.plan = null
+          this.planKey = null
+          this.pending = null
+          this.setPlan(JSON.parse(this.el.dataset.plan))
+          this.handleEvent("plan", plan => this.setPlan(plan))
+        },
+
+        destroyed() {
+          clearTimeout(this.timer)
+          clearTimeout(this.loadTimer)
+        },
+
+        createFrame() {
+          const frame = document.createElement("iframe")
+          frame.className = "absolute inset-0 h-full w-full border-0 opacity-0 transition-opacity duration-500"
+          frame.setAttribute("aria-hidden", "true")
+          this.el.appendChild(frame)
+          return frame
+        },
+
+        // A new rotation plan takes effect at the next page change. A pinned
+        // page, or a switch from or to pinning, applies at once.
+        setPlan(plan) {
+          const key = JSON.stringify(plan)
+          if (key === this.planKey) return
+          this.planKey = key
+
+          if (!this.plan || plan.mode === "pinned" || this.plan.mode === "pinned") {
+            this.plan = plan
+            this.pending = null
+            this.restart()
+          } else {
+            this.pending = plan
+          }
+        },
+
+        restart() {
+          clearTimeout(this.timer)
+          this.index = -1
+          this.preloaded = null
+          this.display(this.pick())
+        },
+
+        advance() {
+          if (this.pending) {
+            this.plan = this.pending
+            this.pending = null
+            this.index = -1
+            this.preloaded = null
+          }
+          const next = this.preloaded ?? this.pick()
+          this.preloaded = null
+          this.display(next)
+        },
+
+        // Picks the next page index: in order, or weighted at random without
+        // repeating the current page when there is more than one.
+        pick() {
+          const pages = this.plan.pages
+          if (this.plan.mode !== "random") {
+            return (this.index + 1) % pages.length
+          }
+          const candidates = pages.map((page, i) => i).filter(i => pages.length === 1 || i !== this.index)
+          const total = candidates.reduce((sum, i) => sum + pages[i].weight, 0)
+          let r = Math.random() * total
+          for (const i of candidates) {
+            r -= pages[i].weight
+            if (r < 0) return i
+          }
+          return candidates[candidates.length - 1]
+        },
+
+        // Shows a page in the hidden frame once it has loaded, then swaps.
+        display(index) {
+          const page = this.plan.pages[index]
+          const frame = this.frames[1 - this.active]
+          const swap = () => {
+            clearTimeout(this.loadTimer)
+            frame.onload = null
+            this.frames[this.active].classList.replace("opacity-100", "opacity-0")
+            frame.classList.replace("opacity-0", "opacity-100")
+            this.active = 1 - this.active
+            this.index = index
+            this.schedule(page)
+          }
+
+          if (frame.dataset.url === page.url && frame.dataset.loaded === "true") {
+            swap()
+            return
+          }
+
+          frame.onload = () => { frame.dataset.loaded = "true"; swap() }
+          // Do not wait forever for a page that never finishes loading.
+          this.loadTimer = setTimeout(swap, LOAD_TIMEOUT)
+
+          // A page still being preloaded keeps loading; anything else starts now.
+          if (frame.dataset.url !== page.url) {
+            frame.dataset.loaded = "false"
+            frame.dataset.url = page.url
+            frame.src = page.url
+          }
+        },
+
+        // Waits for the page's duration, preloading the next page meanwhile.
+        // A single page, or a pinned one, stays until a new plan arrives.
+        schedule(page) {
+          if (this.plan.mode === "pinned" || this.plan.pages.length === 1) return
+
+          const next = this.pick()
+          const nextPage = this.plan.pages[next]
+          const hidden = this.frames[1 - this.active]
+          if (hidden.dataset.url !== nextPage.url) {
+            hidden.dataset.loaded = "false"
+            hidden.onload = () => { hidden.dataset.loaded = "true" }
+            hidden.dataset.url = nextPage.url
+            hidden.src = nextPage.url
+          }
+          this.preloaded = next
+          this.timer = setTimeout(() => this.advance(), page.duration)
+        },
+      }
+    </script>
+    """
+  end
+
   attr :config, Deepsplay.HostConfig.Config, required: true
 
   defp no_revision(assigns) do
     ~H"""
     <.fallback_frame id="fallback-no-revision" icon="hero-clock" title="Waiting for content">
       <p>No revision of this configuration is available yet.</p>
-      <dl class="mt-8 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-left text-lg">
-        <dt class="text-zinc-500">Configuration</dt>
-        <dd id="fallback-config">{@config.name}</dd>
-        <dt class="text-zinc-500">Repository</dt>
-        <dd id="fallback-repo" class="break-all font-mono text-base">
-          {RepoUrl.redact(@config.repo)}
-        </dd>
-        <dt class="text-zinc-500">Ref</dt>
-        <dd id="fallback-ref" class="font-mono text-base">{@config.ref}</dd>
-      </dl>
+      <.config_details config={@config} />
+    </.fallback_frame>
+    """
+  end
+
+  attr :config, Deepsplay.HostConfig.Config, required: true
+  attr :page, :string, required: true
+
+  defp pinned_missing(assigns) do
+    ~H"""
+    <.fallback_frame
+      id="fallback-pinned-missing"
+      icon="hero-document-magnifying-glass"
+      title="Page not found"
+    >
+      <p>
+        <span id="fallback-page" class="font-mono text-zinc-100">{@page}</span>
+        is not a file in <span class="font-mono">pages/</span>
+        of the current revision.
+      </p>
+      <.config_details config={@config} />
+    </.fallback_frame>
+    """
+  end
+
+  attr :config, Deepsplay.HostConfig.Config, required: true
+  attr :errors, :list, required: true
+
+  defp revision_error(assigns) do
+    ~H"""
+    <.fallback_frame
+      id="fallback-revision-error"
+      icon="hero-exclamation-triangle"
+      title="Revision unusable"
+      tone={:error}
+    >
+      <p>The current revision cannot be shown with this configuration.</p>
+      <.error_list errors={@errors} />
+      <.config_details config={@config} />
     </.fallback_frame>
     """
   end
@@ -94,10 +333,35 @@ defmodule DeepsplayWeb.ShellLive do
       tone={:error}
     >
       <p>The server cannot use its host configuration.</p>
-      <ul id="fallback-errors" class="mt-8 space-y-2 text-left font-mono text-base">
-        <li :for={error <- @errors} class="border-l-2 border-red-500/60 pl-4">{error}</li>
-      </ul>
+      <.error_list errors={@errors} />
     </.fallback_frame>
+    """
+  end
+
+  attr :errors, :list, required: true
+
+  defp error_list(assigns) do
+    ~H"""
+    <ul id="fallback-errors" class="mt-8 space-y-2 text-left font-mono text-base">
+      <li :for={error <- @errors} class="border-l-2 border-red-500/60 pl-4">{error}</li>
+    </ul>
+    """
+  end
+
+  attr :config, Deepsplay.HostConfig.Config, required: true
+
+  defp config_details(assigns) do
+    ~H"""
+    <dl class="mt-8 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-left text-lg">
+      <dt class="text-zinc-500">Configuration</dt>
+      <dd id="fallback-config">{@config.name}</dd>
+      <dt class="text-zinc-500">Repository</dt>
+      <dd id="fallback-repo" class="break-all font-mono text-base">
+        {RepoUrl.redact(@config.repo)}
+      </dd>
+      <dt class="text-zinc-500">Ref</dt>
+      <dd id="fallback-ref" class="font-mono text-base">{@config.ref}</dd>
+    </dl>
     """
   end
 

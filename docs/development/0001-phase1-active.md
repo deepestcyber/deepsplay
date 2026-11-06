@@ -12,7 +12,7 @@ Status values: `open`, `in progress`, `done`.
 | 2 | Revision store | done |
 | 3 | `screen.toml` parsing and validation | done |
 | 4 | Static file serving | done |
-| 5 | LiveView shell with rotation | open |
+| 5 | LiveView shell with rotation | done |
 | 6 | Poller and live updates | open |
 | 7 | Status page | open |
 | 8 | Upstream proxy and host secrets | open |
@@ -147,12 +147,44 @@ Notes:
 
 ## 5. LiveView shell with rotation
 
-Status: open
+Status: done (2026-11-06)
 
 Goal: the shell receives the plan and a JavaScript hook rotates the pages in
 iframes, sequential or weighted random without repeats (ADR 9); `?page=`
-pins a single file (ADR 11). First real
-milestone: a screen rotates pages from a git repository.
+pins a single file (ADR 11). First real milestone: a screen rotates pages from
+a git repository.
+
+Done:
+
+- `DeepsplayWeb.ShellLive` builds the plan from the configuration's current
+  revision and sends it to a colocated hook (`.Rotation`): two iframes, the
+  next page preloaded in the hidden one, a 10 s load timeout, fade between
+  pages. Sequential, or weighted random without repeating the current page;
+  a single or pinned page stays without a timer.
+- New revisions arrive over PubSub; the plan is pushed as an event and the
+  hook applies it at the next page change (pinned: at once). The fallback page
+  switches to content by itself when the first revision arrives.
+- `?page=<path>` pins any deliverable file in `pages/`; a missing, hidden or
+  outside path shows a "Page not found" fallback. A current revision that does
+  not fit the configuration (e.g. the manifest changed) shows "Revision
+  unusable" with the errors.
+- `DeepsplayWeb.ScreenPlan` builds plans and page URLs.
+- `Deepsplay.Revisions`: `refresh/2` (publish with the configuration's
+  validator, announce over PubSub), `current/2` (last good revision with its
+  manifest, from the cache), `subscribe/1`, and `refresh_all/0`, which fetches
+  every configuration once at startup (`:fetch_on_start`, off in test).
+- `RevisionStore`: validation also runs when a revision is already cached, and
+  `:remember_as` keeps a last good SHA per configuration, so configurations on
+  the same repository and ref with different manifests do not affect each
+  other.
+
+Notes:
+
+- Until slice 6, revisions are fetched only at startup; a restart picks up new
+  commits.
+- The hook logic was checked with a node simulation (order, no repeats,
+  weighted shares, plan switching, pinning, load timeout). It is not part of
+  the test suite, as the project has no JavaScript test setup.
 
 ## 6. Poller and live updates
 

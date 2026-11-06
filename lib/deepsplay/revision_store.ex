@@ -34,13 +34,17 @@ defmodule Deepsplay.RevisionStore do
   @doc """
   Fetches `ref` of the repository at `url` and publishes its commit, unless
   that revision is already in the cache. Remembers it as the last good SHA for
-  `ref`.
+  `ref` (or the `:remember_as` key).
 
   ## Options
 
     * `:validate` - `fun(dir) -> :ok | {:error, message}`, called with the
-      exported tree before it is published. A rejected revision is never
-      published and the last good SHA stays.
+      revision's tree before it is published, and also when the revision is
+      already in the cache (another caller may have validated it differently).
+      A rejected revision is never remembered and the last good SHA stays.
+    * `:remember_as` - key for the last good SHA, default `ref`. Callers that
+      validate differently use separate keys, so each keeps its own last good
+      revision.
     * `:git` - options passed to `Deepsplay.Git.run/2`, such as `:timeout`
     * `:transports` - allowed git transports; defaults to
       `Deepsplay.HostConfig.allowed_transports/0`
@@ -54,20 +58,22 @@ defmodule Deepsplay.RevisionStore do
          :ok <- check_ref(ref),
          {:ok, writer} <- Writer.ensure_started(cache_dir, url) do
       validate = Keyword.get(opts, :validate, fn _dir -> :ok end)
+      remember_as = Keyword.get(opts, :remember_as, ref)
       git_opts = Keyword.put(Keyword.get(opts, :git, []), :transports, transports)
-      Writer.publish(writer, ref, validate, git_opts)
+      Writer.publish(writer, ref, remember_as, validate, git_opts)
     end
   end
 
   @doc """
-  Returns the last good SHA published for `ref`, if its revision is still in
-  the cache. Needs no network, so it can be served right after a restart.
+  Returns the last good SHA remembered under `key` (a ref, or a `:remember_as`
+  key of `publish/3`), if its revision is still in the cache. Needs no network,
+  so it can be served right after a restart.
   """
   @spec last_good(String.t(), String.t(), keyword()) :: {:ok, String.t()} | :error
-  def last_good(url, ref, opts \\ []) do
+  def last_good(url, key, opts \\ []) do
     with {:ok, cache_dir} <- cache_dir(opts),
          repo_dir = repo_dir(cache_dir, url),
-         {:ok, content} <- File.read(ref_file(repo_dir, ref)),
+         {:ok, content} <- File.read(ref_file(repo_dir, key)),
          sha = String.trim(content),
          true <- File.dir?(Path.join([repo_dir, "rev", sha])) do
       {:ok, sha}
@@ -121,7 +127,7 @@ defmodule Deepsplay.RevisionStore do
   def repo_dir(cache_dir, url), do: Path.join(cache_dir, RepoUrl.key(url))
 
   @doc false
-  def ref_file(repo_dir, ref), do: Path.join([repo_dir, "refs", URI.encode_www_form(ref)])
+  def ref_file(repo_dir, key), do: Path.join([repo_dir, "refs", URI.encode_www_form(key)])
 
   @doc """
   Formats an error for logs, the status page and the fallback page.

@@ -43,8 +43,8 @@ defmodule Deepsplay.RevisionStore.Writer do
   end
 
   @doc false
-  def publish(writer, ref, validate, git_opts),
-    do: GenServer.call(writer, {:publish, ref, validate, git_opts}, :infinity)
+  def publish(writer, ref, remember_as, validate, git_opts),
+    do: GenServer.call(writer, {:publish, ref, remember_as, validate, git_opts}, :infinity)
 
   @doc false
   def prune(writer, in_use, keep), do: GenServer.call(writer, {:prune, in_use, keep}, :infinity)
@@ -65,14 +65,14 @@ defmodule Deepsplay.RevisionStore.Writer do
   end
 
   @impl true
-  def handle_call({:publish, ref, validate, git_opts}, _from, state) do
+  def handle_call({:publish, ref, remember_as, validate, git_opts}, _from, state) do
     # The directories may have been removed while the writer was running.
     ensure_dirs(state.repo_dir)
 
     result =
       with {:ok, sha} <- fetch(state, ref, git_opts),
            :ok <- export(state, sha, validate, git_opts) do
-        remember(state.repo_dir, ref, sha)
+        remember(state.repo_dir, remember_as, sha)
         {:ok, sha}
       end
 
@@ -124,7 +124,7 @@ defmodule Deepsplay.RevisionStore.Writer do
     rev_dir = Path.join([state.repo_dir, "rev", sha])
 
     if File.dir?(rev_dir) do
-      :ok
+      run_validate(validate, rev_dir, sha)
     else
       tmp = Path.join(state.repo_dir, "tmp")
       tar = Path.join(tmp, "#{sha}.tar")
@@ -188,8 +188,8 @@ defmodule Deepsplay.RevisionStore.Writer do
     end
   end
 
-  defp remember(repo_dir, ref, sha) do
-    write_atomically(RevisionStore.ref_file(repo_dir, ref), sha <> "\n")
+  defp remember(repo_dir, key, sha) do
+    write_atomically(RevisionStore.ref_file(repo_dir, key), sha <> "\n")
 
     history = read_history(repo_dir)
 

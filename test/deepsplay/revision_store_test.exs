@@ -105,6 +105,33 @@ defmodule Deepsplay.RevisionStoreTest do
       assert RevisionStore.last_good(ctx.url, "main", ctx.opts) == :error
     end
 
+    test "validates a revision that is already in the cache", ctx do
+      sha = GitFixture.commit(ctx.src, %{"index.html" => "v1"})
+      {:ok, ^sha} = RevisionStore.publish(ctx.url, "main", ctx.opts)
+
+      refuse = fn _dir -> {:error, "not for me"} end
+
+      assert {:error, {:rejected, ^sha, "not for me"}} =
+               RevisionStore.publish(
+                 ctx.url,
+                 "main",
+                 [validate: refuse, remember_as: "picky"] ++ ctx.opts
+               )
+
+      assert RevisionStore.last_good(ctx.url, "picky", ctx.opts) == :error
+      assert RevisionStore.last_good(ctx.url, "main", ctx.opts) == {:ok, sha}
+    end
+
+    test "remembers the last good SHA under a separate key", ctx do
+      sha = GitFixture.commit(ctx.src, %{"index.html" => "v1"})
+
+      assert {:ok, ^sha} =
+               RevisionStore.publish(ctx.url, "main", [remember_as: "config:lobby"] ++ ctx.opts)
+
+      assert RevisionStore.last_good(ctx.url, "config:lobby", ctx.opts) == {:ok, sha}
+      assert RevisionStore.last_good(ctx.url, "main", ctx.opts) == :error
+    end
+
     test "reports an unknown ref", ctx do
       GitFixture.commit(ctx.src, %{"index.html" => "v1"})
 
