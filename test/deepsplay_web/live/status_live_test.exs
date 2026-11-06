@@ -1,0 +1,107 @@
+defmodule DeepsplayWeb.StatusLiveTest do
+  # Not async: uses the global host configuration, status and presence.
+  use DeepsplayWeb.ConnCase, async: false
+
+  import ExUnit.CaptureLog
+  import Phoenix.LiveViewTest
+  import Deepsplay.ScreenFixture
+
+  alias Deepsplay.GitFixture
+  alias Deepsplay.HostConfig.Store
+  alias Deepsplay.Revisions
+  alias DeepsplayWeb.Presence
+
+  @moduletag :tmp_dir
+
+  @files %{
+    "screen.toml" => ~s(title = "Lobby"\n[backend]\n[[page]]\npath = "a.html"\nduration = "1s"\n),
+    "pages/a.html" => "a"
+  }
+
+  setup %{tmp_dir: tmp_dir} do
+    setup_screen(tmp_dir, @files, """
+    [[config]]
+    name = "kitchen"
+    repo = "file:///nonexistent/kitchen"
+    ref  = "main"
+    """)
+  end
+
+  test "lists configurations with revision, warnings and errors", ctx do
+    {:ok, sha} = Revisions.refresh(ctx.config)
+    {:ok, host_config} = Store.get()
+    capture_log(fn -> Revisions.refresh(host_config.configs["kitchen"]) end)
+
+    {:ok, view, _html} = live(ctx.conn, ~p"/status")
+
+    assert has_element?(view, "#config-lobby", String.slice(sha, 0, 12))
+    assert has_element?(view, "#config-lobby", "Lobby")
+    assert has_element?(view, "#config-lobby", "default")
+    assert has_element?(view, "#config-lobby .config-warning", "[backend] is not supported")
+    assert has_element?(view, "#config-kitchen", "none yet")
+    assert has_element?(view, "#config-kitchen .config-error", "fetch failed")
+    assert has_element?(view, "#status-errors .error-entry", "kitchen")
+  end
+
+  test "updates when a revision is published", ctx do
+    {:ok, view, _html} = live(ctx.conn, ~p"/status")
+    assert has_element?(view, "#config-lobby", "none yet")
+
+    {:ok, _sha} = Revisions.refresh(ctx.config)
+    assert has_element?(view, "#config-lobby", "Lobby")
+
+    new = GitFixture.commit(ctx.src, %{"pages/a.html" => "b"})
+    {:ok, ^new} = Revisions.refresh(ctx.config)
+    assert has_element?(view, "#config-lobby", String.slice(new, 0, 12))
+  end
+
+  test "shows connected screens with their state and page", ctx do
+    {:ok, sha} = Revisions.refresh(ctx.config)
+    Phoenix.PubSub.subscribe(Deepsplay.PubSub, Presence.topic())
+
+    {:ok, status, _html} = live(ctx.conn, ~p"/status")
+    assert has_element?(status, "#status-screens", "No screen is connected")
+
+    {:ok, screen, _html} = live(build_conn(), ~p"/?screen=hall")
+    await_diff(fn diff -> joined?(diff, &(&1.label == "hall")) end)
+
+    assert has_element?(status, "#status-screens tr", "hall")
+    assert has_element?(status, "#status-screens tr", "playing")
+    assert has_element?(status, "#status-screens tr", String.slice(sha, 0, 12))
+
+    render_hook(screen, "page", %{"url" => "/c/lobby/r/#{sha}/a.html?duration=1s"})
+    await_diff(fn diff -> joined?(diff, &(&1.page == "a.html?duration=1s")) end)
+    assert has_element?(status, "#status-screens tr", "a.html?duration=1s")
+
+    GenServer.stop(screen.pid)
+
+    await_diff(fn diff ->
+      Enum.any?(diff.leaves, fn {_id, %{metas: m}} -> Enum.any?(m, &(&1.label == "hall")) end)
+    end)
+
+    assert has_element?(status, "#status-screens", "No screen is connected")
+  end
+
+  # Presence diffs from screens of earlier tests can still arrive; wait for
+  # the one this test caused. The status page received it too, before any
+  # later render.
+  defp await_diff(matches?) do
+    receive do
+      %Phoenix.Socket.Broadcast{event: "presence_diff", payload: diff} ->
+        if matches?.(diff), do: :ok, else: await_diff(matches?)
+    after
+      3_000 -> flunk("expected presence diff did not arrive")
+    end
+  end
+
+  defp joined?(diff, meta?) do
+    Enum.any?(diff.joins, fn {_id, %{metas: metas}} -> Enum.any?(metas, meta?) end)
+  end
+
+  test "shows an unusable host configuration", %{conn: conn} do
+    Store.put({:error, ["server.cache_dir is missing"]})
+
+    {:ok, view, _html} = live(conn, ~p"/status")
+    assert has_element?(view, "#status-host-config-error", "server.cache_dir is missing")
+  end
+end

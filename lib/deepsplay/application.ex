@@ -13,6 +13,7 @@ defmodule Deepsplay.Application do
       DeepsplayWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:deepsplay, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Deepsplay.PubSub},
+      DeepsplayWeb.Presence,
       {Registry, keys: :unique, name: Deepsplay.RevisionStore.Registry},
       {DynamicSupervisor, name: Deepsplay.RevisionStore.Supervisor, strategy: :one_for_one},
       Deepsplay.Status,

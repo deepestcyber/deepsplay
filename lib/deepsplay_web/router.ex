@@ -24,6 +24,7 @@ defmodule DeepsplayWeb.Router do
 
     live "/", ShellLive, :default
     live "/c/:name", ShellLive, :named
+    live "/status", StatusLive, :index
   end
 
   # Other scopes may use custom stacks.

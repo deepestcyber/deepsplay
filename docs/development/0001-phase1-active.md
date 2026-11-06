@@ -14,7 +14,7 @@ Status values: `open`, `in progress`, `done`.
 | 4 | Static file serving | done |
 | 5 | LiveView shell with rotation | done |
 | 6 | Poller and live updates | done |
-| 7 | Status page | open |
+| 7 | Status page | done |
 | 8 | Upstream proxy and host secrets | open |
 | 9 | Release, container and kiosk notes | open |
 
@@ -230,10 +230,32 @@ Notes:
 
 ## 7. Status page
 
-Status: open
+Status: done (2026-11-06)
 
 Goal: `/status` with Phoenix Presence: configurations with revision and last
 poll, connected screens, recent errors.
+
+Done:
+
+- `DeepsplayWeb.StatusLive` at `/status`, updating live: configurations
+  (source, revision or live token, manifest title, page count and rotation,
+  last and next check, last error, manifest warnings such as an ignored
+  `[backend]`), connected screens, and recent errors; an unusable host
+  configuration is shown as well. Uses the app layout, whose generated
+  Phoenix header was replaced by a plain deepsplay header.
+- `DeepsplayWeb.Presence`: every connected shell is tracked with its
+  configuration, state, revision, current page (the hook reports each page it
+  shows), connection time, IP address and user agent. `?screen=<label>` names
+  a kiosk on the status page.
+- `Deepsplay.Status` keeps a log of the 50 most recent errors (a repeated
+  error is logged once) and announces all changes on a common topic.
+
+Notes:
+
+- No login and no alerts, as planned; the page is meant for the internal
+  network (open decision in the outline).
+- Only connected screens are listed; a screen that disconnects disappears.
+- Proxy failures will appear in the error log with slice 8.
 
 ## 8. Upstream proxy and host secrets
 

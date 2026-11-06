@@ -1,10 +1,11 @@
 defmodule Deepsplay.Status do
   @moduledoc """
-  The latest polling and fetch outcome per configuration, kept in memory for
-  the fallback page and the status page.
+  The latest polling and fetch outcome per configuration, and a short log of
+  recent errors, kept in memory for the fallback page and the status page.
 
-  Changes are announced to the configuration's subscribers (see
-  `Deepsplay.Revisions.subscribe/1`) as `{:status_changed, name}`.
+  Changes are announced as `{:status_changed, name}` to the configuration's
+  subscribers (see `Deepsplay.Revisions.subscribe/1`) and to subscribers of
+  all configurations (`subscribe_all/0`).
   """
 
   use GenServer
@@ -20,6 +21,10 @@ defmodule Deepsplay.Status do
         }
 
   @empty %{checked_at: nil, error: nil, error_at: nil, next_check_at: nil}
+  @all_topic "status"
+  @max_log 50
+
+  @type log_entry :: %{at: DateTime.t(), config: String.t(), message: String.t()}
 
   @doc false
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
@@ -41,10 +46,47 @@ defmodule Deepsplay.Status do
   """
   @spec update(String.t(), map()) :: t()
   def update(name, changes) do
-    status = Map.merge(get(name), changes)
+    previous = get(name)
+    status = Map.merge(previous, changes)
     :ets.insert(@table, {name, status})
+
+    # A new error goes to the log; the same error repeated by every poll does
+    # not.
+    if status.error && status.error != previous.error do
+      log(name, status.error, status.error_at || DateTime.utc_now())
+    end
+
     Phoenix.PubSub.broadcast(@pubsub, Deepsplay.Revisions.topic(name), {:status_changed, name})
+    Phoenix.PubSub.broadcast(@pubsub, @all_topic, {:status_changed, name})
     status
+  end
+
+  @doc """
+  Subscribes the caller to status changes of all configurations.
+  """
+  @spec subscribe_all() :: :ok | {:error, term()}
+  def subscribe_all, do: Phoenix.PubSub.subscribe(@pubsub, @all_topic)
+
+  @doc """
+  Returns the most recent errors, newest first.
+  """
+  @spec recent_errors() :: [log_entry()]
+  def recent_errors do
+    case :ets.lookup(@table, :log) do
+      [{:log, entries}] -> entries
+      [] -> []
+    end
+  end
+
+  # Serialized through the process, so concurrent errors are all kept.
+  defp log(name, message, at) do
+    GenServer.cast(__MODULE__, {:log, %{at: at, config: name, message: message}})
+  end
+
+  @impl true
+  def handle_cast({:log, entry}, state) do
+    :ets.insert(@table, {:log, Enum.take([entry | recent_errors()], @max_log)})
+    {:noreply, state}
   end
 
   @doc false

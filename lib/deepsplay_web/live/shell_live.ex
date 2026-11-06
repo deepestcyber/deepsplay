@@ -9,6 +9,10 @@ defmodule DeepsplayWeb.ShellLive do
 
   Without a revision to show, the shell is the fallback page. It says which
   configuration the screen asked for and what is missing.
+
+  Connected shells are tracked with `DeepsplayWeb.Presence` for the status
+  page: configuration, state, revision and current page, plus the optional
+  `?screen=<label>` naming a kiosk.
   """
 
   use DeepsplayWeb, :live_view
@@ -19,6 +23,7 @@ defmodule DeepsplayWeb.ShellLive do
   alias Deepsplay.Revisions
   alias Deepsplay.Screen
   alias Deepsplay.Status
+  alias DeepsplayWeb.Presence
   alias DeepsplayWeb.ScreenPlan
 
   @impl true
@@ -41,12 +46,69 @@ defmodule DeepsplayWeb.ShellLive do
           assign(socket, state: :host_config, errors: errors, page_title: "Error")
       end
 
-    {:ok, socket}
+    {:ok, track(socket, requested, params["screen"])}
+  end
+
+  # Tracks the connected screen; updated when its state or page changes.
+  defp track(socket, requested, label) do
+    if connected?(socket) do
+      id = "screen-" <> Base.url_encode64(:crypto.strong_rand_bytes(9))
+
+      meta =
+        Map.merge(presence_state(socket), %{
+          config: if(requested == :default, do: default_name(socket), else: requested),
+          label: label,
+          page: nil,
+          page_since: nil,
+          connected_at: DateTime.utc_now(),
+          ip: peer_ip(socket),
+          user_agent: get_connect_info(socket, :user_agent)
+        })
+
+      {:ok, _ref} = Presence.track(self(), Presence.topic(), id, meta)
+      assign(socket, presence_id: id)
+    else
+      assign(socket, presence_id: nil)
+    end
+  end
+
+  defp update_presence(%{assigns: %{presence_id: id}} = socket, changes) when is_binary(id) do
+    Presence.update(self(), Presence.topic(), id, &Map.merge(&1, changes))
+    socket
+  end
+
+  defp update_presence(socket, _changes), do: socket
+
+  defp presence_state(%{assigns: %{state: :playing, plan: plan}}),
+    do: %{state: :playing, sha: plan.sha}
+
+  defp presence_state(%{assigns: %{state: state}}), do: %{state: state, sha: nil}
+
+  defp default_name(%{assigns: %{config: config}}), do: config.name
+  defp default_name(_socket), do: nil
+
+  defp peer_ip(socket) do
+    case get_connect_info(socket, :peer_data) do
+      %{address: address} -> address |> :inet.ntoa() |> to_string()
+      _other -> nil
+    end
+  end
+
+  @impl true
+  def handle_event("page", %{"url" => url}, socket) do
+    page =
+      case String.split(url, "/r/", parts: 2) do
+        [_prefix, rest] -> rest |> String.split("/", parts: 2) |> List.last()
+        _other -> url
+      end
+
+    {:noreply, update_presence(socket, %{page: page, page_since: DateTime.utc_now()})}
   end
 
   @impl true
   def handle_info({:revision_published, _name, _sha}, socket) do
-    {:noreply, load_revision(socket)}
+    socket = load_revision(socket)
+    {:noreply, update_presence(socket, presence_state(socket))}
   end
 
   def handle_info({:status_changed, name}, socket) do
@@ -255,6 +317,7 @@ defmodule DeepsplayWeb.ShellLive do
             frame.classList.replace("opacity-0", "opacity-100")
             this.active = 1 - this.active
             this.index = index
+            this.pushEvent("page", {url: page.url})
 
             // Stop the old page once it has faded out.
             this.clearTimer = setTimeout(() => {
