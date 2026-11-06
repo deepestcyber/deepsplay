@@ -248,3 +248,21 @@ Status: open
 
 Goal: `mix release`, container image with `git` and `openssh-client`, and notes
 for setting up kiosk screens.
+
+## Additions beyond the slices
+
+### Local directories in development (ADR 12)
+
+Status: done (2026-11-06)
+
+- Host configuration: `path = "/abs/dir"` instead of `repo` and `ref`, only
+  where `:allow_local_paths` is on (dev and test).
+- `Deepsplay.LocalWatcher` (one per local configuration, started by
+  `Deepsplay.Pollers`): watches the manifest and `pages/` with `file_system`
+  (inotify), debounces 200 ms, keeps a version token in a `Registry` and
+  announces each new one like a revision; manifest errors go to the status.
+- `Revisions.current/2` reads local configurations live; the revision
+  controller serves them from the directory with `Cache-Control: no-store`.
+- Plans carry `apply`: `"now"` for local configurations, so the hook reloads
+  the current page in place; `"next"` otherwise.
+- Fallback pages show the directory instead of repository and ref.

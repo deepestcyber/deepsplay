@@ -10,13 +10,18 @@ defmodule Deepsplay.Revisions do
   require Logger
 
   alias Deepsplay.HostConfig.Config
+  alias Deepsplay.LocalWatcher
   alias Deepsplay.RevisionStore
   alias Deepsplay.Screen
   alias Deepsplay.Status
 
   @pubsub Deepsplay.PubSub
 
-  @type current :: %{sha: String.t(), pages_dir: Path.t(), screen: Screen.t()}
+  @typedoc """
+  A configuration's current content. `sha` is the commit, or the version token
+  of a local directory (ADR 12); `local` tells which.
+  """
+  @type current :: %{sha: String.t(), pages_dir: Path.t(), screen: Screen.t(), local: boolean()}
 
   @doc """
   Subscribes the caller to the configuration `name`. Messages are
@@ -37,12 +42,7 @@ defmodule Deepsplay.Revisions do
 
     case RevisionStore.publish(config.repo, config.ref, publish_opts) do
       {:ok, sha} ->
-        Phoenix.PubSub.broadcast(
-          @pubsub,
-          topic(config.name),
-          {:revision_published, config.name, sha}
-        )
-
+        announce(config.name, sha)
         Status.update(config.name, %{error: nil, error_at: nil})
         {:ok, sha}
 
@@ -59,19 +59,45 @@ defmodule Deepsplay.Revisions do
   cache only (no network).
   """
   @spec current(Config.t(), keyword()) :: {:ok, current()} | :none | {:error, [String.t()]}
-  def current(%Config{} = config, opts \\ []) do
+  def current(config, opts \\ [])
+
+  # A local directory is read live, with the watcher's version token.
+  def current(%Config{path: path} = config, _opts) when is_binary(path) do
+    case LocalWatcher.token(config.name) do
+      {:ok, token} -> load(config, token, path, true)
+      :error -> :none
+    end
+  end
+
+  def current(%Config{} = config, opts) do
     with {:ok, sha} <- RevisionStore.last_good(config.repo, remember_key(config), opts),
          {:ok, rev_dir} <- RevisionStore.revision_dir(config.repo, sha, opts) do
-      root = Screen.root(rev_dir, config)
-
-      case Screen.load(root, manifest: config.manifest, upstreams: config.upstreams) do
-        {:ok, screen} -> {:ok, %{sha: sha, pages_dir: Screen.pages_dir(root), screen: screen}}
-        {:error, errors} -> {:error, errors}
-      end
+      load(config, sha, rev_dir, false)
     else
       :error -> :none
       {:error, error} -> {:error, [RevisionStore.format_error(error)]}
     end
+  end
+
+  defp load(config, sha, dir, local) do
+    root = Screen.root(dir, config)
+
+    case Screen.load(root, manifest: config.manifest, upstreams: config.upstreams) do
+      {:ok, screen} ->
+        {:ok, %{sha: sha, pages_dir: Screen.pages_dir(root), screen: screen, local: local}}
+
+      {:error, errors} ->
+        {:error, errors}
+    end
+  end
+
+  @doc """
+  Announces a new revision (or version token) of the configuration `name` to
+  its subscribers.
+  """
+  @spec announce(String.t(), String.t()) :: :ok | {:error, term()}
+  def announce(name, sha) do
+    Phoenix.PubSub.broadcast(@pubsub, topic(name), {:revision_published, name, sha})
   end
 
   @doc false

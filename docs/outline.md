@@ -95,6 +95,8 @@ ref        = "kitchen"
 credential = "github_deploy_key"   # host secret used to fetch this repository
 ```
 
+In development, a configuration can use `path = "/abs/dir"` instead of `repo` and `ref`: the directory is served live, and every save shows on screen at once (ADR 12).
+
 Several configurations may point at the same repository and ref. They share one poller and one cache entry. With different `manifest`s they can show the same pages in different rotations; with different `subdir`s they are separated and cannot reach each other's files.
 
 ## Repository content format

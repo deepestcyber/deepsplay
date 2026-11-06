@@ -61,13 +61,20 @@ defmodule Deepsplay.HostConfig do
 
     * `:transports` - git transports a repository URL may use. Defaults to the
       `:git_transports` application setting (see ADR 6).
+    * `:allow_local_paths` - whether configurations may use a local `path`.
+      Defaults to the `:allow_local_paths` application setting (ADR 12).
   """
   @spec parse(String.t(), keyword()) :: {:ok, t()} | {:error, [String.t()]}
   def parse(toml, opts \\ []) when is_binary(toml) do
     transports = Keyword.get_lazy(opts, :transports, &allowed_transports/0)
 
+    local_paths =
+      Keyword.get_lazy(opts, :allow_local_paths, fn ->
+        Application.get_env(:deepsplay, :allow_local_paths, false)
+      end)
+
     case TomlElixir.decode(toml) do
-      {:ok, data} -> build(data, transports)
+      {:ok, data} -> build(data, %{transports: transports, local_paths: local_paths})
       {:error, error} -> {:error, ["invalid TOML: #{Exception.message(error)}"]}
     end
   end
@@ -80,11 +87,11 @@ defmodule Deepsplay.HostConfig do
     Application.get_env(:deepsplay, :git_transports, ["https", "ssh"])
   end
 
-  defp build(data, transports) do
+  defp build(data, allowed) do
     unknown = TomlSchema.unknown_keys(data, @top_keys, "top level")
     {server, server_errors} = server(Map.get(data, "server"))
     {upstreams, upstream_errors} = upstream_names(Map.get(data, "upstream", %{}))
-    {configs, config_errors} = configs(Map.get(data, "config", []), transports, upstreams)
+    {configs, config_errors} = configs(Map.get(data, "config", []), allowed, upstreams)
 
     errors =
       unknown ++
@@ -127,12 +134,12 @@ defmodule Deepsplay.HostConfig do
 
   defp upstream_names(_upstreams), do: {[], ["upstream must be a table"]}
 
-  defp configs(configs, transports, upstreams) when is_list(configs) do
+  defp configs(configs, allowed, upstreams) when is_list(configs) do
     {parsed, errors} =
       configs
       |> Enum.with_index(1)
       |> Enum.map_reduce([], fn {config, index}, acc ->
-        {config, errors} = config(config, index, transports, upstreams)
+        {config, errors} = config(config, index, allowed, upstreams)
         {config, acc ++ errors}
       end)
 
@@ -140,16 +147,17 @@ defmodule Deepsplay.HostConfig do
     {parsed, errors ++ duplicate_errors(parsed)}
   end
 
-  defp configs(_configs, _transports, _upstreams) do
+  defp configs(_configs, _allowed, _upstreams) do
     {[], ["config must be an array of tables ([[config]])"]}
   end
 
-  defp config(config, index, transports, upstreams) when is_map(config) do
+  defp config(config, index, allowed, upstreams) when is_map(config) do
     ctx = config_context(config, index)
-    {fields, errors} = TomlSchema.fields(config, ctx, config_fields(transports))
+    {fields, errors} = TomlSchema.fields(config, ctx, config_fields(allowed))
 
     errors =
       errors ++
+        source_errors(config, ctx) ++
         for upstream <- fields[:upstreams] || [], upstream not in upstreams do
           ~s(#{ctx}: upstream "#{upstream}" is not defined)
         end
@@ -160,8 +168,30 @@ defmodule Deepsplay.HostConfig do
     end
   end
 
-  defp config(_config, index, _transports, _upstreams) do
+  defp config(_config, index, _allowed, _upstreams) do
     {nil, ["config ##{index} must be a table"]}
+  end
+
+  # Content comes from a repository (repo + ref) or a local directory (path).
+  defp source_errors(config, ctx) do
+    case {Map.has_key?(config, "repo"), Map.has_key?(config, "ref"), Map.has_key?(config, "path")} do
+      {_repo, _ref, true} ->
+        for key <- ["repo", "ref", "credential"], Map.has_key?(config, key) do
+          ~s(#{ctx}: "#{key}" cannot be combined with "path")
+        end
+
+      {true, true, false} ->
+        []
+
+      {false, false, false} ->
+        [~s(#{ctx}: needs "repo" and "ref", or "path")]
+
+      {true, false, false} ->
+        ["#{ctx}.ref is missing"]
+
+      {false, true, false} ->
+        ["#{ctx}.repo is missing"]
+    end
   end
 
   defp config_context(%{"name" => name}, _index) when is_binary(name), do: ~s(config "#{name}")
@@ -194,11 +224,12 @@ defmodule Deepsplay.HostConfig do
     end
   end
 
-  defp config_fields(transports) do
+  defp config_fields(allowed) do
     [
       {"name", :name, &cast_name/1, []},
-      {"repo", :repo, &cast_repo(&1, transports), []},
-      {"ref", :ref, :string, []},
+      {"repo", :repo, &cast_repo(&1, allowed.transports), default: nil},
+      {"ref", :ref, :string, default: nil},
+      {"path", :path, &cast_path(&1, allowed.local_paths), default: nil},
       {"subdir", :subdir, &cast_subdir/1, default: ""},
       {"manifest", :manifest, &cast_manifest/1, default: Screen.default_manifest()},
       {"credential", :credential, :string, default: nil},
@@ -233,6 +264,17 @@ defmodule Deepsplay.HostConfig do
   end
 
   defp cast_repo(_value, _transports), do: {:error, "must be a string"}
+
+  # Local directories are for development only (ADR 12).
+  defp cast_path(value, allowed) when is_binary(value) do
+    cond do
+      not allowed -> {:error, "is only allowed in development"}
+      Path.type(value) != :absolute -> {:error, "must be an absolute path"}
+      true -> {:ok, Path.expand(value)}
+    end
+  end
+
+  defp cast_path(_value, _allowed), do: {:error, "must be a string"}
 
   defp cast_subdir(""), do: {:ok, ""}
   defp cast_subdir(value), do: TomlSchema.cast(:relative_path, value)

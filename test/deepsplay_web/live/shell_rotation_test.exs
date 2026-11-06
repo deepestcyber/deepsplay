@@ -77,6 +77,7 @@ defmodule DeepsplayWeb.ShellRotationTest do
     assert plan(view) == %{
              "sha" => sha,
              "mode" => "random",
+             "apply" => "next",
              "pages" => [
                %{
                  "url" => "/c/lobby/r/#{sha}/welcome.html",
@@ -123,6 +124,7 @@ defmodule DeepsplayWeb.ShellRotationTest do
     assert plan(view) == %{
              "sha" => sha,
              "mode" => "pinned",
+             "apply" => "next",
              "pages" => [
                %{"url" => "/c/lobby/r/#{sha}/extra.html", "duration" => nil, "weight" => 1.0}
              ]

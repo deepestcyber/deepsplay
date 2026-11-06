@@ -21,3 +21,8 @@ ref  = "main"
 # name = "local"
 # repo = "file:///home/me/screens"
 # ref  = "main"
+
+# A local directory served live: every save shows at once (ADR 12).
+# [[config]]
+# name = "live"
+# path = "/home/me/screens"

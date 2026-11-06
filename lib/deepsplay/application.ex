@@ -16,6 +16,7 @@ defmodule Deepsplay.Application do
       {Registry, keys: :unique, name: Deepsplay.RevisionStore.Registry},
       {DynamicSupervisor, name: Deepsplay.RevisionStore.Supervisor, strategy: :one_for_one},
       Deepsplay.Status,
+      {Registry, keys: :unique, name: Deepsplay.LocalWatcher.Registry},
       # One poller per repository and ref (ADR 7), and the cache cleanup.
       Deepsplay.Pollers,
       Deepsplay.Janitor,

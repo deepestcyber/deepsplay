@@ -80,6 +80,23 @@ defmodule Deepsplay.HostConfigTest do
              } = host_config.configs
     end
 
+    test "accepts a local path instead of repo and ref" do
+      toml =
+        String.replace(
+          minimal(),
+          ~s(repo = "https://example.com/lobby.git"\nref  = "main"),
+          ~s(path = "/srv/screens/")
+        )
+
+      assert {:ok,
+              %{
+                configs: %{"lobby" => %Config{path: "/srv/screens", repo: nil, ref: nil} = config}
+              }} =
+               parse(toml)
+
+      assert Config.local?(config)
+    end
+
     test "applies defaults" do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.poll_interval == 30_000
@@ -109,8 +126,7 @@ defmodule Deepsplay.HostConfigTest do
       assert "server.cache_dir is missing" in errors
       assert "server.default_config is missing" in errors
       assert "config #1.name is missing" in errors
-      assert "config #1.repo is missing" in errors
-      assert "config #1.ref is missing" in errors
+      assert ~s(config #1: needs "repo" and "ref", or "path") in errors
     end
 
     test "unknown keys, so typos are not silently ignored" do
@@ -167,6 +183,50 @@ defmodule Deepsplay.HostConfigTest do
       assert ~s(config "lobby".manifest must not be inside "pages/") in errors(
                minimal(~s(manifest = "pages/screen.toml"))
              )
+    end
+
+    test "a source that is missing, incomplete or mixed" do
+      no_source = """
+      [server]
+      cache_dir = "/c"
+      default_config = "a"
+      [[config]]
+      name = "a"
+      """
+
+      assert ~s(config "a": needs "repo" and "ref", or "path") in errors(no_source)
+
+      assert "config \"a\".ref is missing" in errors(
+               no_source <> ~s(repo = "https://e.com/a.git"\n)
+             )
+
+      mixed = no_source <> ~s(path = "/srv/a"\nref = "main"\n)
+      assert ~s(config "a": "ref" cannot be combined with "path") in errors(mixed)
+    end
+
+    test "a relative local path" do
+      toml =
+        String.replace(
+          minimal(),
+          ~s(repo = "https://example.com/lobby.git"\nref  = "main"),
+          ~s(path = "screens")
+        )
+
+      assert ~s(config "lobby".path must be an absolute path) in errors(toml)
+    end
+
+    test "local paths where they are not allowed" do
+      toml =
+        String.replace(
+          minimal(),
+          ~s(repo = "https://example.com/lobby.git"\nref  = "main"),
+          ~s(path = "/srv/screens")
+        )
+
+      assert {:error, errors} =
+               HostConfig.parse(toml, transports: @transports, allow_local_paths: false)
+
+      assert ~s(config "lobby".path is only allowed in development) in errors
     end
 
     test "upstreams that are not defined" do

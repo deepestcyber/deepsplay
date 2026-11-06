@@ -77,14 +77,14 @@ defmodule DeepsplayWeb.ShellLive do
   end
 
   defp plan(config, current, nil),
-    do: {:ok, ScreenPlan.rotation(config.name, current.sha, current.screen)}
+    do: {:ok, ScreenPlan.rotation(config.name, current.sha, current.screen, local: current.local)}
 
   defp plan(config, current, pinned) do
     {path, query} = Screen.split_query(pinned)
 
     with true <- Screen.valid_query?(query),
          {:ok, _file} <- RevisionFile.resolve(current.pages_dir, path) do
-      {:ok, ScreenPlan.pinned(config.name, current.sha, path, query)}
+      {:ok, ScreenPlan.pinned(config.name, current.sha, path, query, local: current.local)}
     else
       _missing -> {:error, :pinned_missing}
     end
@@ -173,7 +173,8 @@ defmodule DeepsplayWeb.ShellLive do
         },
 
         // A new rotation plan takes effect at the next page change. A pinned
-        // page, or a switch from or to pinning, applies at once.
+        // page, or a switch from or to pinning, applies at once. A plan with
+        // apply "now" (local directories) reloads the current page in place.
         setPlan(plan) {
           const key = JSON.stringify(plan)
           if (key === this.planKey) return
@@ -183,9 +184,20 @@ defmodule DeepsplayWeb.ShellLive do
             this.plan = plan
             this.pending = null
             this.restart()
+          } else if (plan.apply === "now") {
+            this.plan = plan
+            this.pending = null
+            this.reload()
           } else {
             this.pending = plan
           }
+        },
+
+        // Shows the current position of the new plan again, with a fresh timer.
+        reload() {
+          clearTimeout(this.timer)
+          const index = this.index >= 0 && this.index < this.plan.pages.length ? this.index : this.pick()
+          this.display(index)
         },
 
         restart() {
@@ -396,12 +408,17 @@ defmodule DeepsplayWeb.ShellLive do
     <dl class="mt-8 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-left text-lg">
       <dt class="text-zinc-500">Configuration</dt>
       <dd id="fallback-config">{@config.name}</dd>
-      <dt class="text-zinc-500">Repository</dt>
-      <dd id="fallback-repo" class="break-all font-mono text-base">
-        {RepoUrl.redact(@config.repo)}
-      </dd>
-      <dt class="text-zinc-500">Ref</dt>
-      <dd id="fallback-ref" class="font-mono text-base">{@config.ref}</dd>
+      <%= if @config.path do %>
+        <dt class="text-zinc-500">Directory</dt>
+        <dd id="fallback-path" class="break-all font-mono text-base">{@config.path}</dd>
+      <% else %>
+        <dt class="text-zinc-500">Repository</dt>
+        <dd id="fallback-repo" class="break-all font-mono text-base">
+          {RepoUrl.redact(@config.repo)}
+        </dd>
+        <dt class="text-zinc-500">Ref</dt>
+        <dd id="fallback-ref" class="font-mono text-base">{@config.ref}</dd>
+      <% end %>
     </dl>
     """
   end

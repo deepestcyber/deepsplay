@@ -46,5 +46,7 @@ branch or tag name.
 - Dev and prod differ only in the allowed transports, so local development runs
   the same fetch, export and validation path as production.
 - With a local repository, changes appear only after they are committed (and
-  the next poll); uncommitted edits are not shown.
+  the next poll); uncommitted edits are not shown. For that, development can
+  serve a local directory directly instead (see
+  [12](0012-serve-local-directories-in-development.md)).
 - Tests cover the local-repository path, not the network transports.

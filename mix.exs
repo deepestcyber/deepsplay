@@ -60,7 +60,9 @@ defmodule Deepsplay.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:toml_elixir, "~> 3.3"}
+      {:toml_elixir, "~> 3.3"},
+      # Watches local directories in development (ADR 12).
+      {:file_system, "~> 1.0", only: [:dev, :test]}
     ]
   end
 

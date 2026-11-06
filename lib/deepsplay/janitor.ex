@@ -31,7 +31,8 @@ defmodule Deepsplay.Janitor do
 
   defp clean(state) do
     with {:ok, host_config} <- Store.get() do
-      repos = host_config.configs |> Map.values() |> Enum.map(& &1.repo) |> Enum.uniq()
+      repos =
+        for {_name, %{repo: repo}} <- host_config.configs, repo != nil, uniq: true, do: repo
 
       case RevisionStore.prune_repositories(repos) do
         :ok -> :ok

@@ -70,8 +70,10 @@ config :deepsplay,
          else: Path.expand("deepsplay.dev.toml", __DIR__)
        )
 
-# Local repositories for page development (ADR 6).
+# Local repositories for page development (ADR 6), and local directories
+# served directly (ADR 12).
 config :deepsplay, :git_transports, ["https", "ssh", "file"]
+config :deepsplay, :allow_local_paths, true
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"

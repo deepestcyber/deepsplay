@@ -26,6 +26,7 @@ config :deepsplay, :host_config_path, Path.expand("../test/support/fixtures/host
 
 # Tests use local repositories (ADR 6).
 config :deepsplay, :git_transports, ["https", "ssh", "file"]
+config :deepsplay, :allow_local_paths, true
 
 # Tests fetch explicitly; no pollers or cache cleanup run on their own.
 config :deepsplay, :start_pollers, false
