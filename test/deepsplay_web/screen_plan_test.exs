@@ -12,7 +12,7 @@ defmodule DeepsplayWeb.ScreenPlanTest do
       rotation: :random,
       pages: [
         %Page{path: "welcome/index.html", duration: 30_000, weight: 3.0},
-        %Page{path: "news.html", duration: 5_000}
+        %Page{path: "news.html", query: "duration=5s", duration: 5_000}
       ]
     }
 
@@ -21,7 +21,7 @@ defmodule DeepsplayWeb.ScreenPlanTest do
              mode: "random",
              pages: [
                %{url: "/c/lobby/r/abc/welcome/index.html", duration: 30_000, weight: 3.0},
-               %{url: "/c/lobby/r/abc/news.html", duration: 5_000, weight: 1.0}
+               %{url: "/c/lobby/r/abc/news.html?duration=5s", duration: 5_000, weight: 1.0}
              ]
            }
   end

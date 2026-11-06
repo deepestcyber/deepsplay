@@ -23,33 +23,43 @@ defmodule DeepsplayWeb.ScreenPlan do
       mode: Atom.to_string(screen.rotation),
       pages:
         Enum.map(screen.pages, fn page ->
-          %{url: page_url(name, sha, page.path), duration: page.duration, weight: page.weight}
+          %{
+            url: page_url(name, sha, page.path, page.query),
+            duration: page.duration,
+            weight: page.weight
+          }
         end)
     }
   end
 
   @doc """
-  Builds the plan for a screen pinned to one file (ADR 11).
+  Builds the plan for a screen pinned to one file (ADR 11), with an optional
+  query string passed on to the page.
   """
-  @spec pinned(String.t(), String.t(), String.t()) :: t()
-  def pinned(name, sha, path) do
+  @spec pinned(String.t(), String.t(), String.t(), String.t() | nil) :: t()
+  def pinned(name, sha, path, query \\ nil) do
     %{
       sha: sha,
       mode: "pinned",
-      pages: [%{url: page_url(name, sha, path), duration: nil, weight: 1.0}]
+      pages: [%{url: page_url(name, sha, path, query), duration: nil, weight: 1.0}]
     }
   end
 
   @doc """
-  Returns the URL of a file in `pages/` of a revision (ADR 10).
+  Returns the URL of a file in `pages/` of a revision (ADR 10). A query string
+  is appended unchanged.
 
       iex> DeepsplayWeb.ScreenPlan.page_url("lobby", "abc", "a b/index.html")
       "/c/lobby/r/abc/a%20b/index.html"
+
+      iex> DeepsplayWeb.ScreenPlan.page_url("lobby", "abc", "a.html", "duration=5s")
+      "/c/lobby/r/abc/a.html?duration=5s"
   """
-  @spec page_url(String.t(), String.t(), String.t()) :: String.t()
-  def page_url(name, sha, path) do
+  @spec page_url(String.t(), String.t(), String.t(), String.t() | nil) :: String.t()
+  def page_url(name, sha, path, query \\ nil) do
     segments = path |> String.split("/") |> Enum.map_join("/", &encode/1)
-    "/c/#{encode(name)}/r/#{sha}/#{segments}"
+    url = "/c/#{encode(name)}/r/#{sha}/#{segments}"
+    if query, do: url <> "?" <> query, else: url
   end
 
   defp encode(segment), do: URI.encode(segment, &URI.char_unreserved?/1)

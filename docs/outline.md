@@ -118,7 +118,7 @@ title    = "Lobby"
 rotation = "random"                # "sequential" (default) or "random"
 
 [[page]]
-path     = "welcome/index.html"    # file in pages/
+path     = "welcome/index.html"    # file in pages/; may add a query, e.g. "?duration=30s"
 duration = "30s"
 weight   = 3.0                     # optional, > 0, default 1.0; random rotation only
 
@@ -131,7 +131,7 @@ uses     = ["weather"]             # upstreams this page calls through the serve
 Validation runs on every new revision, before it is published:
 
 - The manifest parses, is smaller than a size limit, and contains at least one page.
-- `pages/` exists, and every `path` names a regular, non-hidden file in it.
+- `pages/` exists, and every `path` names a regular, non-hidden file in it. A query string on a path is passed on to the page; only the file part is checked.
 - `rotation` is `sequential` or `random`; every `weight` is a number greater than 0.
 - Every `uses` entry is an upstream the configuration is allowed to use. Otherwise the revision is rejected, not served with a broken page.
 - A `[backend]` table is ignored with a warning on the status page (see Extension points for sidecars).
@@ -155,11 +155,10 @@ Webhooks are not needed. They could be added later as an extra trigger for the s
 
 A screen opens `/` or `/c/<name>` in a browser in kiosk mode. The page it receives is the shell, a LiveView that holds the rotation and shows each page in an iframe.
 
-- **Rotation runs in the browser.** The server sends the plan (revision, rotation strategy, and a list of page URLs with durations and weights). A small JavaScript hook in the shell cycles through it, in order or weighted at random, picking the next page one step ahead for preloading. A screen that loses its connection keeps rotating, and screens are not synchronized with each other.
+- **Rotation runs in the browser.** The server sends the plan (revision, rotation strategy, and a list of page URLs with durations and weights). A small JavaScript hook in the shell cycles through it, in order or weighted at random. The next page loads only when it is due, so its animations start when it is shown; the old page stays visible until then and is cleared after the crossfade. A screen that loses its connection keeps rotating, and screens are not synchronized with each other.
 - **Revision in the URL.** Pages are served from `/c/<name>/r/<sha>/<path>`, where `<path>` is relative to `pages/`. Files of one revision never change, so they can be cached for a long time, and a screen that is still on the old revision keeps loading its files while the new one is published.
 - **Pinned page.** `/?page=<path>` or `/c/<name>?page=<path>` shows one file of the revision without rotating (ADR 11). The path is relative to `pages/`; any deliverable file can be pinned, not only listed pages. A new revision reloads the pinned page.
 - **Live update.** When the poller publishes a new revision, every LiveView of that configuration receives the new plan and applies it at the next page change.
-- **Preloading.** The shell can load the next page in a hidden second iframe so that page changes do not flash.
 - **Reconnect.** LiveView reconnects by itself after a server restart or a network break and then receives the current plan. Until then the screen continues with the plan it has.
 - **No pointer.** The shell sets `cursor: none`. Hiding the pointer inside iframes and in the operating system is part of the kiosk setup.
 

@@ -25,7 +25,9 @@ Both are TOML files.
   `pages/`.
 - Page paths in a manifest are relative to `pages/` (see
   [10](0010-url-scheme.md)), so several manifests can list the same pages with
-  different rotations.
+  different rotations. A path may carry a query string that is passed on to
+  the page unchanged (`welcome.html?duration=5s`); only the file part is
+  checked.
 - The manifest is parsed as data with a size limit. Nothing from a repository is
   evaluated as code.
 

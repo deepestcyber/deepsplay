@@ -8,8 +8,9 @@ defmodule Deepsplay.Screen do
       screen.toml          default manifest; others are named by `manifest`
       pages/               the only directory that is delivered (ADR 10)
 
-  Page paths in a manifest are relative to `pages/`. Several manifests can list
-  the same pages.
+  Page paths in a manifest are relative to `pages/` and may carry a query
+  string that is passed on to the page, e.g. `"welcome.html?duration=5s"`.
+  Several manifests can list the same pages.
 
   The manifest is data only. It is validated before a revision is published,
   and a revision that fails is never published.
@@ -39,11 +40,50 @@ defmodule Deepsplay.Screen do
   ]
 
   @page_fields [
-    {"path", :path, :relative_path, []},
+    {"path", :path, &__MODULE__.cast_page_ref/1, []},
     {"duration", :duration, :duration, []},
     {"weight", :weight, :positive_number, default: 1.0},
     {"uses", :uses, :string_list, default: []}
   ]
+
+  @doc """
+  Splits a page reference into the file path and the query string, if any.
+
+      iex> Deepsplay.Screen.split_query("a.html?duration=5s")
+      {"a.html", "duration=5s"}
+
+      iex> Deepsplay.Screen.split_query("a.html")
+      {"a.html", nil}
+  """
+  @spec split_query(String.t()) :: {String.t(), String.t() | nil}
+  def split_query(ref) do
+    case String.split(ref, "?", parts: 2) do
+      [path, query] when query != "" -> {path, query}
+      [path | _rest] -> {path, nil}
+    end
+  end
+
+  @doc """
+  Returns true if a query string uses only characters allowed in a URL query,
+  so it can be passed on unchanged.
+  """
+  @spec valid_query?(String.t() | nil) :: boolean()
+  def valid_query?(nil), do: true
+  def valid_query?(query), do: Regex.match?(~r{^[A-Za-z0-9\-._~%!$&'()*+,;=:@/?]+$}, query)
+
+  @doc false
+  # Casts a manifest page path with an optional query string.
+  def cast_page_ref(value) when is_binary(value) do
+    {path, query} = split_query(value)
+
+    with {:ok, path} <- TomlSchema.cast(:relative_path, path) do
+      if valid_query?(query),
+        do: {:ok, {path, query}},
+        else: {:error, "has a query with characters not allowed in a URL"}
+    end
+  end
+
+  def cast_page_ref(_value), do: {:error, "must be a string"}
 
   @doc """
   Returns the root for `config` in the revision directory `rev_dir`: the
@@ -208,15 +248,17 @@ defmodule Deepsplay.Screen do
     ctx = "page ##{index}"
     {fields, errors} = TomlSchema.fields(page, ctx, @page_fields)
 
+    {path, query} = fields.path || {nil, nil}
+
     errors =
       errors ++
-        file_errors(fields.path, root, ctx) ++
+        file_errors(path, root, ctx) ++
         for upstream <- fields.uses || [], upstream not in upstreams do
           ~s(#{ctx}: upstream "#{upstream}" is not allowed for this configuration)
         end
 
     case errors do
-      [] -> {struct!(Page, fields), []}
+      [] -> {struct!(Page, %{fields | path: path} |> Map.put(:query, query)), []}
       errors -> {nil, errors}
     end
   end

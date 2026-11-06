@@ -9,6 +9,8 @@ defmodule Deepsplay.ScreenTest do
 
   @moduletag :tmp_dir
 
+  doctest Screen
+
   @one_page ~s([[page]]\npath = "a.html"\nduration = "1s"\n)
 
   defp write(root, files) do
@@ -64,6 +66,16 @@ defmodule Deepsplay.ScreenTest do
       assert {:ok, %Screen{title: nil, rotation: :sequential, pages: [page]}} = Screen.load(root)
       assert page.weight == 1.0
       assert page.uses == []
+    end
+
+    test "passes a query string in a page path on, checking only the file", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => ~s([[page]]\npath = "a.html?duration=5s&x=1"\nduration = "5s"\n),
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, %Screen{pages: [%Page{path: "a.html", query: "duration=5s&x=1"}]}} =
+               Screen.load(root)
     end
 
     test "reads another manifest, sharing the same pages", %{tmp_dir: root} do
@@ -189,6 +201,27 @@ defmodule Deepsplay.ScreenTest do
       assert ~s(page #4.path "dir" is not a file in pages/) in errors
 
       assert ~s(page #5.path ".hidden/a.html" must not name a hidden file or directory) in errors
+    end
+
+    test "a query string on a missing file, or with characters not allowed in a URL",
+         %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        [[page]]
+        path = "missing.html?duration=5s"
+        duration = "1s"
+
+        [[page]]
+        path = "a.html?text=two words"
+        duration = "1s"
+        """,
+        "pages/a.html" => "a"
+      })
+
+      assert errors(root) == [
+               ~s(page #1.path "missing.html" is not a file in pages/),
+               "page #2.path has a query with characters not allowed in a URL"
+             ]
     end
 
     test "upstreams the configuration does not allow", %{tmp_dir: root} do

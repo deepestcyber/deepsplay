@@ -157,9 +157,10 @@ a git repository.
 Done:
 
 - `DeepsplayWeb.ShellLive` builds the plan from the configuration's current
-  revision and sends it to a colocated hook (`.Rotation`): two iframes, the
-  next page preloaded in the hidden one, a 10 s load timeout, fade between
-  pages. Sequential, or weighted random without repeating the current page;
+  revision and sends it to a colocated hook (`.Rotation`): two iframes; the
+  next page loads in the hidden one only when it is due (no preloading, so
+  animations start when shown), the old page stays visible until it has loaded
+  (10 s timeout), they crossfade, and the old frame is cleared afterwards. Sequential, or weighted random without repeating the current page;
   a single or pinned page stays without a timer.
 - New revisions arrive over PubSub; the plan is pushed as an event and the
   hook applies it at the next page change (pinned: at once). The fallback page
@@ -169,6 +170,9 @@ Done:
   not fit the configuration (e.g. the manifest changed) shows "Revision
   unusable" with the errors.
 - `DeepsplayWeb.ScreenPlan` builds plans and page URLs.
+- Page paths in manifests, and `?page=`, may carry a query string that is
+  passed on to the page (`a.html?duration=5s`); only the file part is checked,
+  and the query must use URL characters only.
 - `Deepsplay.Revisions`: `refresh/2` (publish with the configuration's
   validator, announce over PubSub), `current/2` (last good revision with its
   manifest, from the cache), `subscribe/1`, and `refresh_all/0`, which fetches
@@ -183,7 +187,9 @@ Notes:
 - Until slice 6, revisions are fetched only at startup; a restart picks up new
   commits.
 - The hook logic was checked with a node simulation (order, no repeats,
-  weighted shares, plan switching, pinning, load timeout). It is not part of
+  weighted shares, no loading before a page is due, no content change during
+  the crossfade, clearing after the fade, plan switching, pinning, load
+  timeout). It is not part of
   the test suite, as the project has no JavaScript test setup.
 
 ## 6. Poller and live updates

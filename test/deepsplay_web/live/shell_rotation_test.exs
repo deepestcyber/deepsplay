@@ -113,6 +113,15 @@ defmodule DeepsplayWeb.ShellRotationTest do
            }
   end
 
+  test "?page= keeps a query string for the pinned page", %{conn: conn, config: config, sha: sha} do
+    {:ok, ^sha} = Revisions.refresh(config)
+
+    {:ok, view, _html} = live(conn, ~p"/?#{[page: "extra.html?duration=5s"]}")
+
+    assert %{"pages" => [%{"url" => url}]} = plan(view)
+    assert url == "/c/lobby/r/#{sha}/extra.html?duration=5s"
+  end
+
   test "?page= with a missing, hidden or outside file shows the fallback page",
        %{conn: conn, config: config} do
     {:ok, _sha} = Revisions.refresh(config)

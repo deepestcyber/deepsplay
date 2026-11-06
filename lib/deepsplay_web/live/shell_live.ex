@@ -17,6 +17,7 @@ defmodule DeepsplayWeb.ShellLive do
   alias Deepsplay.RepoUrl
   alias Deepsplay.RevisionFile
   alias Deepsplay.Revisions
+  alias Deepsplay.Screen
   alias DeepsplayWeb.ScreenPlan
 
   @impl true
@@ -74,9 +75,13 @@ defmodule DeepsplayWeb.ShellLive do
     do: {:ok, ScreenPlan.rotation(config.name, current.sha, current.screen)}
 
   defp plan(config, current, pinned) do
-    case RevisionFile.resolve(current.pages_dir, pinned) do
-      {:ok, _file} -> {:ok, ScreenPlan.pinned(config.name, current.sha, pinned)}
-      :error -> {:error, :pinned_missing}
+    {path, query} = Screen.split_query(pinned)
+
+    with true <- Screen.valid_query?(query),
+         {:ok, _file} <- RevisionFile.resolve(current.pages_dir, path) do
+      {:ok, ScreenPlan.pinned(config.name, current.sha, path, query)}
+    else
+      _missing -> {:error, :pinned_missing}
     end
   end
 
@@ -122,15 +127,22 @@ defmodule DeepsplayWeb.ShellLive do
     </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Rotation">
       // Rotates the pages of a plan in two iframes (ADR 9): the visible one,
-      // and a hidden one where the next page is preloaded.
+      // and a hidden one that loads the next page when it is due.
+      //
+      // Nothing is preloaded: a page starts running (scripts, animations,
+      // videos) only when it is about to be shown. The old page stays fully
+      // visible until the new one has loaded, then they crossfade, and the old
+      // frame is cleared so it stops running.
       //
       // Plan: {sha, mode: "sequential" | "random" | "pinned", pages: [{url, duration, weight}]}
       const LOAD_TIMEOUT = 10000
+      const FADE = 500 // matches duration-500 on the frames
 
       export default {
         mounted() {
           this.frames = [this.createFrame(), this.createFrame()]
           this.active = 0
+          this.index = -1
           this.plan = null
           this.planKey = null
           this.pending = null
@@ -141,6 +153,7 @@ defmodule DeepsplayWeb.ShellLive do
         destroyed() {
           clearTimeout(this.timer)
           clearTimeout(this.loadTimer)
+          clearTimeout(this.clearTimer)
         },
 
         createFrame() {
@@ -170,7 +183,6 @@ defmodule DeepsplayWeb.ShellLive do
         restart() {
           clearTimeout(this.timer)
           this.index = -1
-          this.preloaded = null
           this.display(this.pick())
         },
 
@@ -179,11 +191,8 @@ defmodule DeepsplayWeb.ShellLive do
             this.plan = this.pending
             this.pending = null
             this.index = -1
-            this.preloaded = null
           }
-          const next = this.preloaded ?? this.pick()
-          this.preloaded = null
-          this.display(next)
+          this.display(this.pick())
         },
 
         // Picks the next page index: in order, or weighted at random without
@@ -203,52 +212,54 @@ defmodule DeepsplayWeb.ShellLive do
           return candidates[candidates.length - 1]
         },
 
-        // Shows a page in the hidden frame once it has loaded, then swaps.
+        // Loads a page into the hidden frame and crossfades once it has
+        // loaded, or after LOAD_TIMEOUT at the latest.
         display(index) {
           const page = this.plan.pages[index]
           const frame = this.frames[1 - this.active]
+
+          // The hidden frame may still be due to be cleared, or loading
+          // another page; this load replaces both.
+          clearTimeout(this.clearTimer)
+          clearTimeout(this.loadTimer)
+
+          let done = false
           const swap = () => {
+            if (done) return
+            done = true
             clearTimeout(this.loadTimer)
             frame.onload = null
-            this.frames[this.active].classList.replace("opacity-100", "opacity-0")
+
+            const old = this.frames[this.active]
+            old.classList.replace("opacity-100", "opacity-0")
             frame.classList.replace("opacity-0", "opacity-100")
             this.active = 1 - this.active
             this.index = index
+
+            // Stop the old page once it has faded out.
+            this.clearTimer = setTimeout(() => {
+              old.onload = null
+              old.src = "about:blank"
+            }, FADE)
+
             this.schedule(page)
           }
 
-          if (frame.dataset.url === page.url && frame.dataset.loaded === "true") {
+          frame.onload = () => {
+            // Ignore the load of an empty frame, which some browsers report.
+            try {
+              if (frame.contentWindow.location.href === "about:blank") return
+            } catch (_error) {}
             swap()
-            return
           }
-
-          frame.onload = () => { frame.dataset.loaded = "true"; swap() }
-          // Do not wait forever for a page that never finishes loading.
           this.loadTimer = setTimeout(swap, LOAD_TIMEOUT)
-
-          // A page still being preloaded keeps loading; anything else starts now.
-          if (frame.dataset.url !== page.url) {
-            frame.dataset.loaded = "false"
-            frame.dataset.url = page.url
-            frame.src = page.url
-          }
+          frame.src = page.url
         },
 
-        // Waits for the page's duration, preloading the next page meanwhile.
-        // A single page, or a pinned one, stays until a new plan arrives.
+        // Shows the page for its duration. A single page, or a pinned one,
+        // stays until a new plan arrives.
         schedule(page) {
           if (this.plan.mode === "pinned" || this.plan.pages.length === 1) return
-
-          const next = this.pick()
-          const nextPage = this.plan.pages[next]
-          const hidden = this.frames[1 - this.active]
-          if (hidden.dataset.url !== nextPage.url) {
-            hidden.dataset.loaded = "false"
-            hidden.onload = () => { hidden.dataset.loaded = "true" }
-            hidden.dataset.url = nextPage.url
-            hidden.src = nextPage.url
-          }
-          this.preloaded = next
           this.timer = setTimeout(() => this.advance(), page.duration)
         },
       }
