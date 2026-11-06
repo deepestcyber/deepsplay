@@ -1,18 +1,27 @@
 defmodule Deepsplay.Screen do
   @moduledoc """
-  The manifest of a revision: `screen.toml` at the root of the repository, or
-  of the configured `subdir`. It lists the pages and how they rotate
+  The manifest of a revision: a TOML file listing pages and how they rotate
   (ADR 5, ADR 9).
+
+  Layout below the root (the repository, or the configured `subdir`):
+
+      screen.toml          default manifest; others are named by `manifest`
+      pages/               the only directory that is delivered (ADR 10)
+
+  Page paths in a manifest are relative to `pages/`. Several manifests can list
+  the same pages.
 
   The manifest is data only. It is validated before a revision is published,
   and a revision that fails is never published.
   """
 
   alias Deepsplay.HostConfig.Config
+  alias Deepsplay.RevisionFile
   alias Deepsplay.Screen.Page
   alias Deepsplay.TomlSchema
 
-  @file_name "screen.toml"
+  @default_manifest "screen.toml"
+  @pages_dir "pages"
   @max_size 64 * 1024
 
   defstruct title: nil, rotation: :sequential, pages: [], warnings: []
@@ -37,12 +46,30 @@ defmodule Deepsplay.Screen do
   ]
 
   @doc """
-  Returns the directory holding `screen.toml` for `config` in the revision
-  directory `rev_dir`.
+  Returns the root for `config` in the revision directory `rev_dir`: the
+  revision itself, or its `subdir`.
   """
   @spec root(Path.t(), Config.t()) :: Path.t()
   def root(rev_dir, %Config{subdir: ""}), do: rev_dir
   def root(rev_dir, %Config{subdir: subdir}), do: Path.join(rev_dir, subdir)
+
+  @doc """
+  Returns the directory whose files are delivered, below `root`.
+  """
+  @spec pages_dir(Path.t()) :: Path.t()
+  def pages_dir(root), do: Path.join(root, @pages_dir)
+
+  @doc """
+  The name of the directory whose files are delivered.
+  """
+  @spec pages_dir_name() :: String.t()
+  def pages_dir_name, do: @pages_dir
+
+  @doc """
+  The manifest used when a configuration names none.
+  """
+  @spec default_manifest() :: String.t()
+  def default_manifest, do: @default_manifest
 
   @doc """
   Returns a validator for `Deepsplay.RevisionStore.publish/3`: it accepts a
@@ -54,7 +81,7 @@ defmodule Deepsplay.Screen do
       root = root(rev_dir, config)
 
       if File.dir?(root) do
-        case load(root, upstreams: config.upstreams) do
+        case load(root, manifest: config.manifest, upstreams: config.upstreams) do
           {:ok, _screen} -> :ok
           {:error, errors} -> {:error, Enum.join(errors, "; ")}
         end
@@ -65,29 +92,41 @@ defmodule Deepsplay.Screen do
   end
 
   @doc """
-  Reads and validates `screen.toml` in `root`.
+  Reads and validates a manifest below `root`.
 
-  Every page `path` must name a regular file below `root`.
+  Every page `path` must name a deliverable file in `pages/`: a regular file,
+  not hidden (see `Deepsplay.RevisionFile.resolve/2`).
 
   ## Options
 
+    * `:manifest` - manifest path relative to `root`, default
+      `"#{@default_manifest}"`
     * `:upstreams` - upstreams the configuration may use; a page that `uses`
       any other is an error
   """
   @spec load(Path.t(), keyword()) :: {:ok, t()} | {:error, [String.t()]}
   def load(root, opts \\ []) do
-    path = Path.join(root, @file_name)
+    manifest = Keyword.get(opts, :manifest, @default_manifest)
+    pages_dir = pages_dir(root)
 
-    with {:ok, toml} <- read(path),
-         {:ok, data} <- decode(toml) do
-      build(data, root, Keyword.get(opts, :upstreams, []))
+    with {:ok, toml} <- read(Path.join(root, manifest), manifest),
+         {:ok, data} <- decode(toml, manifest),
+         :ok <- check_pages_dir(pages_dir) do
+      build(data, pages_dir, Keyword.get(opts, :upstreams, []))
     end
   end
 
-  defp read(path) do
+  defp check_pages_dir(pages_dir) do
+    case File.lstat(pages_dir) do
+      {:ok, %File.Stat{type: :directory}} -> :ok
+      _other -> {:error, ["#{@pages_dir}/ directory is missing"]}
+    end
+  end
+
+  defp read(path, name) do
     case File.lstat(path) do
       {:ok, %File.Stat{type: :regular, size: size}} when size > @max_size ->
-        {:error, ["#{@file_name} is larger than #{div(@max_size, 1024)} KiB"]}
+        {:error, ["#{name} is larger than #{div(@max_size, 1024)} KiB"]}
 
       {:ok, %File.Stat{type: :regular}} ->
         case File.read(path) do
@@ -95,24 +134,24 @@ defmodule Deepsplay.Screen do
             {:ok, toml}
 
           {:error, reason} ->
-            {:error, ["cannot read #{@file_name}: #{:file.format_error(reason)}"]}
+            {:error, ["cannot read #{name}: #{:file.format_error(reason)}"]}
         end
 
       {:ok, %File.Stat{}} ->
-        {:error, ["#{@file_name} is not a regular file"]}
+        {:error, ["#{name} is not a regular file"]}
 
       {:error, :enoent} ->
-        {:error, ["#{@file_name} is missing"]}
+        {:error, ["#{name} is missing"]}
 
       {:error, reason} ->
-        {:error, ["cannot read #{@file_name}: #{:file.format_error(reason)}"]}
+        {:error, ["cannot read #{name}: #{:file.format_error(reason)}"]}
     end
   end
 
-  defp decode(toml) do
+  defp decode(toml, name) do
     case TomlElixir.decode(toml) do
       {:ok, data} -> {:ok, data}
-      {:error, error} -> {:error, ["#{@file_name} is invalid TOML: #{Exception.message(error)}"]}
+      {:error, error} -> {:error, ["#{name} is invalid TOML: #{Exception.message(error)}"]}
     end
   end
 
@@ -186,11 +225,16 @@ defmodule Deepsplay.Screen do
 
   defp file_errors(nil, _root, _ctx), do: []
 
-  defp file_errors(path, root, ctx) do
-    case File.lstat(Path.join(root, path)) do
-      {:ok, %File.Stat{type: :regular}} -> []
-      {:ok, %File.Stat{}} -> [~s(#{ctx}.path "#{path}" is not a regular file)]
-      {:error, _reason} -> [~s(#{ctx}.path "#{path}" does not exist)]
+  defp file_errors(path, pages_dir, ctx) do
+    cond do
+      RevisionFile.hidden?(path) ->
+        [~s(#{ctx}.path "#{path}" must not name a hidden file or directory)]
+
+      RevisionFile.resolve(pages_dir, path) == :error ->
+        [~s(#{ctx}.path "#{path}" is not a file in #{@pages_dir}/)]
+
+      true ->
+        []
     end
   end
 end

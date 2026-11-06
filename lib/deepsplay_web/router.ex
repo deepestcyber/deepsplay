@@ -14,6 +14,11 @@ defmodule DeepsplayWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Files of a revision: no session, no CSRF, any content type (ADR 10).
+  scope "/c/:name/r/:sha", DeepsplayWeb do
+    get "/*path", RevisionController, :show
+  end
+
   scope "/", DeepsplayWeb do
     pipe_through :browser
 

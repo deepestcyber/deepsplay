@@ -5,13 +5,14 @@ defmodule Deepsplay.HostConfig.Config do
   """
 
   @enforce_keys [:name, :repo, :ref]
-  defstruct [:name, :repo, :ref, :credential, subdir: "", upstreams: []]
+  defstruct [:name, :repo, :ref, :credential, subdir: "", manifest: "screen.toml", upstreams: []]
 
   @type t :: %__MODULE__{
           name: String.t(),
           repo: String.t(),
           ref: String.t(),
           subdir: String.t(),
+          manifest: String.t(),
           credential: String.t() | nil,
           upstreams: [String.t()]
         }

@@ -9,6 +9,7 @@ defmodule Deepsplay.HostConfig do
 
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.RepoUrl
+  alias Deepsplay.Screen
   alias Deepsplay.TomlSchema
 
   @enforce_keys [:cache_dir, :default_config, :configs]
@@ -199,6 +200,7 @@ defmodule Deepsplay.HostConfig do
       {"repo", :repo, &cast_repo(&1, transports), []},
       {"ref", :ref, :string, []},
       {"subdir", :subdir, &cast_subdir/1, default: ""},
+      {"manifest", :manifest, &cast_manifest/1, default: Screen.default_manifest()},
       {"credential", :credential, :string, default: nil},
       {"upstreams", :upstreams, :string_list, default: []}
     ]
@@ -234,4 +236,13 @@ defmodule Deepsplay.HostConfig do
 
   defp cast_subdir(""), do: {:ok, ""}
   defp cast_subdir(value), do: TomlSchema.cast(:relative_path, value)
+
+  # Manifests are never delivered, so they must not live in pages/ (ADR 10).
+  defp cast_manifest(value) do
+    with {:ok, path} <- TomlSchema.cast(:relative_path, value) do
+      if hd(Path.split(path)) == Screen.pages_dir_name(),
+        do: {:error, ~s(must not be inside "#{Screen.pages_dir_name()}/")},
+        else: {:ok, path}
+    end
+  end
 end

@@ -16,10 +16,9 @@ particular screen, needs a way to display a single page without rotation.
 A screen URL takes an optional `page` query parameter that pins it to one file:
 `/?page=<path>` or `/c/<name>?page=<path>`.
 
-- `<path>` is relative to the root of `screen.toml` (the repository, or the
-  configured `subdir`), like page paths in `screen.toml`.
-- Any file in the revision can be pinned, not only pages listed in
-  `screen.toml`. The same path checks apply as for serving files (ADR 10).
+- `<path>` is relative to `pages/` (ADR 10), like page paths in manifests.
+- Any deliverable file in `pages/` can be pinned, not only pages listed in the
+  manifest. The same path checks apply as for serving files.
 - A pinned screen ignores rotation strategy, durations and weights.
 - A new revision still reaches a pinned screen, which reloads the page.
 - If the file does not exist in the current revision, the fallback page says

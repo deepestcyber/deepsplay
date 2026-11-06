@@ -17,13 +17,18 @@ still on an older revision must be able to finish loading it.
 | --- | --- |
 | `/` | Shell for the default configuration |
 | `/c/<name>` | Shell for a named configuration |
-| `/c/<name>/r/<sha>/<path>` | File from a revision |
+| `/c/<name>/r/<sha>/<path>` | File from `pages/` of a revision |
 | `/c/<name>/api/<upstream>/<path>` | Upstream proxy (see [8](0008-secrets-only-on-host-via-upstream-proxy.md)) |
 | `/c/<name>/backend/*` | Reserved for sidecars, unused in phase 1 |
 | `/status` | Status page |
 
 - A URL can only select a configuration the host defined, never name an
   arbitrary repository. An unknown name shows the fallback page.
+- Only files in `pages/` below the configuration's root (the repository, or its
+  `subdir`) are delivered; `<path>` is relative to `pages/`. Manifests,
+  `.gitignore`, READMEs and any other directory are never delivered. Hidden
+  files and directories (names starting with `.`) inside `pages/` are not
+  delivered either.
 - Files under `/r/<sha>/` never change and are served with long cache lifetimes,
   `X-Content-Type-Options: nosniff` and the type derived from the extension.
 
@@ -31,6 +36,8 @@ still on an older revision must be able to finish loading it.
 
 - Kiosk start URLs are short and stable.
 - Old and new revisions can be served side by side during a switch.
+- Repositories can hold files that are never delivered, in any directory other
+  than `pages/`, which leaves room for future features.
 - All pages share the server's origin, so one page can call another
   configuration's proxy paths. Acceptable for trusted repositories; untrusted
   ones would need separate origins or sandboxed iframes.

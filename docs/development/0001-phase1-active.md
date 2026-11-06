@@ -11,7 +11,7 @@ Status values: `open`, `in progress`, `done`.
 | 1 | Host config and fallback page | done |
 | 2 | Revision store | done |
 | 3 | `screen.toml` parsing and validation | done |
-| 4 | Static file serving | open |
+| 4 | Static file serving | done |
 | 5 | LiveView shell with rotation | open |
 | 6 | Poller and live updates | open |
 | 7 | Status page | open |
@@ -94,15 +94,20 @@ invalid revisions and keep the previous good one.
 
 Done:
 
-- `Deepsplay.Screen.load/2` reads `screen.toml` (max 64 KiB) and collects all
-  errors: `title`, `rotation` (default `sequential`), at least one `[[page]]`,
-  page `path` (relative, no `..`, must be a regular file below the root),
+- `Deepsplay.Screen.load/2` reads the manifest (default `screen.toml`, or the
+  configured `manifest`; max 64 KiB) and collects all errors: `pages/` must
+  exist, `title`, `rotation` (default `sequential`), at least one `[[page]]`,
+  page `path` (relative to `pages/`, no `..`, not hidden, a regular file),
   `duration`, `weight` (number > 0, default 1.0, integers accepted), `uses`
   (only upstreams the configuration allows), unknown keys. A `[backend]` table
   is ignored with a warning (`warnings` field, for the status page).
 - `Deepsplay.Screen.validator/1` plugs into `RevisionStore.publish/3`; it reads
-  the manifest from the configured `subdir` and rejects a missing `subdir`.
-- `Deepsplay.Screen.root/2` gives the manifest directory of a revision.
+  the configured manifest below the `subdir` and rejects a missing `subdir`.
+- `Deepsplay.Screen.root/2` and `pages_dir/1` give a configuration's root and
+  its `pages/` directory in a revision.
+- Host configuration: optional `manifest` per configuration (relative path,
+  not inside `pages/`), so several manifests in one repository can share pages
+  (ADR 5).
 - `Deepsplay.TomlSchema`: field reading and casting shared by the host
   configuration and `screen.toml`; `Deepsplay.HostConfig` now uses it.
 
@@ -113,10 +118,32 @@ Notes:
 
 ## 4. Static file serving
 
-Status: open
+Status: done (2026-11-06)
 
 Goal: serve `/c/<name>/r/<sha>/<path>` from the revision directory with path and
 symlink checks and long cache lifetimes (ADR 10).
+
+Done:
+
+- `DeepsplayWeb.RevisionController` on `GET /c/:name/r/:sha/*path`, outside the
+  browser pipeline (no session, no CSRF). Files are served with
+  `Cache-Control: public, max-age=31536000, immutable`,
+  `X-Content-Type-Options: nosniff` and the type from the extension.
+- `Deepsplay.RevisionFile.resolve/2`: only regular files below the root; no
+  `..`, hidden (`.`-prefixed), empty or encoded-slash segments; every component checked with
+  `lstat`, so symlinks are never followed. `sha?/1` accepts full SHA-1 and
+  SHA-256 hashes.
+- Unknown configuration, unknown or short SHA, missing file, directory or an
+  unusable host configuration: `404` with `Cache-Control: no-store`.
+
+Notes:
+
+- Only `pages/` below the configuration's root (the repository, or its
+  `subdir`) is served; paths are relative to it, like page paths and pinned
+  pages. Manifests and everything else outside `pages/` answer `404`.
+- Any revision still in the cache can be served, not only the current one, so
+  screens on an older revision can finish loading it.
+- Directories are not served; there is no `index.html` fallback.
 
 ## 5. LiveView shell with rotation
 

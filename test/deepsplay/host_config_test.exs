@@ -18,6 +18,7 @@ defmodule Deepsplay.HostConfigTest do
   repo      = "https://github.com/example/lobby-screen.git"
   ref       = "main"
   subdir    = "screens/lobby"
+  manifest  = "rotations/lobby.toml"
   upstreams = ["weather"]
 
   [[config]]
@@ -66,11 +67,13 @@ defmodule Deepsplay.HostConfigTest do
                  repo: "https://github.com/example/lobby-screen.git",
                  ref: "main",
                  subdir: "screens/lobby",
+                 manifest: "rotations/lobby.toml",
                  upstreams: ["weather"],
                  credential: nil
                },
                "kitchen" => %Config{
                  subdir: "",
+                 manifest: "screen.toml",
                  upstreams: [],
                  credential: "github_deploy_key"
                }
@@ -153,6 +156,17 @@ defmodule Deepsplay.HostConfigTest do
       for subdir <- ["/abs", "../up", "a/../../b"] do
         assert Enum.any?(errors(minimal(~s(subdir = "#{subdir}"))), &(&1 =~ ".subdir")), subdir
       end
+    end
+
+    test "manifests outside the root or inside pages/" do
+      for manifest <- ["../x.toml", "/x.toml", "pages/screen.toml", ""] do
+        assert Enum.any?(errors(minimal(~s(manifest = "#{manifest}"))), &(&1 =~ ".manifest")),
+               manifest
+      end
+
+      assert ~s(config "lobby".manifest must not be inside "pages/") in errors(
+               minimal(~s(manifest = "pages/screen.toml"))
+             )
     end
 
     test "upstreams that are not defined" do

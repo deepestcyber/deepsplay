@@ -9,6 +9,8 @@ defmodule Deepsplay.ScreenTest do
 
   @moduletag :tmp_dir
 
+  @one_page ~s([[page]]\npath = "a.html"\nduration = "1s"\n)
+
   defp write(root, files) do
     for {path, content} <- files do
       full = Path.join(root, path)
@@ -25,7 +27,7 @@ defmodule Deepsplay.ScreenTest do
   end
 
   describe "load/2 with a valid manifest" do
-    test "reads title, rotation and pages", %{tmp_dir: root} do
+    test "reads title, rotation and pages relative to pages/", %{tmp_dir: root} do
       write(root, %{
         "screen.toml" => """
         title    = "Lobby"
@@ -42,8 +44,8 @@ defmodule Deepsplay.ScreenTest do
         weight   = 0.5
         uses     = ["weather"]
         """,
-        "welcome/index.html" => "w",
-        "weather/index.html" => "x"
+        "pages/welcome/index.html" => "w",
+        "pages/weather/index.html" => "x"
       })
 
       assert {:ok, screen} = Screen.load(root, upstreams: ["weather"])
@@ -57,21 +59,30 @@ defmodule Deepsplay.ScreenTest do
     end
 
     test "applies defaults", %{tmp_dir: root} do
-      write(root, %{
-        "screen.toml" => ~s([[page]]\npath = "a.html"\nduration = "10s"\n),
-        "a.html" => "a"
-      })
+      write(root, %{"screen.toml" => @one_page, "pages/a.html" => "a"})
 
       assert {:ok, %Screen{title: nil, rotation: :sequential, pages: [page]}} = Screen.load(root)
       assert page.weight == 1.0
       assert page.uses == []
     end
 
+    test "reads another manifest, sharing the same pages", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => @one_page,
+        "rotations/kitchen.toml" => ~s(rotation = "random"\n) <> @one_page,
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, %Screen{rotation: :sequential}} = Screen.load(root)
+
+      assert {:ok, %Screen{rotation: :random, pages: [%Page{path: "a.html"}]}} =
+               Screen.load(root, manifest: "rotations/kitchen.toml")
+    end
+
     test "ignores a [backend] table with a warning", %{tmp_dir: root} do
       write(root, %{
-        "screen.toml" =>
-          ~s([backend]\ncommand = "x"\n[[page]]\npath = "a.html"\nduration = "10s"\n),
-        "a.html" => "a"
+        "screen.toml" => ~s([backend]\ncommand = "x"\n) <> @one_page,
+        "pages/a.html" => "a"
       })
 
       assert {:ok, %Screen{warnings: ["[backend] is not supported yet and is ignored"]}} =
@@ -80,8 +91,17 @@ defmodule Deepsplay.ScreenTest do
   end
 
   describe "load/2 rejects" do
-    test "a missing manifest", %{tmp_dir: root} do
+    test "a missing manifest, named in the message", %{tmp_dir: root} do
       assert errors(root) == ["screen.toml is missing"]
+
+      assert errors(root, manifest: "rotations/kitchen.toml") == [
+               "rotations/kitchen.toml is missing"
+             ]
+    end
+
+    test "a missing pages/ directory", %{tmp_dir: root} do
+      write(root, %{"screen.toml" => @one_page, "a.html" => "a"})
+      assert errors(root) == ["pages/ directory is missing"]
     end
 
     test "a manifest that is too large", %{tmp_dir: root} do
@@ -93,11 +113,11 @@ defmodule Deepsplay.ScreenTest do
     test "invalid TOML", %{tmp_dir: root} do
       write(root, %{"screen.toml" => "[[page"})
       assert [error] = errors(root)
-      assert error =~ "invalid TOML"
+      assert error =~ "screen.toml is invalid TOML"
     end
 
     test "a manifest without pages", %{tmp_dir: root} do
-      write(root, %{"screen.toml" => ~s(title = "Empty"\n)})
+      write(root, %{"screen.toml" => ~s(title = "Empty"\n), "pages/a.html" => "a"})
       assert errors(root) == ["at least one [[page]] is required"]
     end
 
@@ -113,7 +133,7 @@ defmodule Deepsplay.ScreenTest do
         weight   = 0
         wieght   = 2
         """,
-        "a.html" => "a"
+        "pages/a.html" => "a"
       })
 
       errors = errors(root)
@@ -126,20 +146,18 @@ defmodule Deepsplay.ScreenTest do
     end
 
     test "missing required page keys", %{tmp_dir: root} do
-      write(root, %{"screen.toml" => "[[page]]\n"})
+      write(root, %{"screen.toml" => "[[page]]\n", "pages/a.html" => "a"})
       errors = errors(root)
 
       assert "page #1.path is missing" in errors
       assert "page #1.duration is missing" in errors
     end
 
-    test "paths outside the root, missing files and directories", %{tmp_dir: tmp_dir} do
-      root = Path.join(tmp_dir, "root")
-
+    test "paths that are not deliverable files in pages/", %{tmp_dir: root} do
       write(root, %{
         "screen.toml" => """
         [[page]]
-        path = "../outside.html"
+        path = "../README.md"
         duration = "1s"
 
         [[page]]
@@ -153,25 +171,31 @@ defmodule Deepsplay.ScreenTest do
         [[page]]
         path = "dir"
         duration = "1s"
-        """,
-        "dir/index.html" => "x"
-      })
 
-      write(tmp_dir, %{"outside.html" => "x"})
+        [[page]]
+        path = ".hidden/a.html"
+        duration = "1s"
+        """,
+        "README.md" => "outside pages/",
+        "pages/dir/index.html" => "x",
+        "pages/.hidden/a.html" => "x"
+      })
 
       errors = errors(root)
 
       assert ~s(page #1.path must not contain "..") in errors
       assert "page #2.path must be a relative path" in errors
-      assert ~s(page #3.path "missing.html" does not exist) in errors
-      assert ~s(page #4.path "dir" is not a regular file) in errors
+      assert ~s(page #3.path "missing.html" is not a file in pages/) in errors
+      assert ~s(page #4.path "dir" is not a file in pages/) in errors
+
+      assert ~s(page #5.path ".hidden/a.html" must not name a hidden file or directory) in errors
     end
 
     test "upstreams the configuration does not allow", %{tmp_dir: root} do
       write(root, %{
         "screen.toml" =>
           ~s([[page]]\npath = "a.html"\nduration = "1s"\nuses = ["weather", "news"]\n),
-        "a.html" => "a"
+        "pages/a.html" => "a"
       })
 
       assert errors(root, upstreams: ["weather"]) == [
@@ -181,26 +205,30 @@ defmodule Deepsplay.ScreenTest do
   end
 
   describe "validator/1" do
-    defp config(subdir \\ "", upstreams \\ []) do
-      %Config{name: "lobby", repo: "file:///x", ref: "main", subdir: subdir, upstreams: upstreams}
+    defp config(fields \\ []) do
+      struct!(%Config{name: "lobby", repo: "file:///x", ref: "main"}, fields)
     end
 
-    test "accepts a valid revision and reads screen.toml from subdir", %{tmp_dir: root} do
-      write(root, %{
-        "screens/lobby/screen.toml" => ~s([[page]]\npath = "a.html"\nduration = "1s"\n),
-        "screens/lobby/a.html" => "a"
-      })
+    test "reads the manifest from the subdir", %{tmp_dir: root} do
+      write(root, %{"lobby/screen.toml" => @one_page, "lobby/pages/a.html" => "a"})
 
-      assert Screen.validator(config("screens/lobby")).(root) == :ok
+      assert Screen.validator(config(subdir: "lobby")).(root) == :ok
       assert {:error, "screen.toml is missing"} = Screen.validator(config()).(root)
     end
 
+    test "uses the configured manifest", %{tmp_dir: root} do
+      write(root, %{"rotations/kitchen.toml" => @one_page, "pages/a.html" => "a"})
+
+      assert Screen.validator(config(manifest: "rotations/kitchen.toml")).(root) == :ok
+    end
+
     test "rejects a missing subdir", %{tmp_dir: root} do
-      assert Screen.validator(config("nope")).(root) == {:error, ~s(subdir "nope" does not exist)}
+      assert Screen.validator(config(subdir: "nope")).(root) ==
+               {:error, ~s(subdir "nope" does not exist)}
     end
 
     test "joins all errors into one message", %{tmp_dir: root} do
-      write(root, %{"screen.toml" => "[[page]]\n"})
+      write(root, %{"screen.toml" => "[[page]]\n", "pages/a.html" => "a"})
 
       assert {:error, "page #1.path is missing; page #1.duration is missing"} =
                Screen.validator(config()).(root)
@@ -211,12 +239,7 @@ defmodule Deepsplay.ScreenTest do
       url = GitFixture.init(src)
       opts = [cache_dir: Path.join(tmp_dir, "cache"), validate: Screen.validator(config())]
 
-      good =
-        GitFixture.commit(src, %{
-          "screen.toml" => ~s([[page]]\npath = "a.html"\nduration = "1s"\n),
-          "a.html" => "a"
-        })
-
+      good = GitFixture.commit(src, %{"screen.toml" => @one_page, "pages/a.html" => "a"})
       assert {:ok, ^good} = RevisionStore.publish(url, "main", opts)
 
       bad =
@@ -224,7 +247,7 @@ defmodule Deepsplay.ScreenTest do
           "screen.toml" => ~s([[page]]\npath = "gone.html"\nduration = "1s"\n)
         })
 
-      assert {:error, {:rejected, ^bad, ~s(page #1.path "gone.html" does not exist)}} =
+      assert {:error, {:rejected, ^bad, ~s(page #1.path "gone.html" is not a file in pages/)}} =
                RevisionStore.publish(url, "main", opts)
 
       assert RevisionStore.last_good(url, "main", opts) == {:ok, good}
