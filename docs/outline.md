@@ -250,9 +250,10 @@ Keeping the proxy and the revision store behind small modules (`Upstream`, `Revi
 
 **Server**
 
-- A `mix release`, usually in a container. The image needs `git`, `openssh-client` and CA certificates. It runs as a non-root user.
-- Persistent volume for `cache_dir`. The secrets file is mounted read-only.
-- Settings through environment variables: the path of the host configuration, the secrets path or values, `SECRET_KEY_BASE`, `PORT`.
+- A container image, built by GitHub Actions for amd64 and arm64 and published on `ghcr.io/deepestcyber/deepsplay` (ADR 13). It contains the release, `git`, `openssh-client` and CA certificates, and runs as a non-root user.
+- Persistent volume for `cache_dir`. The host configuration and the secrets file are mounted read-only.
+- Settings through environment variables: the path of the host configuration, the secrets path or values, `SECRET_KEY_BASE`, `PORT`, optionally `DEEPSPLAY_ORIGINS`. Plain HTTP; HTTPS through a reverse proxy.
+- Setup with Docker Compose or NixOS `virtualisation.oci-containers`: see [deployment.md](deployment.md).
 
 **Screen**
 

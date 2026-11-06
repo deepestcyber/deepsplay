@@ -1,5 +1,7 @@
 # Phase 1 progress
 
+Status: completed (2026-11-06)
+
 Phase 1 is built in vertical slices. Each slice is tested and merged on its own.
 Scope and design are in [outline.md](../outline.md); decisions in
 [adr/](../adr/).
@@ -16,7 +18,7 @@ Status values: `open`, `in progress`, `done`.
 | 6 | Poller and live updates | done |
 | 7 | Status page | done |
 | 8 | Upstream proxy and host secrets | done |
-| 9 | Release, container and kiosk notes | open |
+| 9 | Release, container and kiosk notes | done |
 
 ## 1. Host config and fallback page
 
@@ -298,10 +300,35 @@ Notes:
 
 ## 9. Release, container and kiosk notes
 
-Status: open
+Status: done (2026-11-06)
 
-Goal: `mix release`, container image with `git` and `openssh-client`, and notes
-for setting up kiosk screens.
+Goal: a release, a container image and notes for setting up kiosk screens.
+
+Done:
+
+- Container image (ADR 13): multi-stage `Dockerfile` from `phx.gen.release`,
+  runtime image with `git`, `openssh-client` and CA certificates, running as
+  user `deepsplay` (uid 10001), volume `/var/lib/deepsplay`, default
+  `DEEPSPLAY_CONFIG=/etc/deepsplay/host.toml`. Smoke-tested locally (HTTPS
+  fetch, rejection shown, status page, origin check).
+- `.github/workflows/ci.yml`: tests on every push and pull request; on `main`
+  and `v*` tags, native amd64 and arm64 builds merged into one image on
+  `ghcr.io/deepestcyber/deepsplay` (`edge`, version, `latest`).
+- Production config: no `force_ssl` (plain HTTP on the internal network);
+  LiveView origin check accepts the request's own host (`check_origin: :conn`),
+  narrowed with `DEEPSPLAY_ORIGINS`; URL from `PHX_HOST`, `PHX_URL_SCHEME`,
+  `PHX_URL_PORT`.
+- `deploy/compose.yaml`, `deploy/host.example.toml`, `docs/deployment.md`
+  (Compose, NixOS `virtualisation.oci-containers`, kiosk screens, releasing),
+  `CHANGELOG.md`, a project `README.md`.
+
+Notes:
+
+- Decided when starting this slice: images built by GitHub Actions and
+  published publicly, instead of building on the server (ADR 13).
+- The workflow has not run yet; it runs on the first push to `main` or tag.
+  The published package may need to be made public once in GitHub's package
+  settings.
 
 ## Additions beyond the slices
 

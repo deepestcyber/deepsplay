@@ -1,0 +1,27 @@
+# Host configuration for the deepsplay container (ADR 5).
+# Mounted at /etc/deepsplay/host.toml.
+
+[server]
+cache_dir      = "/var/lib/deepsplay/cache"   # on the container's volume
+default_config = "lobby"                      # shown on /
+poll_interval  = "30s"
+keep_revisions = 3
+
+[[config]]
+name = "lobby"
+repo = "https://github.com/example/lobby-screen.git"
+ref  = "main"
+
+# A private repository over SSH; the key comes from the secrets file.
+# [[config]]
+# name       = "kitchen"
+# repo       = "git@github.com:example/private-screens.git"
+# ref        = "main"
+# credential = "github_deploy_key"
+
+# An upstream pages may call through /c/<config>/api/weather/... (ADR 8).
+# [upstream.weather]
+# base_url    = "https://api.example.com/v1"
+# query       = "appid"
+# query_value = "{secret:weather_api}"
+# cache_ttl   = "60s"

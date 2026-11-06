@@ -1,0 +1,25 @@
+# deepsplay with Docker Compose (see docs/deployment.md).
+#
+# Next to this file:
+#   host.toml      host configuration (start from host.example.toml)
+#   secrets.toml   host secrets, mode 0600 (optional)
+#   .env           SECRET_KEY_BASE=... (generate with: openssl rand -base64 48)
+
+services:
+  deepsplay:
+    image: ghcr.io/deepestcyber/deepsplay:latest
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE in .env}
+      # DEEPSPLAY_SECRETS: /etc/deepsplay/secrets.toml
+      # DEEPSPLAY_SECRET_WEATHER_API: ...           # or secrets as variables
+      # DEEPSPLAY_ORIGINS: //display.lan,//10.0.0.5 # default: the request's own host
+    volumes:
+      - ./host.toml:/etc/deepsplay/host.toml:ro
+      # - ./secrets.toml:/etc/deepsplay/secrets.toml:ro
+      - cache:/var/lib/deepsplay
+
+volumes:
+  cache:

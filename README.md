@@ -1,18 +1,33 @@
-# Deepsplay
+# deepsplay
 
-To start your Phoenix server:
+A display application by and for [Deep Cyber](https://www.deepcyber.de): kiosk
+screens show HTML pages from git repositories, rotating through them, and pick
+up new commits on their own.
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+- Content repositories hold a manifest (`screen.toml`) and the pages in
+  `pages/`; screens open `/` or `/c/<name>` and rotate the pages in the browser.
+- Secrets stay on the server; pages reach external APIs through a proxy.
+- `/status` shows configurations, connected screens and recent errors.
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+## Documentation
 
-Ready to run in production? Please [check our deployment guides](https://phoenix.hexdocs.pm/deployment.html).
+- [Outline](docs/outline.md): concept and design
+- [Architecture decisions](docs/adr/)
+- [Deployment](docs/deployment.md): container image, Docker Compose, NixOS,
+  kiosk screens
+- [Development plans and progress](docs/development/)
+- [Changelog](CHANGELOG.md)
 
-## Learn more
+## Development
 
-* Official website: https://www.phoenixframework.org/
-* Guides: https://phoenix.hexdocs.pm/overview.html
-* Docs: https://phoenix.hexdocs.pm
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+Requires Elixir 1.20 and Erlang/OTP 29; the watcher tests need `inotify-tools`.
+
+```sh
+mix setup                 # dependencies and asset tools
+iex -S mix phx.server     # http://localhost:4000
+mix precommit             # compile, format, tests
+```
+
+Dev uses `config/deepsplay.dev.toml`, or your own gitignored
+`config/deepsplay.local.toml` if it exists. A configuration with
+`path = "/abs/dir"` serves a local directory live, so every save shows at once.

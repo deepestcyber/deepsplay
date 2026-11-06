@@ -47,12 +47,27 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  # The URL deepsplay builds absolute links with; pages use relative paths,
+  # so this rarely matters (ADR 13).
+  host = System.get_env("PHX_HOST") || "localhost"
+  scheme = System.get_env("PHX_URL_SCHEME") || "http"
+  url_port = String.to_integer(System.get_env("PHX_URL_PORT") || System.get_env("PORT", "4000"))
+
+  # Origins allowed for the LiveView websocket. By default the origin must
+  # match the host the request came in on, so screens can use an IP address or
+  # any host name. DEEPSPLAY_ORIGINS="//display.lan,//10.0.0.5" narrows it down.
+  check_origin =
+    case System.get_env("DEEPSPLAY_ORIGINS") do
+      nil -> :conn
+      "" -> :conn
+      origins -> origins |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+    end
 
   config :deepsplay, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :deepsplay, DeepsplayWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: host, port: url_port, scheme: scheme],
+    check_origin: check_origin,
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
