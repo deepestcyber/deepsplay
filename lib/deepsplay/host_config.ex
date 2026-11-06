@@ -8,7 +8,9 @@ defmodule Deepsplay.HostConfig do
   """
 
   alias Deepsplay.HostConfig.Config
+  alias Deepsplay.HostConfig.Upstream
   alias Deepsplay.RepoUrl
+  alias Deepsplay.Secrets
   alias Deepsplay.Screen
   alias Deepsplay.TomlSchema
 
@@ -17,6 +19,7 @@ defmodule Deepsplay.HostConfig do
     :cache_dir,
     :default_config,
     :configs,
+    upstreams: %{},
     poll_interval: 30_000,
     keep_revisions: 3
   ]
@@ -26,10 +29,13 @@ defmodule Deepsplay.HostConfig do
           default_config: String.t(),
           poll_interval: pos_integer(),
           keep_revisions: non_neg_integer(),
-          configs: %{String.t() => Config.t()}
+          configs: %{String.t() => Config.t()},
+          upstreams: %{String.t() => Upstream.t()}
         }
 
   @top_keys ~w(server config upstream)
+
+  @upstream_methods ~w(GET HEAD POST PUT PATCH DELETE)
 
   @server_fields [
     {"cache_dir", :cache_dir, :string, []},
@@ -63,6 +69,8 @@ defmodule Deepsplay.HostConfig do
       `:git_transports` application setting (see ADR 6).
     * `:allow_local_paths` - whether configurations may use a local `path`.
       Defaults to the `:allow_local_paths` application setting (ADR 12).
+    * `:secrets` - names of the defined secrets, which upstreams and
+      credentials may refer to. Defaults to `Deepsplay.Secrets.names/0`.
   """
   @spec parse(String.t(), keyword()) :: {:ok, t()} | {:error, [String.t()]}
   def parse(toml, opts \\ []) when is_binary(toml) do
@@ -74,8 +82,12 @@ defmodule Deepsplay.HostConfig do
       end)
 
     case TomlElixir.decode(toml) do
-      {:ok, data} -> build(data, %{transports: transports, local_paths: local_paths})
-      {:error, error} -> {:error, ["invalid TOML: #{Exception.message(error)}"]}
+      {:ok, data} ->
+        secrets = Keyword.get_lazy(opts, :secrets, &Secrets.names/0)
+        build(data, %{transports: transports, local_paths: local_paths, secrets: secrets})
+
+      {:error, error} ->
+        {:error, ["invalid TOML: #{Exception.message(error)}"]}
     end
   end
 
@@ -90,8 +102,8 @@ defmodule Deepsplay.HostConfig do
   defp build(data, allowed) do
     unknown = TomlSchema.unknown_keys(data, @top_keys, "top level")
     {server, server_errors} = server(Map.get(data, "server"))
-    {upstreams, upstream_errors} = upstream_names(Map.get(data, "upstream", %{}))
-    {configs, config_errors} = configs(Map.get(data, "config", []), allowed, upstreams)
+    {upstreams, upstream_errors} = upstreams(Map.get(data, "upstream", %{}), allowed.secrets)
+    {configs, config_errors} = configs(Map.get(data, "config", []), allowed, Map.keys(upstreams))
 
     errors =
       unknown ++
@@ -106,7 +118,8 @@ defmodule Deepsplay.HostConfig do
            default_config: server.default_config,
            poll_interval: server.poll_interval,
            keep_revisions: server.keep_revisions,
-           configs: Map.new(configs, &{&1.name, &1})
+           configs: Map.new(configs, &{&1.name, &1}),
+           upstreams: upstreams
          }}
 
       errors ->
@@ -121,18 +134,94 @@ defmodule Deepsplay.HostConfig do
 
   defp server(_server), do: {nil, ["server must be a table"]}
 
-  # Upstream tables are only checked for their names here; their contents are
-  # read by the upstream proxy (ADR 8).
-  defp upstream_names(upstreams) when is_map(upstreams) do
-    errors =
-      for {name, value} <- upstreams, not is_map(value) do
-        "upstream.#{name} must be a table"
-      end
+  # Upstreams of the proxy (ADR 8). Invalid ones still count as defined, so a
+  # configuration using one is not also reported.
+  defp upstreams(upstreams, secrets) when is_map(upstreams) do
+    {parsed, errors} =
+      upstreams
+      |> Enum.sort()
+      |> Enum.map_reduce([], fn {name, table}, acc ->
+        {upstream, errors} = upstream(name, table, secrets)
+        {{name, upstream}, acc ++ errors}
+      end)
 
-    {Map.keys(upstreams), errors}
+    {Map.new(parsed), errors}
   end
 
-  defp upstream_names(_upstreams), do: {[], ["upstream must be a table"]}
+  defp upstreams(_upstreams, _secrets), do: {%{}, ["upstream must be a table"]}
+
+  defp upstream(name, table, secrets) when is_map(table) do
+    ctx = "upstream.#{name}"
+
+    {fields, errors} =
+      TomlSchema.fields(table, ctx, [
+        {"base_url", :base_url, &cast_base_url/1, []},
+        {"methods", :methods, &cast_methods/1, default: ["GET"]},
+        {"header", :header, &cast_header_name/1, default: nil},
+        {"value", :value, :string, default: nil},
+        {"query", :query, :string, default: nil},
+        {"query_value", :query_value, :string, default: nil},
+        {"cache_ttl", :cache_ttl, :duration, default: nil},
+        {"timeout", :timeout, :duration, default: 15_000}
+      ])
+
+    errors =
+      errors ++
+        pair_errors(table, ctx, "header", "value") ++
+        pair_errors(table, ctx, "query", "query_value") ++
+        for template <- [fields.value, fields.query_value],
+            is_binary(template),
+            secret <- Secrets.references(template),
+            secret not in secrets do
+          ~s(#{ctx}: secret "#{secret}" is not defined)
+        end
+
+    if Regex.match?(~r/^[a-z0-9][a-z0-9_-]*$/, name) do
+      {struct!(Upstream, Map.put(fields, :name, name)), errors}
+    else
+      {nil, errors ++ ["#{ctx}: name must be lowercase letters, digits, \"-\" and \"_\""]}
+    end
+  end
+
+  defp upstream(name, _table, _secrets), do: {nil, ["upstream.#{name} must be a table"]}
+
+  defp pair_errors(table, ctx, a, b) do
+    case {Map.has_key?(table, a), Map.has_key?(table, b)} do
+      {true, false} -> [~s(#{ctx}: "#{a}" needs "#{b}")]
+      {false, true} -> [~s(#{ctx}: "#{b}" needs "#{a}")]
+      _both_or_none -> []
+    end
+  end
+
+  defp cast_base_url(value) when is_binary(value) do
+    case URI.parse(value) do
+      %URI{scheme: scheme, host: host, query: nil, fragment: nil, userinfo: nil}
+      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
+        {:ok, String.trim_trailing(value, "/")}
+
+      _other ->
+        {:error, "must be an http or https URL without credentials, query or fragment"}
+    end
+  end
+
+  defp cast_base_url(_value), do: {:error, "must be a string"}
+
+  defp cast_methods(value) when is_list(value) and value != [] do
+    if Enum.all?(value, &(&1 in @upstream_methods)),
+      do: {:ok, value},
+      else: {:error, "must be a list of: #{Enum.join(@upstream_methods, ", ")}"}
+  end
+
+  defp cast_methods(_value),
+    do: {:error, "must be a list of: #{Enum.join(@upstream_methods, ", ")}"}
+
+  defp cast_header_name(value) when is_binary(value) do
+    if Regex.match?(~r/^[A-Za-z0-9-]+$/, value),
+      do: {:ok, value},
+      else: {:error, "must be a header name"}
+  end
+
+  defp cast_header_name(_value), do: {:error, "must be a string"}
 
   defp configs(configs, allowed, upstreams) when is_list(configs) do
     {parsed, errors} =
@@ -158,6 +247,7 @@ defmodule Deepsplay.HostConfig do
     errors =
       errors ++
         source_errors(config, ctx) ++
+        credential_errors(fields[:credential], ctx, allowed.secrets) ++
         for upstream <- fields[:upstreams] || [], upstream not in upstreams do
           ~s(#{ctx}: upstream "#{upstream}" is not defined)
         end
@@ -170,6 +260,14 @@ defmodule Deepsplay.HostConfig do
 
   defp config(_config, index, _allowed, _upstreams) do
     {nil, ["config ##{index} must be a table"]}
+  end
+
+  defp credential_errors(nil, _ctx, _secrets), do: []
+
+  defp credential_errors(credential, ctx, secrets) do
+    if credential in secrets,
+      do: [],
+      else: [~s(#{ctx}: credential secret "#{credential}" is not defined)]
   end
 
   # Content comes from a repository (repo + ref) or a local directory (path).

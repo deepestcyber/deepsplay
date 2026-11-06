@@ -30,3 +30,6 @@ config :deepsplay, :allow_local_paths, true
 
 # Tests fetch explicitly; no pollers or cache cleanup run on their own.
 config :deepsplay, :start_pollers, false
+
+# The upstream proxy talks to Req.Test stubs instead of the network.
+config :deepsplay, :proxy_req_options, plug: {Req.Test, Deepsplay.UpstreamProxy}

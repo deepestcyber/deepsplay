@@ -16,6 +16,7 @@ defmodule Deepsplay.Poller do
 
   require Logger
 
+  alias Deepsplay.GitCredentials
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.RemoteRef
   alias Deepsplay.Revisions
@@ -77,7 +78,7 @@ defmodule Deepsplay.Poller do
     if state.timer, do: Process.cancel_timer(state.timer)
     now = DateTime.utc_now()
 
-    case RemoteRef.resolve(state.url, state.ref) do
+    case resolve(state) do
       {:ok, %{sha: sha, kind: kind}} when sha == state.last_sha ->
         # Nothing new. A previous check error is over; a rejected revision's
         # error stays until the branch moves.
@@ -96,6 +97,17 @@ defmodule Deepsplay.Poller do
         state = schedule(%{state | failures: state.failures + 1})
         record(state, %{checked_at: now, error: "check failed: " <> message, error_at: now})
         state
+    end
+  end
+
+  # All configurations share the repository; the first with a credential
+  # provides it for checking.
+  defp resolve(state) do
+    config = Enum.find(state.configs, hd(state.configs), & &1.credential)
+
+    case GitCredentials.env(config) do
+      {:ok, env} -> RemoteRef.resolve(state.url, state.ref, env: env)
+      {:error, message} -> {:error, message}
     end
   end
 

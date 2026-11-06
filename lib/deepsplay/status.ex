@@ -62,6 +62,17 @@ defmodule Deepsplay.Status do
   end
 
   @doc """
+  Adds an error to the log without changing the configuration's status, for
+  problems that do not affect its content, such as upstream failures.
+  """
+  @spec log_error(String.t(), String.t()) :: :ok
+  def log_error(name, message) do
+    log(name, message, DateTime.utc_now())
+    Phoenix.PubSub.broadcast(@pubsub, @all_topic, {:status_changed, name})
+    :ok
+  end
+
+  @doc """
   Subscribes the caller to status changes of all configurations.
   """
   @spec subscribe_all() :: :ok | {:error, term()}

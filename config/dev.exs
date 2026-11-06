@@ -70,6 +70,11 @@ config :deepsplay,
          else: Path.expand("deepsplay.dev.toml", __DIR__)
        )
 
+# Host secrets used unless DEEPSPLAY_SECRETS is set: the personal, gitignored
+# config/deepsplay.secrets.toml if it exists (ADR 8).
+secrets = Path.expand("deepsplay.secrets.toml", __DIR__)
+if File.exists?(secrets), do: config(:deepsplay, :secrets_path, secrets)
+
 # Local repositories for page development (ADR 6), and local directories
 # served directly (ADR 12).
 config :deepsplay, :git_transports, ["https", "ssh", "file"]

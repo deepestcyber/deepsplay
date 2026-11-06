@@ -177,8 +177,8 @@ There are no alerts in phase 1.
 
 Anything the browser can read is not secret, so a page can never hold a key in its HTML or JavaScript. Secrets are used by the server on the page's behalf, through named upstreams that the host defines. The repository only names the upstream it wants to call.
 
-1. **Host secrets.** Values live in a secrets file outside the repository and the cache (TOML, mode 0600, mounted read-only) or in environment variables. Names are lowercase, for example `weather_api`.
-2. **Host upstreams.** The host defines each upstream: a base URL and how the secret is added to the request. A page cannot choose a URL, so a repository cannot make the server send a secret to a host of its own.
+1. **Host secrets.** Values live in a secrets file outside the repository and the cache (TOML at `DEEPSPLAY_SECRETS`, mode 0600, mounted read-only) or in environment variables `DEEPSPLAY_SECRET_<NAME>`. Names are lowercase, for example `weather_api`.
+2. **Host upstreams.** The host defines each upstream: a base URL and how the secret is added to the request, as a header and/or a query parameter. A page cannot choose a URL, so a repository cannot make the server send a secret to a host of its own.
 3. **Binding.** A configuration lists the upstreams it may use (`upstreams` in the host configuration). A repository that asks for anything else is rejected at validation.
 4. **Use.** A page calls `/c/<config>/api/<upstream>/<path>`. The server checks the binding, adds the credential, forwards the request and returns the answer.
 
@@ -192,6 +192,8 @@ base_url  = "https://api.example.com/v1"
 methods   = ["GET"]
 header    = "Authorization"
 value     = "Bearer {secret:weather_api}"
+# query       = "appid"                    # alternatively or additionally,
+# query_value = "{secret:weather_api}"     # the secret as a query parameter
 cache_ttl = "60s"       # one upstream call serves all screens within this time
 ```
 

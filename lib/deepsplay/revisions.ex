@@ -9,6 +9,7 @@ defmodule Deepsplay.Revisions do
 
   require Logger
 
+  alias Deepsplay.GitCredentials
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.LocalWatcher
   alias Deepsplay.RevisionStore
@@ -37,10 +38,23 @@ defmodule Deepsplay.Revisions do
   """
   @spec refresh(Config.t(), keyword()) :: {:ok, String.t()} | {:error, RevisionStore.error()}
   def refresh(%Config{} = config, opts \\ []) do
-    publish_opts =
-      [validate: Screen.validator(config), remember_as: remember_key(config)] ++ opts
+    result =
+      case GitCredentials.env(config) do
+        {:ok, env} ->
+          publish_opts =
+            [
+              validate: Screen.validator(config),
+              remember_as: remember_key(config),
+              git: [env: env]
+            ] ++ opts
 
-    case RevisionStore.publish(config.repo, config.ref, publish_opts) do
+          RevisionStore.publish(config.repo, config.ref, publish_opts)
+
+        {:error, message} ->
+          {:error, {:config, message}}
+      end
+
+    case result do
       {:ok, sha} ->
         announce(config.name, sha)
         Status.update(config.name, %{error: nil, error_at: nil})

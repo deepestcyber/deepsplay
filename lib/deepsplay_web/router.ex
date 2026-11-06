@@ -14,6 +14,11 @@ defmodule DeepsplayWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Upstream proxy: no session, no CSRF, any method (ADR 8).
+  scope "/c/:name/api/:upstream", DeepsplayWeb do
+    match :*, "/*path", ProxyController, :forward
+  end
+
   # Files of a revision: no session, no CSRF, any content type (ADR 10).
   scope "/c/:name/r/:sha", DeepsplayWeb do
     get "/*path", RevisionController, :show

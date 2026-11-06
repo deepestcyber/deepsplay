@@ -10,21 +10,26 @@ defmodule Deepsplay.HostConfig.Store do
 
   alias Deepsplay.HostConfig
   alias Deepsplay.HostConfig.Config
+  alias Deepsplay.Secrets
 
   @key {__MODULE__, :host_config}
 
   @type state :: {:ok, HostConfig.t()} | {:error, [String.t()]}
 
   @doc """
-  Loads the host configuration from the `:host_config_path` application
-  setting and stores the result.
+  Loads the secrets and then the host configuration from the
+  `:host_config_path` application setting, and stores the result. Unusable
+  secrets make the host configuration unusable too.
   """
   @spec load() :: state()
   def load do
+    # Secrets first: the host configuration refers to them by name (ADR 8).
     result =
-      case Application.get_env(:deepsplay, :host_config_path) do
-        nil -> {:error, ["no host configuration: DEEPSPLAY_CONFIG is not set"]}
-        path -> HostConfig.load(path)
+      with {:ok, secrets} <- Secrets.load() do
+        case Application.get_env(:deepsplay, :host_config_path) do
+          nil -> {:error, ["no host configuration: DEEPSPLAY_CONFIG is not set"]}
+          path -> HostConfig.load(path, secrets: secrets)
+        end
       end
 
     case result do

@@ -114,7 +114,8 @@ defmodule Deepsplay.RevisionStore do
     with {:ok, cache_dir} <- cache_dir(opts) do
       keep = MapSet.new(urls, &RepoUrl.key/1)
 
-      for entry <- ls(cache_dir), entry not in keep do
+      # Hidden entries (such as .credentials) are not repositories.
+      for entry <- ls(cache_dir), entry not in keep, not String.starts_with?(entry, ".") do
         Writer.stop(cache_dir, entry)
         File.rm_rf!(Path.join(cache_dir, entry))
       end

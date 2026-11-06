@@ -25,6 +25,12 @@ if host_config_path = System.get_env("DEEPSPLAY_CONFIG") do
   config :deepsplay, :host_config_path, host_config_path
 end
 
+# Path of the host secrets file (ADR 8). Secrets can also be given as
+# DEEPSPLAY_SECRET_<NAME> environment variables.
+if secrets_path = System.get_env("DEEPSPLAY_SECRETS") do
+  config :deepsplay, :secrets_path, secrets_path
+end
+
 config :deepsplay, DeepsplayWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

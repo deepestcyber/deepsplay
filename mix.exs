@@ -61,6 +61,8 @@ defmodule Deepsplay.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:toml_elixir, "~> 3.3"},
+      # HTTP client of the upstream proxy (ADR 8).
+      {:req, "~> 0.7"},
       # Watches local directories in development (ADR 12).
       {:file_system, "~> 1.0", only: [:dev, :test]}
     ]

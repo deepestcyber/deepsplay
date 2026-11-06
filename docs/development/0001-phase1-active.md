@@ -15,7 +15,7 @@ Status values: `open`, `in progress`, `done`.
 | 5 | LiveView shell with rotation | done |
 | 6 | Poller and live updates | done |
 | 7 | Status page | done |
-| 8 | Upstream proxy and host secrets | open |
+| 8 | Upstream proxy and host secrets | done |
 | 9 | Release, container and kiosk notes | open |
 
 ## 1. Host config and fallback page
@@ -259,10 +259,42 @@ Notes:
 
 ## 8. Upstream proxy and host secrets
 
-Status: open
+Status: done (2026-11-06)
 
 Goal: `/c/<name>/api/<upstream>/<path>` with host-side secrets and a response
 cache (ADR 8).
+
+Done:
+
+- `Deepsplay.Secrets`: TOML file at `DEEPSPLAY_SECRETS` (dev default: the
+  gitignored `config/deepsplay.secrets.toml` if present) plus
+  `DEEPSPLAY_SECRET_<NAME>` environment variables, which win; warns if the
+  file is readable by others; `{secret:name}` templates. Loaded before the host
+  configuration, which may only refer to defined secrets.
+- Host configuration: `[upstream.<name>]` with `base_url`, `methods` (default
+  `GET`), `header`/`value` and/or `query`/`query_value`, `cache_ttl`,
+  `timeout` (default 15 s).
+- `Deepsplay.UpstreamProxy` (with `Req`) and `DeepsplayWeb.ProxyController`:
+  configuration and method checks, re-encoded path below `base_url`, only
+  `Accept`, `Accept-Language` and `Content-Type` forwarded, secret added as
+  header and/or query (a client parameter of the same name is dropped), safe
+  response headers only, 5 MB response limit, `502`/`504` on failures with an
+  entry in the status page's error log. `DeepsplayWeb.Parsers` keeps the
+  request body unparsed for proxy paths.
+- `Deepsplay.UpstreamProxy.Cache`: successful `GET` answers for `cache_ttl`.
+- `Deepsplay.GitCredentials`: private repositories via `credential`; HTTPS
+  token or `username:token` through a `GIT_ASKPASS` script, SSH key through
+  `GIT_SSH_COMMAND` with trust on first use; used for fetching and polling.
+
+Notes:
+
+- Decided when starting this slice: `Req` as HTTP client, secrets as header
+  and/or query parameter, SSH host keys trusted on first use, secrets from file
+  and environment (ADR 8 updated).
+- Proxy tests use `Req.Test` stubs; the network path was checked once against
+  a local HTTP server. Git credentials are tested up to the environment and the
+  askpass script, not against a real private repository.
+- `HEAD` requests reach the proxy as `GET` (Phoenix converts them).
 
 ## 9. Release, container and kiosk notes
 

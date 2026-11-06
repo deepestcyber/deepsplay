@@ -31,7 +31,9 @@ defmodule Deepsplay.HostConfigTest do
   base_url = "https://api.example.com/v1"
   """
 
-  defp parse(toml), do: HostConfig.parse(toml, transports: @transports)
+  @secrets ["github_deploy_key", "weather_api"]
+
+  defp parse(toml), do: HostConfig.parse(toml, transports: @transports, secrets: @secrets)
 
   defp errors(toml) do
     assert {:error, errors} = parse(toml)
@@ -95,6 +97,36 @@ defmodule Deepsplay.HostConfigTest do
                parse(toml)
 
       assert Config.local?(config)
+    end
+
+    test "reads upstreams" do
+      toml =
+        minimal() <>
+          """
+          [upstream.weather]
+          base_url    = "https://api.example.com/v1/"
+          methods     = ["GET", "POST"]
+          header      = "Authorization"
+          value       = "Bearer {secret:weather_api}"
+          query       = "appid"
+          query_value = "{secret:weather_api}"
+          cache_ttl   = "60s"
+          timeout     = "5s"
+          """
+
+      assert {:ok, %{upstreams: %{"weather" => upstream}}} = parse(toml)
+
+      assert upstream == %Deepsplay.HostConfig.Upstream{
+               name: "weather",
+               base_url: "https://api.example.com/v1",
+               methods: ["GET", "POST"],
+               header: "Authorization",
+               value: "Bearer {secret:weather_api}",
+               query: "appid",
+               query_value: "{secret:weather_api}",
+               cache_ttl: 60_000,
+               timeout: 5_000
+             }
     end
 
     test "applies defaults" do
@@ -227,6 +259,34 @@ defmodule Deepsplay.HostConfigTest do
                HostConfig.parse(toml, transports: @transports, allow_local_paths: false)
 
       assert ~s(config "lobby".path is only allowed in development) in errors
+    end
+
+    test "invalid upstreams and undefined secrets" do
+      toml =
+        minimal() <>
+          """
+          [upstream.bad]
+          base_url = "ftp://x"
+          methods  = ["FETCH"]
+          header   = "Authorization"
+
+          [upstream.secretive]
+          base_url    = "https://api.example.com"
+          query       = "key"
+          query_value = "{secret:missing}"
+          """
+
+      errors = errors(toml)
+
+      assert Enum.any?(errors, &(&1 =~ "upstream.bad.base_url must be an http or https URL"))
+      assert Enum.any?(errors, &(&1 =~ "upstream.bad.methods must be a list of"))
+      assert ~s(upstream.bad: "header" needs "value") in errors
+      assert ~s(upstream.secretive: secret "missing" is not defined) in errors
+    end
+
+    test "a credential naming an undefined secret" do
+      toml = minimal(~s(credential = "missing_key"))
+      assert ~s(config "lobby": credential secret "missing_key" is not defined) in errors(toml)
     end
 
     test "upstreams that are not defined" do

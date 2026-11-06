@@ -42,3 +42,6 @@ npm-debug.log
 
 # Personal host configuration for development.
 /config/deepsplay.local.toml
+
+# Personal host secrets for development (ADR 8).
+/config/deepsplay.secrets.toml
