@@ -3,7 +3,7 @@
 All notable changes are listed here. Versions follow `version` in `mix.exs`;
 releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
-## 0.1.0 – unreleased
+## 0.1.0 – 2026-11-07
 
 First version (phase 1, see [docs/development](docs/development/)).
 
