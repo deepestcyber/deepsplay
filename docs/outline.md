@@ -98,14 +98,16 @@ Several configurations may point at the same repository and ref. They share one 
 
 ## Repository content format
 
-Each repository (or the configured subdirectory) has a `screen.toml` at its root. It lists the pages in rotation order. The fields below are a minimal starting point; the final rotation format, such as time windows, is still open.
+Each repository (or the configured subdirectory) has a `screen.toml` at its root. It lists the pages and how they rotate: `sequential` (default) shows them in listed order, `random` picks the next page weighted by `weight` (default 1.0) and never shows the same page twice in a row when there is more than one. Weights are ignored in sequential rotation. Further rotation rules, such as time windows, are still open.
 
 ```toml
-title = "Lobby"
+title    = "Lobby"
+rotation = "random"                # "sequential" (default) or "random"
 
 [[page]]
 path     = "welcome/index.html"    # file inside the repository
 duration = "30s"
+weight   = 3.0                     # optional, > 0, default 1.0; random rotation only
 
 [[page]]
 path     = "weather/index.html"
@@ -117,6 +119,7 @@ Validation runs on every new revision, before it is published:
 
 - `screen.toml` parses, is smaller than a size limit, and contains at least one page.
 - Every `path` stays inside the repository and points to an existing file.
+- `rotation` is `sequential` or `random`; every `weight` is a number greater than 0.
 - Every `uses` entry is an upstream the configuration is allowed to use. Otherwise the revision is rejected, not served with a broken page.
 - A `[backend]` table is ignored with a warning on the status page (see Extension points for sidecars).
 
@@ -139,8 +142,9 @@ Webhooks are not needed. They could be added later as an extra trigger for the s
 
 A screen opens `/` or `/c/<name>` in a browser in kiosk mode. The page it receives is the shell, a LiveView that holds the rotation and shows each page in an iframe.
 
-- **Rotation runs in the browser.** The server sends the plan (revision and a list of page URLs with durations). A small JavaScript hook in the shell cycles through it. A screen that loses its connection keeps rotating, and screens are not synchronized with each other.
+- **Rotation runs in the browser.** The server sends the plan (revision, rotation strategy, and a list of page URLs with durations and weights). A small JavaScript hook in the shell cycles through it, in order or weighted at random, picking the next page one step ahead for preloading. A screen that loses its connection keeps rotating, and screens are not synchronized with each other.
 - **Revision in the URL.** Pages are served from `/c/<name>/r/<sha>/<path>`. Files of one revision never change, so they can be cached for a long time, and a screen that is still on the old revision keeps loading its files while the new one is published.
+- **Pinned page.** `/?page=<path>` or `/c/<name>?page=<path>` shows one file of the revision without rotating (ADR 11). The path is relative to the root of `screen.toml`; any file in the revision can be pinned, not only listed pages. A new revision reloads the pinned page.
 - **Live update.** When the poller publishes a new revision, every LiveView of that configuration receives the new plan and applies it at the next page change.
 - **Preloading.** The shell can load the next page in a hidden second iframe so that page changes do not flash.
 - **Reconnect.** LiveView reconnects by itself after a server restart or a network break and then receives the current plan. Until then the screen continues with the plan it has.
@@ -198,6 +202,7 @@ A screen never goes blank while any good revision exists. The server keeps the l
 | Server restarts without network | Serve the last good revision from the cache on disk |
 | First start, empty cache, no network | Show the fallback page until the first revision arrives |
 | Unknown configuration name | Show the fallback page with that message |
+| Pinned page does not exist in the current revision | Show the fallback page with that message |
 | Upstream call fails | Return an error to the page (502 or 504); the page decides how to show it |
 
 The fallback page is built into the app. It is the shell in a state without a revision, not a separate route, so it switches to the real content by itself as soon as the first revision is published. It shows the configuration name, repository and ref, the last error with its time, and when the next attempt happens. Error texts have credentials and tokens removed from URLs.
@@ -249,7 +254,7 @@ In scope:
 - [ ] Repository cache: SHA-keyed exports, retention, kept across restarts
 - [ ] Branch poller with GitHub conditional requests and a `git ls-remote` fallback
 - [ ] `screen.toml` parsing and validation
-- [ ] LiveView shell with browser-side rotation and live revision updates
+- [ ] LiveView shell with browser-side rotation, page pinning and live revision updates
 - [ ] Static file serving from the revision directory with path and symlink checks
 - [ ] Upstream proxy with host-side secrets and a response cache
 - [ ] Status page with Presence
@@ -264,13 +269,13 @@ Out of scope for now:
 - Screen synchronization and per-screen settings
 - Webhooks as a refresh trigger
 - Git submodules and LFS
-- Rotation rules beyond a plain ordered list
+- Rotation rules beyond sequential and weighted random order (such as time windows)
 
 ## Open decisions
 
 | Question | Proposed default |
 | --- | --- |
-| Rotation format in `screen.toml` (time windows, conditions) | Start with an ordered list and a duration per page; extend when needed |
+| Further rotation rules in `screen.toml` (time windows, conditions) | Sequential or weighted random with a duration per page for now; extend when needed |
 | When a new revision replaces the running one | At the next page change; an immediate reload could become an option |
 | Who may open `/status` | Reachable only on the internal network; add basic authentication if needed |
 | Methods an upstream may use | `GET` only unless the host lists more |

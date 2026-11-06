@@ -31,8 +31,10 @@ branch or tag name.
 - Git access uses the `git` command-line tool, not a library. Only `https` and
   `ssh` transports, no submodules, no LFS, no hooks. Credentials reach git only
   through the environment.
-- In the test environment, `file` is allowed as well, so tests can use local
-  repositories. It is never allowed in dev or prod.
+- In dev and test, the `file` transport is allowed as well, as
+  `file:///absolute/path` URLs only. Dev uses it to build pages against a local
+  repository without a central one; tests use it for local fixtures. It is never
+  allowed in prod.
 
 ## Consequences
 
@@ -41,5 +43,8 @@ branch or tag name.
 - A restart without network still shows content.
 - The container image needs `git` and `openssh-client`.
 - Symlinks in a repository must be removed or rejected at export.
-- The allowed transports depend on the environment, so tests cover the
-  local-repository path, not the network transports.
+- Dev and prod differ only in the allowed transports, so local development runs
+  the same fetch, export and validation path as production.
+- With a local repository, changes appear only after they are committed (and
+  the next poll); uncommitted edits are not shown.
+- Tests cover the local-repository path, not the network transports.
