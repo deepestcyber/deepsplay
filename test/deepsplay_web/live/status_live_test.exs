@@ -98,6 +98,13 @@ defmodule DeepsplayWeb.StatusLiveTest do
     Enum.any?(diff.joins, fn {_id, %{metas: metas}} -> Enum.any?(metas, meta?) end)
   end
 
+  test "shows the app version", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/status")
+
+    version = Application.spec(:deepsplay, :vsn) |> to_string()
+    assert has_element?(view, "#status-version", "deepsplay #{version}")
+  end
+
   test "shows an unusable host configuration", %{conn: conn} do
     Store.put({:error, ["server.cache_dir is missing"]})
 

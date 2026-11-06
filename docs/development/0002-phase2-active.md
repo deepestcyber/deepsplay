@@ -122,3 +122,7 @@ To plan:
 - Guidelines for pages: screen sizes and aspect ratios, no pointer input,
   starting animations on load, reading parameters, licences of fonts and
   assets.
+- State per display: pages use the browser's `localStorage` (shared by a
+  screen's pages, kept across reloads with a persistent kiosk profile); a key
+  prefix per page avoids collisions. Shared state across screens is planned in
+  phase 3.

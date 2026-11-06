@@ -70,7 +70,12 @@ defmodule DeepsplayWeb.StatusLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <h1 class="text-2xl font-semibold tracking-tight">Status</h1>
+      <div class="flex items-baseline justify-between gap-4">
+        <h1 class="text-2xl font-semibold tracking-tight">Status</h1>
+        <p id="status-version" class="font-mono text-sm text-base-content/60">
+          deepsplay {version()}
+        </p>
+      </div>
 
       <section :if={match?({:error, _}, @host_config)} id="status-host-config-error">
         <h2 class="text-lg font-semibold text-red-500">Host configuration unusable</h2>
@@ -229,6 +234,8 @@ defmodule DeepsplayWeb.StatusLive do
   defp warnings({:ok, current}), do: current.screen.warnings
   defp warnings({:error, errors}), do: errors
   defp warnings(:none), do: []
+
+  defp version, do: Application.spec(:deepsplay, :vsn) |> to_string()
 
   defp short(nil), do: ""
   defp short(sha), do: String.slice(sha, 0, 12)
