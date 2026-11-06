@@ -10,7 +10,7 @@ Status values: `open`, `in progress`, `done`.
 | --- | --- | --- |
 | 1 | Host config and fallback page | done |
 | 2 | Revision store | done |
-| 3 | `screen.toml` parsing and validation | open |
+| 3 | `screen.toml` parsing and validation | done |
 | 4 | Static file serving | open |
 | 5 | LiveView shell with rotation | open |
 | 6 | Poller and live updates | open |
@@ -86,11 +86,30 @@ Notes:
 
 ## 3. `screen.toml` parsing and validation
 
-Status: open
+Status: done (2026-11-06)
 
 Goal: parse and validate the manifest of a revision before it is published,
 including `rotation` (`sequential` or `random`) and page `weight`s; reject
 invalid revisions and keep the previous good one.
+
+Done:
+
+- `Deepsplay.Screen.load/2` reads `screen.toml` (max 64 KiB) and collects all
+  errors: `title`, `rotation` (default `sequential`), at least one `[[page]]`,
+  page `path` (relative, no `..`, must be a regular file below the root),
+  `duration`, `weight` (number > 0, default 1.0, integers accepted), `uses`
+  (only upstreams the configuration allows), unknown keys. A `[backend]` table
+  is ignored with a warning (`warnings` field, for the status page).
+- `Deepsplay.Screen.validator/1` plugs into `RevisionStore.publish/3`; it reads
+  the manifest from the configured `subdir` and rejects a missing `subdir`.
+- `Deepsplay.Screen.root/2` gives the manifest directory of a revision.
+- `Deepsplay.TomlSchema`: field reading and casting shared by the host
+  configuration and `screen.toml`; `Deepsplay.HostConfig` now uses it.
+
+Notes:
+
+- `duration` is required for every page, also when only pinned pages are used.
+- The same path may appear more than once in `[[page]]`.
 
 ## 4. Static file serving
 

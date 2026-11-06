@@ -7,9 +7,9 @@ defmodule Deepsplay.HostConfig do
   so an operator can fix the whole file in one go.
   """
 
-  alias Deepsplay.Duration
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.RepoUrl
+  alias Deepsplay.TomlSchema
 
   @enforce_keys [:cache_dir, :default_config, :configs]
   defstruct [
@@ -35,15 +35,6 @@ defmodule Deepsplay.HostConfig do
     {"default_config", :default_config, :string, []},
     {"poll_interval", :poll_interval, :duration, default: 30_000},
     {"keep_revisions", :keep_revisions, :non_neg_integer, default: 3}
-  ]
-
-  @config_fields [
-    {"name", :name, :name, []},
-    {"repo", :repo, :repo, []},
-    {"ref", :ref, :string, []},
-    {"subdir", :subdir, :subdir, default: ""},
-    {"credential", :credential, :string, default: nil},
-    {"upstreams", :upstreams, :string_list, default: []}
   ]
 
   @doc """
@@ -89,7 +80,7 @@ defmodule Deepsplay.HostConfig do
   end
 
   defp build(data, transports) do
-    unknown = unknown_keys(data, @top_keys, "top level")
+    unknown = TomlSchema.unknown_keys(data, @top_keys, "top level")
     {server, server_errors} = server(Map.get(data, "server"))
     {upstreams, upstream_errors} = upstream_names(Map.get(data, "upstream", %{}))
     {configs, config_errors} = configs(Map.get(data, "config", []), transports, upstreams)
@@ -116,7 +107,10 @@ defmodule Deepsplay.HostConfig do
   end
 
   defp server(nil), do: {nil, ["[server] table is missing"]}
-  defp server(server) when is_map(server), do: fields(server, "server", @server_fields)
+
+  defp server(server) when is_map(server),
+    do: TomlSchema.fields(server, "server", @server_fields)
+
   defp server(_server), do: {nil, ["server must be a table"]}
 
   # Upstream tables are only checked for their names here; their contents are
@@ -151,7 +145,7 @@ defmodule Deepsplay.HostConfig do
 
   defp config(config, index, transports, upstreams) when is_map(config) do
     ctx = config_context(config, index)
-    {fields, errors} = fields(config, ctx, @config_fields, transports: transports)
+    {fields, errors} = TomlSchema.fields(config, ctx, config_fields(transports))
 
     errors =
       errors ++
@@ -199,44 +193,18 @@ defmodule Deepsplay.HostConfig do
     end
   end
 
-  # Reads the listed fields from a table, applies defaults, and reports
-  # missing, invalid and unknown keys.
-  defp fields(table, ctx, specs, opts \\ []) do
-    known = Enum.map(specs, fn {key, _field, _type, _spec_opts} -> key end)
-
-    {values, errors} =
-      Enum.map_reduce(specs, [], fn {key, field, type, spec_opts}, errors ->
-        case Map.fetch(table, key) do
-          {:ok, value} ->
-            case cast(type, value, opts) do
-              {:ok, value} -> {{field, value}, errors}
-              {:error, why} -> {{field, nil}, errors ++ ["#{ctx}.#{key} #{why}"]}
-            end
-
-          :error ->
-            if Keyword.has_key?(spec_opts, :default) do
-              {{field, spec_opts[:default]}, errors}
-            else
-              {{field, nil}, errors ++ ["#{ctx}.#{key} is missing"]}
-            end
-        end
-      end)
-
-    {Map.new(values), errors ++ unknown_keys(table, known, ctx)}
+  defp config_fields(transports) do
+    [
+      {"name", :name, &cast_name/1, []},
+      {"repo", :repo, &cast_repo(&1, transports), []},
+      {"ref", :ref, :string, []},
+      {"subdir", :subdir, &cast_subdir/1, default: ""},
+      {"credential", :credential, :string, default: nil},
+      {"upstreams", :upstreams, :string_list, default: []}
+    ]
   end
 
-  defp unknown_keys(table, known, ctx) do
-    table
-    |> Map.keys()
-    |> Enum.reject(&(&1 in known))
-    |> Enum.sort()
-    |> Enum.map(&~s(#{ctx}: unknown key "#{&1}"))
-  end
-
-  defp cast(:string, value, _opts) when is_binary(value) and value != "", do: {:ok, value}
-  defp cast(:string, _value, _opts), do: {:error, "must be a non-empty string"}
-
-  defp cast(:name, value, _opts) when is_binary(value) do
+  defp cast_name(value) when is_binary(value) do
     if Regex.match?(~r/^[a-z0-9][a-z0-9_-]{0,63}$/, value) do
       {:ok, value}
     else
@@ -246,11 +214,9 @@ defmodule Deepsplay.HostConfig do
     end
   end
 
-  defp cast(:name, _value, _opts), do: {:error, "must be a string"}
+  defp cast_name(_value), do: {:error, "must be a string"}
 
-  defp cast(:repo, value, opts) when is_binary(value) do
-    transports = Keyword.fetch!(opts, :transports)
-
+  defp cast_repo(value, transports) when is_binary(value) do
     case RepoUrl.transport(value) do
       {:ok, transport} ->
         if transport in transports do
@@ -264,38 +230,8 @@ defmodule Deepsplay.HostConfig do
     end
   end
 
-  defp cast(:repo, _value, _opts), do: {:error, "must be a string"}
+  defp cast_repo(_value, _transports), do: {:error, "must be a string"}
 
-  defp cast(:subdir, value, _opts) when is_binary(value) do
-    segments = Path.split(value)
-
-    cond do
-      value == "" -> {:ok, ""}
-      Path.type(value) != :relative -> {:error, "must be a relative path"}
-      ".." in segments -> {:error, "must not contain \"..\""}
-      true -> {:ok, value}
-    end
-  end
-
-  defp cast(:subdir, _value, _opts), do: {:error, "must be a string"}
-
-  defp cast(:duration, value, _opts) do
-    case Duration.parse(value) do
-      {:ok, ms} -> {:ok, ms}
-      :error -> {:error, ~s(must be a duration such as "30s", "5m" or "1h")}
-    end
-  end
-
-  defp cast(:non_neg_integer, value, _opts) when is_integer(value) and value >= 0,
-    do: {:ok, value}
-
-  defp cast(:non_neg_integer, _value, _opts), do: {:error, "must be a non-negative integer"}
-
-  defp cast(:string_list, value, _opts) when is_list(value) do
-    if Enum.all?(value, &is_binary/1),
-      do: {:ok, value},
-      else: {:error, "must be a list of strings"}
-  end
-
-  defp cast(:string_list, _value, _opts), do: {:error, "must be a list of strings"}
+  defp cast_subdir(""), do: {:ok, ""}
+  defp cast_subdir(value), do: TomlSchema.cast(:relative_path, value)
 end
