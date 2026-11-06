@@ -39,3 +39,6 @@ npm-debug.log
 # IDE files
 /.idea/
 *.iml
+
+# Personal host configuration for development.
+/config/deepsplay.local.toml

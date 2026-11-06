@@ -1,5 +1,8 @@
-# Host configuration for local development (ADR 5).
-# Set DEEPSPLAY_CONFIG to use a different file.
+# Shared host configuration for local development (ADR 5).
+#
+# For personal settings, copy this file to config/deepsplay.local.toml
+# (gitignored). Dev uses that file instead when it exists.
+# DEEPSPLAY_CONFIG overrides both.
 
 [server]
 cache_dir      = "tmp/cache"

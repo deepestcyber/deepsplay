@@ -58,8 +58,17 @@ config :deepsplay, DeepsplayWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :deepsplay, dev_routes: true
 
-# Host configuration used unless DEEPSPLAY_CONFIG is set.
-config :deepsplay, :host_config_path, Path.expand("deepsplay.dev.toml", __DIR__)
+# Host configuration used unless DEEPSPLAY_CONFIG is set: the personal,
+# gitignored config/deepsplay.local.toml if it exists, else the shared
+# config/deepsplay.dev.toml.
+local_host_config = Path.expand("deepsplay.local.toml", __DIR__)
+
+config :deepsplay,
+       :host_config_path,
+       if(File.exists?(local_host_config),
+         do: local_host_config,
+         else: Path.expand("deepsplay.dev.toml", __DIR__)
+       )
 
 # Local repositories for page development (ADR 6).
 config :deepsplay, :git_transports, ["https", "ssh", "file"]
