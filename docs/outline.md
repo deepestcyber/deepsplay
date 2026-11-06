@@ -142,10 +142,9 @@ A revision that fails validation is never published. The previous good revision 
 
 There is one poller per repository and ref, no matter how many configurations or screens use it. It checks every `poll_interval` (default 30 seconds) with a random offset of about 20 percent so pollers do not fire together.
 
-- **GitHub repositories:** ask the REST API for the commit of the branch with a conditional request (`If-None-Match` with the last ETag). Unchanged means a `304` answer, which according to GitHub's REST documentation does not count against the rate limit. A configured token raises the limit for private repositories.
-- **Other hosts:** run `git ls-remote <url> <ref>`, one light request that returns only the SHA.
+- **Check:** run `git ls-remote <url> refs/heads/<ref> refs/tags/<ref>` for every host, GitHub included: one light request that returns only the SHA and transfers no objects.
 - **Changed SHA:** fetch with depth 1, export, validate, then publish the new revision (see Repository cache). Publishing sends a message on Phoenix PubSub for every configuration that uses this repository and ref.
-- **Errors:** retry with exponential backoff up to 5 minutes, honor `Retry-After` and the rate limit headers, and record the last result for the status page. A SHA that failed validation is not retried until the branch moves again.
+- **Errors:** retry with exponential backoff up to 5 minutes, and record the last result for the fallback and status pages. A SHA that failed validation is not retried until the branch moves again.
 - **What is polled:** branches only. A tag or a full SHA is resolved once at start and when the server restarts.
 - **Credentials for private repositories:** a host secret, either an HTTPS token or an SSH deploy key. It reaches git through the environment (`GIT_ASKPASS`, `GIT_SSH_COMMAND` with a key file), never on the command line, in logs or in the repository. Git always runs with `GIT_TERMINAL_PROMPT=0` and a timeout.
 
@@ -160,7 +159,7 @@ A screen opens `/` or `/c/<name>` in a browser in kiosk mode. The page it receiv
 - **Pinned page.** `/?page=<path>` or `/c/<name>?page=<path>` shows one file of the revision without rotating (ADR 11). The path is relative to `pages/`; any deliverable file can be pinned, not only listed pages. A new revision reloads the pinned page.
 - **Live update.** When the poller publishes a new revision, every LiveView of that configuration receives the new plan and applies it at the next page change.
 - **Reconnect.** LiveView reconnects by itself after a server restart or a network break and then receives the current plan. Until then the screen continues with the plan it has.
-- **No pointer.** The shell sets `cursor: none`. Hiding the pointer inside iframes and in the operating system is part of the kiosk setup.
+- **No pointer.** The shell sets `cursor: none`, and the iframes take no pointer input, so the pointer is hidden on every page. Pages get no mouse or touch input. Hiding the pointer in the operating system as well covers the moment before the shell loads.
 
 ### Status page
 
@@ -255,7 +254,7 @@ Keeping the proxy and the revision store behind small modules (`Upstream`, `Revi
 
 - Chromium in kiosk mode, started by systemd and restarted on crash. Typical flags: `--kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --autoplay-policy=no-user-gesture-required`.
 - The start URL is `/` or `/c/<name>` of the server.
-- Hide the pointer in the operating system, for example with `unclutter` on X11 or a kiosk compositor such as `cage` on Wayland. `cursor: none` in the shell does not reach inside iframes.
+- Hide the pointer in the operating system, for example with `unclutter` on X11 or a kiosk compositor such as `cage` on Wayland. The shell hides it on all pages once loaded.
 - Turn off screen blanking and power saving.
 
 ## Phase 1 scope
@@ -264,7 +263,7 @@ In scope:
 
 - [ ] Host configuration in TOML with a default and named configurations
 - [ ] Repository cache: SHA-keyed exports, retention, kept across restarts
-- [ ] Branch poller with GitHub conditional requests and a `git ls-remote` fallback
+- [ ] Branch poller with `git ls-remote`
 - [ ] Manifest parsing and validation
 - [ ] LiveView shell with browser-side rotation, page pinning and live revision updates
 - [ ] Static file serving from the revision directory with path and symlink checks

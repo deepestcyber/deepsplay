@@ -13,7 +13,7 @@ Status values: `open`, `in progress`, `done`.
 | 3 | `screen.toml` parsing and validation | done |
 | 4 | Static file serving | done |
 | 5 | LiveView shell with rotation | done |
-| 6 | Poller and live updates | open |
+| 6 | Poller and live updates | done |
 | 7 | Status page | open |
 | 8 | Upstream proxy and host secrets | open |
 | 9 | Release, container and kiosk notes | open |
@@ -194,10 +194,39 @@ Notes:
 
 ## 6. Poller and live updates
 
-Status: open
+Status: done (2026-11-06)
 
 Goal: one poller per repository and ref, publishing new revisions over PubSub
 to running screens (ADR 7).
+
+Done:
+
+- `Deepsplay.RemoteRef.resolve/3`: one `git ls-remote` for
+  `refs/heads/<ref>`, `refs/tags/<ref>` and the peeled tag; tells branches
+  from tags; a full SHA needs no network.
+- `Deepsplay.Poller`, one per repository and ref, started by
+  `Deepsplay.Pollers` from the host configuration and shared by all
+  configurations using them. First check right after start, then every
+  `poll_interval` with ±20 % jitter. A new SHA refreshes every configuration
+  (fetch, validate, publish, announce) and prunes old revisions; a SHA is acted
+  on once, so a rejected one waits until the branch moves. Tags and SHAs are
+  resolved once. Errors double the delay up to 5 minutes.
+- `Deepsplay.Status`: last check, last error and next check per configuration
+  (ETS), announced on the configuration's PubSub topic. The "Waiting for
+  content" fallback page shows the last error and the next attempt.
+- `Deepsplay.Janitor` removes cache directories of unconfigured repositories at
+  start and once a day.
+- The startup fetch of slice 5 is replaced by the pollers; `:start_pollers`
+  (off in test) controls pollers and janitor.
+
+Notes:
+
+- Polling uses `git ls-remote` for every host (decided when starting this
+  slice; ADR 7 updated). No GitHub API, no HTTP client dependency.
+- A failed fetch counts as an error for the backoff and is retried at the next
+  check; a rejected revision is not.
+- The host configuration is still read only at startup: new or changed
+  configurations need a restart.
 
 ## 7. Status page
 

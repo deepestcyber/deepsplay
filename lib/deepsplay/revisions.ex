@@ -10,17 +10,18 @@ defmodule Deepsplay.Revisions do
   require Logger
 
   alias Deepsplay.HostConfig.Config
-  alias Deepsplay.HostConfig.Store
   alias Deepsplay.RevisionStore
   alias Deepsplay.Screen
+  alias Deepsplay.Status
 
   @pubsub Deepsplay.PubSub
 
   @type current :: %{sha: String.t(), pages_dir: Path.t(), screen: Screen.t()}
 
   @doc """
-  Subscribes the caller to new revisions of the configuration `name`. Messages
-  are `{:revision_published, name, sha}`.
+  Subscribes the caller to the configuration `name`. Messages are
+  `{:revision_published, name, sha}` and `{:status_changed, name}` (see
+  `Deepsplay.Status`).
   """
   @spec subscribe(String.t()) :: :ok | {:error, term()}
   def subscribe(name), do: Phoenix.PubSub.subscribe(@pubsub, topic(name))
@@ -42,10 +43,13 @@ defmodule Deepsplay.Revisions do
           {:revision_published, config.name, sha}
         )
 
+        Status.update(config.name, %{error: nil, error_at: nil})
         {:ok, sha}
 
       {:error, error} ->
-        Logger.warning(~s(config "#{config.name}": #{RevisionStore.format_error(error)}))
+        message = RevisionStore.format_error(error)
+        Logger.warning(~s(config "#{config.name}": #{message}))
+        Status.update(config.name, %{error: message, error_at: DateTime.utc_now()})
         {:error, error}
     end
   end
@@ -70,23 +74,9 @@ defmodule Deepsplay.Revisions do
     end
   end
 
-  @doc """
-  Refreshes every configuration once, in the background. Called at startup
-  unless the `:fetch_on_start` application setting is false.
-  """
-  @spec refresh_all() :: :ok
-  def refresh_all do
-    with true <- Application.get_env(:deepsplay, :fetch_on_start, true),
-         {:ok, host_config} <- Store.get() do
-      for {_name, config} <- host_config.configs do
-        Task.Supervisor.start_child(Deepsplay.TaskSupervisor, fn -> refresh(config) end)
-      end
-    end
-
-    :ok
-  end
-
-  defp topic(name), do: "revisions:" <> name
+  @doc false
+  # Revisions and status changes of a configuration share one topic.
+  def topic(name), do: "revisions:" <> name
 
   # Configuration names are restricted to [a-z0-9_-], so the key is unique and
   # cannot collide with a ref name (refs cannot contain ":").

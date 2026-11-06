@@ -18,6 +18,7 @@ defmodule DeepsplayWeb.ShellLive do
   alias Deepsplay.RevisionFile
   alias Deepsplay.Revisions
   alias Deepsplay.Screen
+  alias Deepsplay.Status
   alias DeepsplayWeb.ScreenPlan
 
   @impl true
@@ -30,7 +31,7 @@ defmodule DeepsplayWeb.ShellLive do
           if connected?(socket), do: Revisions.subscribe(config.name)
 
           socket
-          |> assign(config: config, pinned: params["page"])
+          |> assign(config: config, pinned: params["page"], status: Status.get(config.name))
           |> load_revision()
 
         {:error, :unknown_config} ->
@@ -46,6 +47,10 @@ defmodule DeepsplayWeb.ShellLive do
   @impl true
   def handle_info({:revision_published, _name, _sha}, socket) do
     {:noreply, load_revision(socket)}
+  end
+
+  def handle_info({:status_changed, name}, socket) do
+    {:noreply, assign(socket, status: Status.get(name))}
   end
 
   defp load_revision(%{assigns: %{config: config, pinned: pinned}} = socket) do
@@ -99,7 +104,7 @@ defmodule DeepsplayWeb.ShellLive do
         <% :playing -> %>
           <.rotation plan={@plan} />
         <% :no_revision -> %>
-          <.no_revision config={@config} />
+          <.no_revision config={@config} status={@status} />
         <% :pinned_missing -> %>
           <.pinned_missing config={@config} page={@pinned} />
         <% :revision_error -> %>
@@ -156,9 +161,12 @@ defmodule DeepsplayWeb.ShellLive do
           clearTimeout(this.clearTimer)
         },
 
+        // Frames take no pointer input: the mouse always stays over the shell,
+        // whose cursor: none then hides the pointer on every page.
         createFrame() {
           const frame = document.createElement("iframe")
-          frame.className = "absolute inset-0 h-full w-full border-0 opacity-0 transition-opacity duration-500"
+          frame.className =
+            "pointer-events-none absolute inset-0 h-full w-full border-0 opacity-0 transition-opacity duration-500"
           frame.setAttribute("aria-hidden", "true")
           this.el.appendChild(frame)
           return frame
@@ -268,15 +276,37 @@ defmodule DeepsplayWeb.ShellLive do
   end
 
   attr :config, Deepsplay.HostConfig.Config, required: true
+  attr :status, :map, required: true
 
   defp no_revision(assigns) do
     ~H"""
     <.fallback_frame id="fallback-no-revision" icon="hero-clock" title="Waiting for content">
       <p>No revision of this configuration is available yet.</p>
       <.config_details config={@config} />
+      <div
+        :if={@status.error}
+        id="fallback-last-error"
+        class="mt-8 border-l-2 border-red-500/60 pl-4 text-left font-mono text-base text-zinc-300"
+      >
+        <p class="text-sm text-zinc-500">Last error, {format_time(@status.error_at)}</p>
+        <p>{@status.error}</p>
+      </div>
+      <p :if={@status.next_check_at} id="fallback-next-check" class="mt-4 text-base text-zinc-500">
+        Next attempt at {format_time(@status.next_check_at)}
+      </p>
     </.fallback_frame>
     """
   end
+
+  defp format_time(nil), do: ""
+
+  defp format_time(%DateTime{} = time),
+    do:
+      time
+      |> DateTime.truncate(:second)
+      |> DateTime.to_time()
+      |> Time.to_iso8601()
+      |> Kernel.<>(" UTC")
 
   attr :config, Deepsplay.HostConfig.Config, required: true
   attr :page, :string, required: true

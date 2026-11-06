@@ -42,7 +42,11 @@ Rotation runs in the browser.
 - With random rotation, screens on the same configuration show different pages.
 - Because a page never follows itself, weights mean "more or less often", not
   exact shares: a dominant page shows at most every second time.
-- Each page is an independent HTML document; the shell's styles and the
-  `cursor: none` setting do not reach into the iframes.
+- Each page is an independent HTML document; the shell's styles do not reach
+  into the iframes.
+- The iframes take no pointer input (`pointer-events: none`), so the mouse
+  always stays over the shell, whose `cursor: none` hides the pointer on every
+  page. Pages get no mouse or touch input and no hover effects; interactive
+  pages would need a new decision.
 - A page is on screen a little longer than its duration, by the next page's
   load time. Animations that start on load run during the short fade-in.

@@ -40,6 +40,7 @@ defmodule Deepsplay.ScreenFixture do
 
     previous = Store.get()
     Store.put({:ok, host_config})
+    Deepsplay.Status.clear()
     on_exit(fn -> Store.put(previous) end)
 
     %{src: src, url: url, sha: sha, config: host_config.configs["lobby"]}

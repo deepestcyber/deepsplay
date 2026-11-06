@@ -50,6 +50,22 @@ defmodule DeepsplayWeb.ShellRotationTest do
     refute has_element?(view, "#screen-rotation")
   end
 
+  test "the fallback page shows the last error and the next attempt", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/")
+    refute has_element?(view, "#fallback-last-error")
+
+    now = DateTime.utc_now()
+
+    Deepsplay.Status.update("lobby", %{
+      error: "check failed: unreachable",
+      error_at: now,
+      next_check_at: DateTime.add(now, 30, :second)
+    })
+
+    assert has_element?(view, "#fallback-last-error", "check failed: unreachable")
+    assert has_element?(view, "#fallback-next-check")
+  end
+
   test "rotates the pages of the current revision", %{conn: conn, config: config, sha: sha} do
     {:ok, ^sha} = Revisions.refresh(config)
 

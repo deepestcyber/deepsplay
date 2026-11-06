@@ -77,7 +77,8 @@ defmodule DeepsplayWeb.Layouts do
 
   It has no navigation and no flash messages: a screen is not interactive, and
   a connection notice would cover the content while the screen keeps rotating
-  (see ADR 9). The pointer is hidden.
+  (see ADR 9). The pointer is hidden; pages in iframes take no pointer input,
+  so it stays hidden over them too.
 
   ## Examples
 
