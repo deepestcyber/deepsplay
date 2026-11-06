@@ -1,0 +1,20 @@
+# Host configuration for local development (ADR 5).
+# Set DEEPSPLAY_CONFIG to use a different file.
+
+[server]
+cache_dir      = "tmp/cache"
+default_config = "lobby"
+poll_interval  = "30s"
+keep_revisions = 3
+
+[[config]]
+name = "lobby"
+repo = "https://github.com/example/lobby-screen.git"
+ref  = "main"
+
+# A local repository, for building pages without pushing anywhere (ADR 6).
+# Only committed changes are shown. Adjust the path and uncomment.
+# [[config]]
+# name = "local"
+# repo = "file:///home/me/screens"
+# ref  = "main"

@@ -20,3 +20,9 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Host configuration used unless DEEPSPLAY_CONFIG is set.
+config :deepsplay, :host_config_path, Path.expand("../test/support/fixtures/host.toml", __DIR__)
+
+# Tests use local repositories (ADR 6).
+config :deepsplay, :git_transports, ["https", "ssh", "file"]

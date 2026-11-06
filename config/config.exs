@@ -10,6 +10,9 @@ import Config
 config :deepsplay,
   generators: [timestamp_type: :utc_datetime]
 
+# Git transports a repository URL may use (ADR 6).
+config :deepsplay, :git_transports, ["https", "ssh"]
+
 # Configure the endpoint
 config :deepsplay, DeepsplayWeb.Endpoint,
   url: [host: "localhost"],

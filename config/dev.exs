@@ -58,6 +58,12 @@ config :deepsplay, DeepsplayWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :deepsplay, dev_routes: true
 
+# Host configuration used unless DEEPSPLAY_CONFIG is set.
+config :deepsplay, :host_config_path, Path.expand("deepsplay.dev.toml", __DIR__)
+
+# Local repositories for page development (ADR 6).
+config :deepsplay, :git_transports, ["https", "ssh", "file"]
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

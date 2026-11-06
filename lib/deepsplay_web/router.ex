@@ -17,7 +17,8 @@ defmodule DeepsplayWeb.Router do
   scope "/", DeepsplayWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", ShellLive, :default
+    live "/c/:name", ShellLive, :named
   end
 
   # Other scopes may use custom stacks.

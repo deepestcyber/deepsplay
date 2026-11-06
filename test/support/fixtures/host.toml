@@ -1,0 +1,15 @@
+# Host configuration loaded at application start in the test environment.
+
+[server]
+cache_dir      = "tmp/test-cache"
+default_config = "lobby"
+
+[[config]]
+name = "lobby"
+repo = "https://user:secret-token@example.com/lobby-screen.git"
+ref  = "main"
+
+[[config]]
+name = "kitchen"
+repo = "git@example.com:example/private-screens.git"
+ref  = "kitchen"

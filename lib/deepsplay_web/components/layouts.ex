@@ -73,6 +73,30 @@ defmodule DeepsplayWeb.Layouts do
   end
 
   @doc """
+  Renders the full-screen layout for kiosk screens.
+
+  It has no navigation and no flash messages: a screen is not interactive, and
+  a connection notice would cover the content while the screen keeps rotating
+  (see ADR 9). The pointer is hidden.
+
+  ## Examples
+
+      <Layouts.screen>
+        <p>Content</p>
+      </Layouts.screen>
+
+  """
+  slot :inner_block, required: true
+
+  def screen(assigns) do
+    ~H"""
+    <main class="h-dvh w-dvw overflow-hidden cursor-none bg-zinc-950 text-zinc-100">
+      {render_slot(@inner_block)}
+    </main>
+    """
+  end
+
+  @doc """
   Shows the flash group with standard titles and content.
 
   ## Examples

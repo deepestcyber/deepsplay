@@ -20,6 +20,11 @@ if System.get_env("PHX_SERVER") do
   config :deepsplay, DeepsplayWeb.Endpoint, server: true
 end
 
+# Path of the host configuration (ADR 5). Dev and test have a default.
+if host_config_path = System.get_env("DEEPSPLAY_CONFIG") do
+  config :deepsplay, :host_config_path, host_config_path
+end
+
 config :deepsplay, DeepsplayWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

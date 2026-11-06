@@ -7,10 +7,14 @@ defmodule Deepsplay.Application do
 
   @impl true
   def start(_type, _args) do
+    Deepsplay.HostConfig.Store.load()
+
     children = [
       DeepsplayWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:deepsplay, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Deepsplay.PubSub},
+      {Registry, keys: :unique, name: Deepsplay.RevisionStore.Registry},
+      {DynamicSupervisor, name: Deepsplay.RevisionStore.Supervisor, strategy: :one_for_one},
       # Start a worker by calling: Deepsplay.Worker.start_link(arg)
       # {Deepsplay.Worker, arg},
       # Start to serve requests, typically the last entry
