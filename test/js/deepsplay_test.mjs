@@ -7,6 +7,7 @@ import vm from "node:vm"
 const root = new URL("../../", import.meta.url)
 const source = readFileSync(new URL("priv/lib/deepsplay.js", root), "utf8")
 const cases = JSON.parse(readFileSync(new URL("test/support/fixtures/params_cases.json", root), "utf8"))
+const metadataCases = JSON.parse(readFileSync(new URL("test/support/fixtures/metadata_cases.json", root), "utf8"))
 
 // A fetch answering from an in-memory state store like the server's, and
 // recording requests.
@@ -63,13 +64,13 @@ function stateServer() {
 }
 
 // Loads the helper in a fresh page with the given block, query and path.
-function load({ toml = null, search = "", pathname = "/c/lobby/r/abc/page.html", fetch } = {}) {
+function load({ toml = null, search = "", pathname = "/c/lobby/r/abc/page.html", fetch, title = "" } = {}) {
   const warnings = []
   const block = toml === null ? null : { type: "application/toml", textContent: toml }
   const context = {
     console: { warn: (...args) => warnings.push(args.join(" ")) },
     location: { search, pathname },
-    document: { getElementById: id => (id === "deepsplay-page" ? block : null) },
+    document: { title, getElementById: id => (id === "deepsplay-page" ? block : null) },
     URLSearchParams,
     fetch,
   }
@@ -152,6 +153,31 @@ check("version and a frozen API", () => {
   const { Deepsplay } = load()
   assert.match(Deepsplay.version, /^\d+\.\d+\.\d+$/)
   assert.ok(Object.isFrozen(Deepsplay))
+})
+
+for (const c of metadataCases) {
+  check(`metadata case "${c.name}"`, () => {
+    let toml = c.toml
+    for (const [placeholder, length] of Object.entries(c.long || {})) toml = toml.replace(placeholder, "x".repeat(length))
+    const { Deepsplay, warnings } = load({ toml })
+    const meta = Deepsplay.page()
+    assert.deepEqual(plain({ authors: meta.authors, credits: meta.credits, license: meta.license }), c.expect)
+    assert.equal(warnings.length, c.warnings || 0, warnings.join("; "))
+  })
+}
+
+check("page() gives title and description, with <title> as fallback", () => {
+  const withBlock = load({ toml: 'title = "Life"\ndescription = "Cells."', title: "Doc title" }).Deepsplay.page()
+  assert.equal(withBlock.title, "Life")
+  assert.equal(withBlock.description, "Cells.")
+
+  const fallback = load({ toml: 'author = "Ada"', title: "Doc title" }).Deepsplay.page()
+  assert.equal(fallback.title, "Doc title")
+  assert.equal(fallback.description, null)
+
+  const none = load({ title: "" }).Deepsplay.page()
+  assert.deepEqual(plain(none), { title: null, description: null, authors: [], credits: null, license: null })
+  assert.ok(Object.isFrozen(none))
 })
 
 async function checkAsync(name, fn) {

@@ -14,6 +14,9 @@
 //   Deepsplay.params("theme")     the parameters of a registered helper
 //   Deepsplay.helper(name, toml)  registers a helper's parameter definition
 //                                 and returns its parameters
+//   Deepsplay.page()              the page's metadata from its block
+//                                 (ADR 24): { title, description, authors,
+//                                 credits, license }
 //   Deepsplay.api(upstream, path) URL of an upstream of the page's
 //                                 configuration (ADR 8)
 //   Deepsplay.state               shared state of the page's configuration
@@ -181,10 +184,78 @@ function read(defs, search) {
 let pageValues = null
 const helpers = {}
 
-function pageDefinitions() {
+function pageBlock() {
   const block = document.getElementById(BLOCK_ID)
-  if (!block || block.type !== "application/toml") return {}
-  return definitionsFrom(block.textContent, "page block")
+  return block && block.type === "application/toml" ? block.textContent : null
+}
+
+function pageDefinitions() {
+  const toml = pageBlock()
+  return toml === null ? {} : definitionsFrom(toml, "page block")
+}
+
+// ---------- metadata (ADR 24) ----------
+
+const MAX_NAME = 200
+const MAX_CREDITS = 500
+const MAX_LICENSE = 100
+
+function metaText(data, key, max, where) {
+  const value = data[key]
+  if (value === undefined) return null
+  if (typeof value !== "string") {
+    warn(`${where}: ${key} must be a string`)
+    return null
+  }
+  const text = value.trim()
+  if (text === "") return null
+  if ([...text].length > max) {
+    warn(`${where}: ${key} must be at most ${max} characters`)
+    return null
+  }
+  return text
+}
+
+function metaAuthors(value, where) {
+  if (value === undefined) return []
+  const names = typeof value === "string" ? [value] : value
+  if (!Array.isArray(names) || !names.every(name => typeof name === "string")) {
+    warn(`${where}: author must be a string or a list of strings`)
+    return []
+  }
+  const kept = []
+  for (const name of names.map(name => name.trim()).filter(name => name !== "")) {
+    if ([...name].length <= MAX_NAME) kept.push(name)
+    else warn(`${where}: author names must be at most ${MAX_NAME} characters`)
+  }
+  return kept
+}
+
+function metadataFrom(toml, fallbackTitle, where) {
+  let data = {}
+  if (toml !== null) {
+    try {
+      data = parseToml(toml)
+    } catch (error) {
+      warn(`${where}: invalid TOML (${error.message})`)
+    }
+  }
+  const title = typeof data.title === "string" ? data.title : fallbackTitle || null
+  const description = typeof data.description === "string" ? data.description : null
+  return Object.freeze({
+    title,
+    description,
+    authors: Object.freeze(metaAuthors(data.author, where)),
+    credits: metaText(data, "credits", MAX_CREDITS, where),
+    license: metaText(data, "license", MAX_LICENSE, where),
+  })
+}
+
+let pageMeta = null
+
+function page() {
+  if (pageMeta === null) pageMeta = metadataFrom(pageBlock(), document.title, "page block")
+  return pageMeta
 }
 
 function params(helperName) {
@@ -293,4 +364,4 @@ const state = Object.freeze({
   },
 })
 
-window.Deepsplay = Object.freeze({ version: VERSION, params, helper, api, state })
+window.Deepsplay = Object.freeze({ version: VERSION, params, helper, page, api, state })

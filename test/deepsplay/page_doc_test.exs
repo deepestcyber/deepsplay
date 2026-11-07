@@ -16,6 +16,30 @@ defmodule Deepsplay.PageDocTest do
     end
   end
 
+  @metadata_cases "test/support/fixtures/metadata_cases.json" |> File.read!() |> Jason.decode!()
+
+  # Placeholders in the TOML of a case are replaced by that many characters.
+  def expand_case(c) do
+    Enum.reduce(c["long"] || %{}, c["toml"], fn {placeholder, length}, toml ->
+      String.replace(toml, placeholder, String.duplicate("x", length))
+    end)
+  end
+
+  describe "shared metadata cases (same as deepsplay.js)" do
+    for c <- @metadata_cases do
+      @case c
+      test @case["name"] do
+        doc = PageDoc.parse(expand_case(@case))
+        expect = @case["expect"]
+
+        assert {doc.authors, doc.credits, doc.license} ==
+                 {expect["authors"], expect["credits"], expect["license"]}
+
+        assert length(doc.warnings) == (@case["warnings"] || 0), inspect(doc.warnings)
+      end
+    end
+  end
+
   describe "from_html/1" do
     test "finds the block, in either attribute order, and uses <title>" do
       html = """

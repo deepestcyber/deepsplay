@@ -87,6 +87,9 @@ A page describes itself and its URL parameters in a block in its `<head>`:
 <title>Game of Life</title>
 <script type="application/toml" id="deepsplay-page">
 description = "Conway's Game of Life over the whole screen."
+author      = "Ada Lovelace"            # optional; or ["Ada", "Grace"]
+credits     = "Rules by John Conway"    # optional: data and assets used
+license     = "MIT"                     # optional: the page's own license
 uses = ["theme"]
 
 [params.cells]
@@ -116,6 +119,10 @@ query = "cells=40&gps=4"
   as a fragment another page loads. It is still served, but not offered as a
   page.
 - `title` is optional; the page's `<title>` is used otherwise.
+- `author`, `credits` and `license` are optional and shown in the catalog.
+  `credits` attributes data and assets (e.g. "Radar: Deutscher
+  Wetterdienst"); `license` is preferably an SPDX identifier. Helpers can
+  have them too.
 - The block must not contain the text `</script`.
 
 Problems in the block never stop a page from being shown; they appear as
@@ -136,6 +143,17 @@ without a value and without a default are left out. The helper is
 `/lib/v1/deepsplay.js` (compatible within `v1`); a page can pin one exact
 version with `/lib/deepsplay@X.Y.Z.js`, or copy the file into the repository.
 Pages using it work only when served by deepsplay.
+
+A page (or its theme) reads its metadata with `Deepsplay.page()`:
+
+```js
+const { title, description, authors, credits, license } = Deepsplay.page()
+// authors is always a list; credits and license are null when not set
+if (authors.length) credit.textContent = "by " + authors.join(", ")
+```
+
+Whether a credit appears on screen is up to the page or its theme, e.g.
+through a theme parameter.
 
 ### Shared helpers
 
@@ -309,6 +327,9 @@ These are recommendations; build what your screens need.
   state shared by all screens.
 - **Licences**: only fonts and assets that may be redistributed (e.g. SIL
   OFL), with the licence file next to them.
+- **Attribution**: data and map providers often require attribution on
+  screen (e.g. "© BKG" for TopPlusOpen); the page shows it. Note it in
+  `credits` too, so the catalog lists it.
 - **Videos**: `muted`, `autoplay` and `playsinline`.
 
 ## Several displays from one repository

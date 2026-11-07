@@ -26,6 +26,9 @@ defmodule Deepsplay.HelperIndex do
           name: String.t(),
           file: String.t(),
           description: String.t() | nil,
+          authors: [String.t()],
+          credits: String.t() | nil,
+          license: String.t() | nil,
           params: %{String.t() => Param.t()},
           warnings: [String.t()]
         }
@@ -107,6 +110,9 @@ defmodule Deepsplay.HelperIndex do
             name: name,
             file: relative,
             description: doc.description,
+            authors: doc.authors,
+            credits: doc.credits,
+            license: doc.license,
             params: doc.params,
             warnings: doc.warnings
           }

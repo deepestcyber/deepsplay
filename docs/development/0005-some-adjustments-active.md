@@ -12,7 +12,7 @@ Status values: `open`, `in progress`, `done`.
 | 1 | Descriptions for configurations, upstreams, manifests and pages | done |
 | 2 | Byte sizes with SI and binary units | done |
 | 3 | Reload the host configuration on change | open |
-| 4 | Page metadata: author, credits, license | open |
+| 4 | Page metadata: author, credits, license | done |
 | 5 | Time windows and overrides | open |
 
 ## 1. Descriptions for configurations, upstreams, manifests and pages
@@ -120,7 +120,15 @@ with the defaults proposed:
 
 ## 4. Page metadata: author, credits, license
 
-Status: open
+Status: done (2026-11-07)
+
+Built as sketched. The rules are tested in Elixir and in `deepsplay.js`
+against the shared `test/support/fixtures/metadata_cases.json`.
+`Deepsplay.page()` returns a frozen object; its `title` and `description`
+come from the block as they are (only `title` falls back to `<title>`). The
+catalog shows "by ...", credits and license on page and helper cards.
+Credits on screen in the template and `tinker-display` are left to those
+repositories.
 
 Goal: people who write pages are named in the catalog, data and assets are
 attributed, a page's license is known, and a page or its theme can show

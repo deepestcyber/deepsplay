@@ -18,10 +18,17 @@ defmodule Deepsplay.PageDoc do
 
   alias Deepsplay.PageDoc.Param
 
-  @fields ~w(title description uses page params variants)
+  @fields ~w(title description author credits license uses page params variants)
+
+  @max_name 200
+  @max_credits 500
+  @max_license 100
 
   defstruct title: nil,
             description: nil,
+            authors: [],
+            credits: nil,
+            license: nil,
             uses: [],
             page: true,
             params: %{},
@@ -33,6 +40,9 @@ defmodule Deepsplay.PageDoc do
   @type t :: %__MODULE__{
           title: String.t() | nil,
           description: String.t() | nil,
+          authors: [String.t()],
+          credits: String.t() | nil,
+          license: String.t() | nil,
           uses: [String.t()],
           page: boolean(),
           params: %{String.t() => Param.t()},
@@ -102,6 +112,9 @@ defmodule Deepsplay.PageDoc do
     {page, w4} = page(data["page"])
     {params, w5} = params_table(data["params"])
     {variants, w6} = variants(data["variants"])
+    {authors, w7} = authors(data["author"])
+    {credits, w8} = text(data, "credits", @max_credits)
+    {license, w9} = text(data, "license", @max_license)
 
     unknown =
       for key <- Map.keys(data) -- @fields, do: ~s(unknown key "#{key}")
@@ -109,11 +122,14 @@ defmodule Deepsplay.PageDoc do
     %__MODULE__{
       title: title || fallback_title,
       description: description,
+      authors: authors,
+      credits: credits,
+      license: license,
       uses: uses,
       page: page,
       params: params,
       variants: variants,
-      warnings: w1 ++ w2 ++ w3 ++ w4 ++ w5 ++ w6 ++ Enum.sort(unknown)
+      warnings: w1 ++ w2 ++ w3 ++ w4 ++ w5 ++ w6 ++ w7 ++ w8 ++ w9 ++ Enum.sort(unknown)
     }
   end
 
@@ -122,6 +138,49 @@ defmodule Deepsplay.PageDoc do
       :error -> {nil, []}
       {:ok, value} when is_binary(value) -> {value, []}
       {:ok, _value} -> {nil, ["#{key} must be a string"]}
+    end
+  end
+
+  # Metadata (ADR 24): `author` is a name or a list of names; names are
+  # trimmed, empty ones dropped, too long ones dropped with a warning.
+  defp authors(nil), do: {[], []}
+  defp authors(name) when is_binary(name), do: authors([name])
+
+  defp authors(names) when is_list(names) do
+    if Enum.all?(names, &is_binary/1) do
+      names
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.reduce({[], []}, fn name, {kept, warnings} ->
+        if String.length(name) <= @max_name,
+          do: {kept ++ [name], warnings},
+          else: {kept, warnings ++ ["author names must be at most #{@max_name} characters"]}
+      end)
+    else
+      {[], ["author must be a string or a list of strings"]}
+    end
+  end
+
+  defp authors(_value), do: {[], ["author must be a string or a list of strings"]}
+
+  defp text(data, key, max) do
+    case Map.fetch(data, key) do
+      :error ->
+        {nil, []}
+
+      {:ok, value} when is_binary(value) ->
+        case String.trim(value) do
+          "" ->
+            {nil, []}
+
+          text ->
+            if String.length(text) <= max,
+              do: {text, []},
+              else: {nil, ["#{key} must be at most #{max} characters"]}
+        end
+
+      {:ok, _value} ->
+        {nil, ["#{key} must be a string"]}
     end
   end
 

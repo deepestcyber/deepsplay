@@ -365,6 +365,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
           <span class="font-mono text-xs text-base-content/50">{helper.file}</span>
         </div>
         <p :if={helper.description} class="mt-1 text-base-content/70">{helper.description}</p>
+        <.metadata item={helper} />
         <p class="mt-2 font-mono text-xs">
           {helper.params |> Map.keys() |> Enum.sort() |> Enum.join(", ")}
         </p>
@@ -440,6 +441,25 @@ defmodule DeepsplayWeb.CatalogConfigLive do
     """
   end
 
+  attr :item, :map,
+    required: true,
+    doc: "a page's doc or a helper, with authors, credits, license"
+
+  # Authors, credits and license of a page or helper (ADR 24).
+  defp metadata(assigns) do
+    ~H"""
+    <p :if={@item.authors != []} class="page-authors mt-1 text-xs text-base-content/70">
+      by {Enum.join(@item.authors, ", ")}
+    </p>
+    <p :if={@item.credits} class="page-credits mt-1 text-xs text-base-content/50">
+      Credits: {@item.credits}
+    </p>
+    <p :if={@item.license} class="page-license mt-1 text-xs text-base-content/50">
+      License: {@item.license}
+    </p>
+    """
+  end
+
   attr :page, :map, required: true
   attr :catalog, :map, required: true
   attr :selected, :map, default: nil
@@ -503,6 +523,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
       >
         {String.trim(@page.doc.description)}
       </p>
+      <.metadata :if={@page.doc} item={@page.doc} />
       <p :if={@page.doc && @page.doc.uses != []} class="mt-1 text-xs text-base-content/50">
         Uses: {Enum.join(@page.doc.uses, ", ")}
       </p>

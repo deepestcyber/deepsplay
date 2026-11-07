@@ -13,6 +13,7 @@ defmodule DeepsplayWeb.CatalogLiveTest do
   @theme """
   const T = Deepsplay.helper("theme", `
   description = "Colours."
+  author = "Grace"
   [params.theme]
   type    = "enum"
   values  = ["default", "neon"]
@@ -51,6 +52,9 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     <title>Game of Life</title>
     <script type="application/toml" id="deepsplay-page">
     description = "Cells."
+    author = ["Ada", "Grace"]
+    credits = "Rules by John Conway"
+    license = "MIT"
     uses = ["theme"]
     [params.cells]
     type    = "int"
@@ -107,6 +111,12 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     refute has_element?(view, "#page-fragment-html .page-preview")
 
     assert has_element?(view, "#helper-theme", "Used by: life.html")
+    assert has_element?(view, "#helper-theme .page-authors", "by Grace")
+
+    assert has_element?(view, "#page-life-html .page-authors", "by Ada, Grace")
+    assert has_element?(view, "#page-life-html .page-credits", "Rules by John Conway")
+    assert has_element?(view, "#page-life-html .page-license", "MIT")
+    refute has_element?(view, "#page-plain-html .page-authors")
 
     assert has_element?(view, "#upstream-radar", "https://radar.example.com/wms")
     assert has_element?(view, "#upstream-radar", "cache 300s")

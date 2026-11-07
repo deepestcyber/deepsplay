@@ -59,6 +59,9 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   show sizes in SI units.
 - Optional `description` for configurations, host and manifest upstreams,
   manifests and page entries, shown on the status page and in the catalog.
+- Page metadata: optional `author`, `credits` and `license` in the parameter
+  block of pages and helpers, shown in the catalog; `Deepsplay.page()` gives
+  pages and themes their metadata (ADR 24).
 
 ## 0.1.0 – 2026-11-07
 
