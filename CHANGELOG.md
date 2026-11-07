@@ -8,6 +8,9 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - The status page shows the app version.
 - Manifests can set a default `duration` for all pages; a page's `duration` is
   optional and falls back to the manifest's, or to 15 seconds.
+- Page helper `deepsplay.js` at `/lib/v1/deepsplay.js`: pages define their
+  parameters in a TOML block and read them typed, with defaults and limits;
+  `Deepsplay.api()` builds upstream URLs (ADR 14).
 
 ## 0.1.0 – 2026-11-07
 

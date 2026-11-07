@@ -88,8 +88,12 @@ page.
 ## Releasing
 
 1. Update `version` in `mix.exs` and the `CHANGELOG.md`.
-2. Tag the commit `vX.Y.Z` and push the tag.
-3. The CI workflow tests, builds both architectures and publishes the image.
+2. Archive the page helper of the new version, so pages pinning it keep
+   working after later releases (ADR 14): `mix assets.deploy`, then copy
+   `priv/lib/deepsplay.js` to `priv/lib/archive/deepsplay@X.Y.Z.js` and commit
+   it.
+3. Tag the commit `vX.Y.Z` and push the tag.
+4. The CI workflow tests, builds both architectures and publishes the image.
 
 The first published image is private by default on some accounts: make the
 package public once under the repository's or organisation's package settings.

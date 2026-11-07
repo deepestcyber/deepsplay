@@ -24,7 +24,7 @@ Status values: `open`, `in progress`, `done`.
 ## 1. In-page documentation format
 
 Status: done (2026-11-07), decided in
-[ADR 14](../adr/0014-page-parameters-defined-in-the-page.md); not built yet.
+[ADR 14](../adr/0014-page-parameters-defined-in-the-page.md); built.
 
 Goal: pages document themselves, next to their code: a short description and
 their parameters, optionally variants to try. deepsplay reads this for the
@@ -44,9 +44,26 @@ Decided:
 - deepsplay finds the block by text search, without an HTML parser; problems
   are warnings, never rejections.
 
-To build (with part 4 or as its own step): `deepsplay.js` with a bundled TOML
-parser and its tests, serving `/lib/` with the caching from ADR 14, the
-server-side reader, and converting `life.html` in tinker as the first example.
+Built (2026-11-07):
+
+- `assets/lib/deepsplay.js`, bundled by esbuild (profile `deepsplay_lib`)
+  into `priv/lib/deepsplay.js` with the vendored TOML parser
+  (`assets/vendor/smol-toml`, 1.9.1, BSD-3-Clause) and the version baked in;
+  16 KB minified, 7 KB gzipped. `params()`, `params(name)`, `helper()` and
+  `api()` are in; the server side of helpers follows in part 2.
+- `DeepsplayWeb.LibController`: `/lib/v1/deepsplay.js` (one day, then a week
+  `stale-while-revalidate`) and `/lib/deepsplay@X.Y.Z.js` (immutable; the
+  current version from the build, released ones from `priv/lib/archive/`).
+- `Deepsplay.PageDoc` and `Deepsplay.PageDoc.Param`: finding and parsing the
+  block, warnings instead of errors, and the same value rules as the helper.
+  Both are tested against `test/support/fixtures/params_cases.json`; the
+  JavaScript side runs with Node from the test suite (skipped without Node).
+  The shared cases found a bug on the Elixir side (`false` values dropped).
+- `life.html` in tinker converted: parameter block with ten parameters and
+  four variants, `Deepsplay.params()` instead of hand-written parsing.
+
+Not yet: reading page blocks per revision for the catalog and defaults
+(parts 3 and 4).
 
 ## 2. Shared parameters (theme and other helpers)
 

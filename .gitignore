@@ -45,3 +45,6 @@ npm-debug.log
 
 # Personal host secrets for development (ADR 8).
 /config/deepsplay.secrets.toml
+
+# The built page helper (ADR 14); released versions live in priv/lib/archive/.
+/priv/lib/deepsplay.js

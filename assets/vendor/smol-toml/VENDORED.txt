@@ -1,0 +1,2 @@
+smol-toml 1.9.1 (BSD-3-Clause), from https://registry.npmjs.org/smol-toml/-/smol-toml-1.9.1.tgz
+Only dist/*.js (ES modules) and LICENSE are vendored. Bundled into deepsplay.js (ADR 14).

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "int: valid, clamped, invalid falls back to default",
+    "toml": "[params.cells]\ntype = \"int\"\ndefault = 90\nmin = 4\nmax = 500\n\n[params.lo]\ntype = \"int\"\ndefault = 90\nmin = 4\n\n[params.bad]\ntype = \"int\"\ndefault = 7",
+    "query": "?cells=40&lo=1&bad=4.5",
+    "expect": {"cells": 40, "lo": 4, "bad": 7}
+  },
+  {
+    "name": "int: above max, negative, missing without default",
+    "toml": "[params.a]\ntype = \"int\"\nmax = 10\n\n[params.b]\ntype = \"int\"\n\n[params.c]\ntype = \"int\"",
+    "query": "a=99&b=-3",
+    "expect": {"a": 10, "b": -3}
+  },
+  {
+    "name": "number: decimals, exponent, leading dot, limits",
+    "toml": "[params.gps]\ntype = \"number\"\ndefault = 10\nmin = 0.1\n\n[params.d]\ntype = \"number\"\nmax = 0.9\n\n[params.e]\ntype = \"number\"\n\n[params.f]\ntype = \"number\"",
+    "query": "gps=0.05&d=.5&e=1e3&f=abc",
+    "expect": {"gps": 0.1, "d": 0.5, "e": 1000}
+  },
+  {
+    "name": "number: integer default stays a number",
+    "toml": "[params.speed]\ntype = \"number\"\ndefault = 2.5",
+    "query": "",
+    "expect": {"speed": 2.5}
+  },
+  {
+    "name": "bool: words, empty value, invalid",
+    "toml": "[params.a]\ntype = \"bool\"\n[params.b]\ntype = \"bool\"\n[params.c]\ntype = \"bool\"\ndefault = true\n[params.d]\ntype = \"bool\"\n[params.e]\ntype = \"bool\"\ndefault = false",
+    "query": "a=Yes&b=0&c=maybe&d",
+    "expect": {"a": true, "b": false, "c": true, "d": true, "e": false}
+  },
+  {
+    "name": "duration: units in milliseconds, limits as durations, invalid",
+    "toml": "[params.duration]\ntype = \"duration\"\nfrom = \"duration\"\n\n[params.fade]\ntype = \"duration\"\ndefault = \"500ms\"\nmin = \"100ms\"\nmax = \"2s\"\n\n[params.x]\ntype = \"duration\"\ndefault = \"1m\"",
+    "query": "duration=5s&fade=10s&x=soon",
+    "expect": {"duration": 5000, "fade": 2000, "x": 60000}
+  },
+  {
+    "name": "color: hex with and without hash, names, invalid",
+    "toml": "[params.a]\ntype = \"color\"\n[params.b]\ntype = \"color\"\n[params.c]\ntype = \"color\"\n[params.d]\ntype = \"color\"\ndefault = \"#FFF\"",
+    "query": "a=%23FF8800&b=0af&c=White&d=rgb(1,2,3)",
+    "expect": {"a": "#ff8800", "b": "#0af", "c": "white", "d": "#fff"}
+  },
+  {
+    "name": "enum: listed values only",
+    "toml": "[params.theme]\ntype = \"enum\"\nvalues = [\"default\", \"neon\", \"dc\"]\ndefault = \"default\"\n\n[params.mode]\ntype = \"enum\"\nvalues = [\"a\", \"b\"]",
+    "query": "theme=neon&mode=c",
+    "expect": {"theme": "neon"}
+  },
+  {
+    "name": "string: taken as is, decoded",
+    "toml": "[params.title]\ntype = \"string\"\ndefault = \"Hello\"\n\n[params.city]\ntype = \"string\"",
+    "query": "city=New%20York&other=1",
+    "expect": {"title": "Hello", "city": "New York"}
+  },
+  {
+    "name": "repeated key: the first value counts",
+    "toml": "[params.n]\ntype = \"int\"",
+    "query": "n=1&n=2",
+    "expect": {"n": 1}
+  },
+  {
+    "name": "invalid definitions are ignored",
+    "toml": "[params.ok]\ntype = \"int\"\ndefault = 1\n\n[params.unknown]\ntype = \"weird\"\n\n[params.noenum]\ntype = \"enum\"\n\n[params.baddefault]\ntype = \"int\"\ndefault = \"x\"",
+    "query": "unknown=1&noenum=a&baddefault=3",
+    "expect": {"ok": 1, "baddefault": 3}
+  },
+  {
+    "name": "no params at all",
+    "toml": "description = \"Just a page\"",
+    "query": "a=1",
+    "expect": {}
+  }
+]

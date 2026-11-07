@@ -14,6 +14,12 @@ defmodule DeepsplayWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # The page helper for content pages (ADR 14): plain files, no session.
+  scope "/lib", DeepsplayWeb do
+    get "/v1/deepsplay.js", LibController, :v1
+    get "/:file", LibController, :exact
+  end
+
   # Upstream proxy: no session, no CSRF, any method (ADR 8).
   scope "/c/:name/api/:upstream", DeepsplayWeb do
     match :*, "/*path", ProxyController, :forward

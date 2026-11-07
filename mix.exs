@@ -78,12 +78,20 @@ defmodule Deepsplay.MixProject do
     [
       setup: ["deps.get", "assets.setup", "assets.build"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind deepsplay", "esbuild deepsplay"],
+      "assets.build": [
+        "compile",
+        "tailwind deepsplay",
+        "esbuild deepsplay",
+        "esbuild deepsplay_lib"
+      ],
       "assets.deploy": [
         "tailwind deepsplay --minify",
         "esbuild deepsplay --minify",
+        "esbuild deepsplay_lib --minify",
         "phx.digest"
       ],
+      # Tests use the built page helper (ADR 14).
+      test: ["esbuild deepsplay_lib --log-level=warning", "test"],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
     ]
   end

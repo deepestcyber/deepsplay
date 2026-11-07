@@ -16,6 +16,7 @@ config :deepsplay, DeepsplayWeb.Endpoint,
   secret_key_base: "hg7+ebsbR9LS6cCQCE9bfOjB0RBJZzf4GxsuV3MOPCdN/eP84p7EnoOdmDVnh4qb",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:deepsplay, ~w(--sourcemap=inline --watch)]},
+    esbuild_lib: {Esbuild, :install_and_run, [:deepsplay_lib, ~w(--watch)]},
     tailwind: {Tailwind, :install_and_run, [:deepsplay, ~w(--watch)]}
   ]
 

@@ -37,6 +37,19 @@ config :esbuild,
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
+  ],
+  # The page helper for content pages, a standalone script served at /lib/
+  # (ADR 14), with its version baked in.
+  deepsplay_lib: [
+    args: [
+      "lib/deepsplay.js",
+      "--bundle",
+      "--format=iife",
+      "--target=es2020",
+      "--outfile=../priv/lib/deepsplay.js",
+      "--define:__DEEPSPLAY_VERSION__=\"#{Mix.Project.config()[:version]}\""
+    ],
+    cd: Path.expand("../assets", __DIR__)
   ]
 
 # Configure tailwind (the version is required)
