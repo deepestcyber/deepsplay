@@ -220,6 +220,7 @@ defmodule Deepsplay.HostConfig do
         {"cache_ttl", :cache_ttl, :duration, default: nil},
         {"stale_ttl", :stale_ttl, :duration, default: nil},
         {"refresh", :refresh, :boolean, default: false},
+        {"accepted_types", :accepted_types, &Upstream.cast_accepted_types/1, default: nil},
         {"timeout", :timeout, :duration, default: 15_000}
       ])
 
@@ -227,7 +228,7 @@ defmodule Deepsplay.HostConfig do
       errors ++
         pair_errors(table, ctx, "header", "value") ++
         pair_errors(table, ctx, "query", "query_value") ++
-        for key <- ["stale_ttl", "refresh"],
+        for key <- ["stale_ttl", "refresh", "accepted_types"],
             Map.has_key?(table, key) and not Map.has_key?(table, "cache_ttl") do
           ~s(#{ctx}: "#{key}" needs "cache_ttl")
         end ++

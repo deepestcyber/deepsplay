@@ -409,6 +409,9 @@ defmodule DeepsplayWeb.CatalogConfigLive do
           </span>
           <span :if={upstream.refresh}>· refresh</span>
         </p>
+        <p :if={upstream.accepted_types} class="mt-1 font-mono text-xs text-base-content/60">
+          accepts {Enum.join(upstream.accepted_types, ", ")}
+        </p>
         <p class="mt-1 text-xs text-base-content/50">
           Used by: {if used_by == [], do: "no page", else: Enum.join(used_by, ", ")}
         </p>

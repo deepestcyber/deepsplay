@@ -4,6 +4,8 @@ defmodule Deepsplay.HostConfigTest do
   alias Deepsplay.HostConfig
   alias Deepsplay.HostConfig.Config
 
+  doctest Deepsplay.HostConfig.Upstream
+
   @transports ["https", "ssh"]
 
   @valid """
@@ -115,6 +117,7 @@ defmodule Deepsplay.HostConfigTest do
           cache_ttl   = "60s"
           stale_ttl   = "1h"
           refresh     = true
+          accepted_types = ["Image/PNG", "text/*"]
           timeout     = "5s"
           """
 
@@ -131,8 +134,34 @@ defmodule Deepsplay.HostConfigTest do
                cache_ttl: 60_000,
                stale_ttl: 3_600_000,
                refresh: true,
+               accepted_types: ["image/png", "text/*"],
                timeout: 5_000
              }
+    end
+
+    test "invalid accepted_types" do
+      for value <- [
+            ~s([]),
+            ~s(["png"]),
+            ~s(["image/png; charset=x"]),
+            ~s(["*/*"]),
+            ~s("image/png")
+          ] do
+        toml =
+          minimal() <>
+            """
+            [upstream.weather]
+            base_url       = "https://api.example.com"
+            cache_ttl      = "1m"
+            accepted_types = #{value}
+            """
+
+        assert Enum.any?(
+                 errors(toml),
+                 &(&1 =~ "upstream.weather.accepted_types must be a list of media types")
+               ),
+               value
+      end
     end
 
     test "stale_ttl and refresh need cache_ttl" do
@@ -143,9 +172,11 @@ defmodule Deepsplay.HostConfigTest do
           base_url  = "https://api.example.com"
           stale_ttl = "1h"
           refresh   = true
+          accepted_types = ["image/png"]
           """
 
       assert {:error, errors} = parse(toml)
+      assert ~s(upstream.weather: "accepted_types" needs "cache_ttl") in errors
       assert ~s(upstream.weather: "stale_ttl" needs "cache_ttl") in errors
       assert ~s(upstream.weather: "refresh" needs "cache_ttl") in errors
     end

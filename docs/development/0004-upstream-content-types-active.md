@@ -18,7 +18,7 @@ Status values: `open`, `in progress`, `done`.
 | # | Part | Status |
 | --- | --- | --- |
 | 1 | Decision (new ADR 22, amending ADR 19 and ADR 20) | done |
-| 2 | Option `accepted_types` for host and manifest upstreams | open |
+| 2 | Option `accepted_types` for host and manifest upstreams | done |
 | 3 | Option `cache_size` per upstream | open |
 | 4 | Docs (`docs/pages.md`, host configuration) | open |
 
@@ -135,7 +135,15 @@ Alternatives considered:
 
 ## 2. Option `accepted_types`
 
-Status: open
+Status: done (2026-11-07)
+
+Built as sketched. `Upstream.cast_accepted_types/1` validates for host and
+manifest upstreams (`*/*` is not accepted; leave the option out instead),
+`Upstream.accepts?/2` matches. The proxy records a mismatch as
+`answered 200 <type>, expected <types>` (`without type` for a missing
+`Content-Type`). The status page shows the types under the cache settings,
+the catalog as `accepts ...`. A failed refresh keeping the entry is tested
+in the cache directly (it applies to any failure, not only a type mismatch).
 
 Sketch:
 

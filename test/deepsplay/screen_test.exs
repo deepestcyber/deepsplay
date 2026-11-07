@@ -284,6 +284,7 @@ defmodule Deepsplay.ScreenTest do
     cache_ttl = "5m"
     stale_ttl = "1h"
     refresh   = true
+    accepted_types = ["image/png"]
 
     [[page]]
     path = "a.html"
@@ -303,6 +304,7 @@ defmodule Deepsplay.ScreenTest do
       assert radar.methods == ["GET"]
       assert {radar.cache_ttl, radar.stale_ttl, radar.refresh} == {300_000, 3_600_000, true}
       assert {radar.header, radar.query} == {nil, nil}
+      assert radar.accepted_types == ["image/png"]
     end
 
     test "only for allowed hosts", %{tmp_dir: root} do

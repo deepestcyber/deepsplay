@@ -136,6 +136,25 @@ defmodule Deepsplay.UpstreamProxy.CacheTest do
       refute_receive {:fetched, _n}, 300
     end
 
+    test "a failed refresh keeps the entry until it expires", %{name: name} do
+      cache = start_cache(name: name, dir: nil, max_size: 1_000_000)
+      ttls = %{ttl: 1_000, stale_ttl: nil, refresh: true}
+      test = self()
+      counter = :counters.new(1, [])
+
+      fun = fn ->
+        :counters.add(counter, 1, 1)
+        n = :counters.get(counter, 1)
+        send(test, {:fetched, n})
+        if n == 1, do: {:cache, "good"}, else: {:failed, "error document"}
+      end
+
+      assert {:miss, "good"} = Cache.fetch(:k, ttls, 1_000, fun, cache)
+      assert_receive {:fetched, 2}, 2_000
+      # The refresh ran a tenth of cache_ttl before expiry and failed.
+      assert {:hit, "good", _age} = Cache.fetch(:k, ttls, 1_000, fun, cache)
+    end
+
     test "does not refresh without the option", %{name: name} do
       cache = start_cache(name: name, dir: nil, max_size: 1_000_000)
       fun = counting(self())

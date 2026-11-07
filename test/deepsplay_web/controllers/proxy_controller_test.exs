@@ -37,6 +37,12 @@ defmodule DeepsplayWeb.ProxyControllerTest do
         cache_ttl = "60s"
         stale_ttl = "1h"
 
+        [upstream.images]
+        base_url       = "https://images.example.com"
+        cache_ttl      = "60s"
+        stale_ttl      = "1h"
+        accepted_types = ["image/*"]
+
         [upstream.writer]
         base_url = "https://write.example.com"
         methods  = ["GET", "POST"]
@@ -44,7 +50,7 @@ defmodule DeepsplayWeb.ProxyControllerTest do
         [[config]]
         name      = "lobby"
         path      = "/srv/lobby"
-        upstreams = ["weather", "cached", "stale", "writer"]
+        upstreams = ["weather", "cached", "stale", "images", "writer"]
 
         [[config]]
         name = "kitchen"
@@ -58,6 +64,7 @@ defmodule DeepsplayWeb.ProxyControllerTest do
     Secrets.put(%{"weather_api" => @secret})
     Cache.clear()
     Status.clear()
+    Deepsplay.UpstreamProxy.Stats.clear()
 
     on_exit(fn ->
       Store.put(previous)
@@ -242,6 +249,60 @@ defmodule DeepsplayWeb.ProxyControllerTest do
     fresh = get(build_conn(), "/c/lobby/api/stale/data")
     assert response(fresh, 200) == "new"
     assert get_resp_header(fresh, "x-deepsplay-cache") == ["miss"]
+  end
+
+  describe "accepted_types" do
+    defp answer(type, body) do
+      fn upstream ->
+        upstream
+        |> then(&if(type, do: Plug.Conn.put_resp_header(&1, "content-type", type), else: &1))
+        |> Plug.Conn.send_resp(200, body)
+      end
+    end
+
+    test "caches answers of accepted types", %{conn: conn} do
+      Req.Test.stub(@stub, answer("image/png", "png"))
+      assert conn |> get("/c/lobby/api/images/a") |> response(200) == "png"
+
+      hit = get(build_conn(), "/c/lobby/api/images/a")
+      assert get_resp_header(hit, "x-deepsplay-cache") == ["hit"]
+    end
+
+    test "serves the stale answer instead of a 200 of another type", %{conn: conn} do
+      Req.Test.stub(@stub, answer("image/png", "png"))
+      assert conn |> get("/c/lobby/api/images/a") |> response(200) == "png"
+      Cache.expire_all()
+
+      for type <- ["text/xml;charset=UTF-8", nil] do
+        Req.Test.stub(@stub, answer(type, "<ServiceExceptionReport/>"))
+        stale = get(build_conn(), "/c/lobby/api/images/a")
+        assert response(stale, 200) == "png"
+        assert get_resp_header(stale, "x-deepsplay-cache") == ["stale"]
+      end
+
+      assert Deepsplay.UpstreamProxy.Stats.get({:host, "images"}).last_error ==
+               "answered 200 without type, expected image/*"
+    end
+
+    test "passes a 200 of another type on without a stale answer, not cached", %{conn: conn} do
+      test = self()
+
+      Req.Test.stub(@stub, fn upstream ->
+        send(test, :called)
+        answer("text/xml", "<ServiceExceptionReport/>").(upstream)
+      end)
+
+      error = get(conn, "/c/lobby/api/images/b")
+      assert response(error, 200) == "<ServiceExceptionReport/>"
+      assert get_resp_header(error, "x-deepsplay-cache") == ["miss"]
+      assert_received :called
+
+      get(build_conn(), "/c/lobby/api/images/b")
+      assert_received :called
+
+      assert Deepsplay.UpstreamProxy.Stats.get({:host, "images"}).last_error ==
+               "answered 200 text/xml, expected image/*"
+    end
   end
 
   test "passes failures on without stale_ttl", %{conn: conn} do

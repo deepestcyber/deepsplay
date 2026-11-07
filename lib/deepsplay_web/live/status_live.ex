@@ -323,6 +323,12 @@ defmodule DeepsplayWeb.StatusLive do
                         row.upstream.refresh
                       }>, refresh</span>
                     </div>
+                    <div
+                      :if={row.upstream.accepted_types}
+                      class="upstream-types font-mono text-xs text-base-content/50"
+                    >
+                      {Enum.join(row.upstream.accepted_types, ", ")}
+                    </div>
                   <% else %>
                     <span class="text-base-content/50">not cached</span>
                   <% end %>

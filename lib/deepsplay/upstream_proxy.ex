@@ -21,7 +21,8 @@ defmodule Deepsplay.UpstreamProxy do
   - with `refresh`, fetches answers screens still ask for again before they
     expire,
   - with `stale_ttl`, serves an expired answer when the upstream fails
-    (timeout, connection error, `429` or `5xx`),
+    (timeout, connection error, `429`, `5xx`, or a `200` of a type not in
+    `accepted_types`, ADR 22),
   - returns only the status, the body and safe response headers; cacheable
     answers also carry `X-Deepsplay-Cache` (`hit`, `miss` or `stale`) and
     `Age`.
@@ -135,8 +136,16 @@ defmodule Deepsplay.UpstreamProxy do
 
     fetch = fn ->
       case call(config, upstream, url, query, request) do
-        {:ok, %{status: 200} = response} ->
-          {:cache, {:ok, response}}
+        {:ok, %{status: 200} = response} = result ->
+          type = content_type(response)
+
+          if Upstream.accepts?(upstream, type) do
+            {:cache, result}
+          else
+            expected = Enum.join(upstream.accepted_types, ", ")
+            Stats.failed(group, "answered 200 #{type || "without type"}, expected #{expected}")
+            {:failed, result}
+          end
 
         {:ok, %{status: status}} = result when status == 429 or status >= 500 ->
           Stats.failed(group, "answered #{status}")
@@ -161,6 +170,10 @@ defmodule Deepsplay.UpstreamProxy do
       {:error, :timeout} -> {:error, 504, "upstream #{upstream.name}: timed out"}
       {:error, :crashed} -> failure(config, upstream, 502, "request failed")
     end
+  end
+
+  defp content_type(response) do
+    Enum.find_value(response.headers, fn {name, value} -> if name == "content-type", do: value end)
   end
 
   defp count_as({:hit, _value, _age}), do: :hit
