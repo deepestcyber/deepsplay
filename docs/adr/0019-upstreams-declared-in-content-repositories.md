@@ -9,7 +9,8 @@ Accepted
 Amends [8](0008-secrets-only-on-host-via-upstream-proxy.md).
 
 Amended by [22](0022-accepted-types-and-cache-size-per-upstream.md):
-`accepted_types` and `cache_size` are allowed in manifests.
+`accepted_types` and `cache_size` are allowed in manifests. Also allowed:
+`description` (0005 part 1).
 
 ## Context
 

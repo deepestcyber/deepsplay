@@ -234,6 +234,7 @@ defmodule Deepsplay.HostConfig do
         {"refresh", :refresh, :boolean, default: false},
         {"accepted_types", :accepted_types, &Upstream.cast_accepted_types/1, default: nil},
         {"cache_size", :cache_size, :size, default: nil},
+        {"description", :description, :description, default: nil},
         {"timeout", :timeout, :duration, default: 15_000}
       ])
 
@@ -409,6 +410,7 @@ defmodule Deepsplay.HostConfig do
       {"credential", :credential, :string, default: nil},
       {"upstreams", :upstreams, :string_list, default: []},
       {"params", :params, :params, default: %{}},
+      {"description", :description, :description, default: nil},
       {"repo_upstreams", :repo_upstreams, :boolean, default: nil},
       {"repo_upstream_hosts", :repo_upstream_hosts, &cast_host_patterns/1, default: nil},
       {"state", :state, &cast_state/1, default: :default}

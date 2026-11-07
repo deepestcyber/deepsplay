@@ -9,7 +9,7 @@ Status values: `open`, `in progress`, `done`.
 
 | # | Part | Status |
 | --- | --- | --- |
-| 1 | Descriptions for configurations, upstreams, manifests and pages | open |
+| 1 | Descriptions for configurations, upstreams, manifests and pages | done |
 | 2 | Byte sizes with SI and binary units | done |
 | 3 | Reload the host configuration on change | open |
 | 4 | Page metadata: author, credits, license | open |
@@ -17,7 +17,12 @@ Status values: `open`, `in progress`, `done`.
 
 ## 1. Descriptions for configurations, upstreams, manifests and pages
 
-Status: open
+Status: done (2026-11-07)
+
+Built as decided, with a `:description` type in `Deepsplay.TomlSchema`.
+Status page: under the configuration's name and the upstream's URL.
+Catalog: an "About" row for the configuration, the manifest's description
+under its title, per rotation entry, and on manifest upstream cards.
 
 Goal: an operator or repository author can say in a sentence what something
 is for, and the status page and catalog show it.

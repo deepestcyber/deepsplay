@@ -92,6 +92,7 @@ ref       = "main"          # a branch is polled; a tag or SHA is resolved once
 subdir    = ""              # optional: root (manifests and pages/) is a subdirectory
 manifest  = "screen.toml"   # optional: manifest path below the root
 params    = { theme = "dc" }  # optional: default parameters for its pages (ADR 16)
+description = "Kiosk at the entrance"   # optional, shown on the status page
 upstreams = ["weather"]     # upstreams (see Secrets) this configuration may use
 
 [[config]]
@@ -208,6 +209,7 @@ stale_ttl = "1h"        # optional: serve the old answer this long while the ups
 refresh   = true        # optional: fetch answers screens use again before they expire
 # accepted_types = ["application/json"]   # optional: answers of other types count as failures
 # cache_size     = "20MB"                 # optional: this upstream's share of the cache
+# description    = "Forecasts for the lobby"   # optional, shown on the status page
 ```
 
 The proxy:

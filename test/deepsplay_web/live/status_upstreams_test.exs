@@ -31,8 +31,15 @@ defmodule DeepsplayWeb.StatusUpstreamsTest do
   setup %{tmp_dir: tmp_dir} do
     ctx =
       setup_screen(tmp_dir, @files, """
+      [[config]]
+      name        = "hall"
+      repo        = "file:///nonexistent/hall"
+      ref         = "main"
+      description = "Kiosk at the entrance"
+
       [upstream.weather]
-      base_url = "https://api.example.com"
+      base_url    = "https://api.example.com"
+      description = "Forecasts for the lobby"
       """)
 
     {:ok, _sha} = Revisions.refresh(ctx.config)
@@ -69,6 +76,13 @@ defmodule DeepsplayWeb.StatusUpstreamsTest do
 
     assert has_element?(view, "#upstream-host-configuration-weather", "host configuration")
     assert has_element?(view, "#upstream-host-configuration-weather", "not cached")
+    assert has_element?(view, "#config-hall .config-description", "Kiosk at the entrance")
+
+    assert has_element?(
+             view,
+             "#upstream-host-configuration-weather .upstream-description",
+             "Forecasts for the lobby"
+           )
 
     radar = "#upstream-manifest-radar"
     assert has_element?(view, radar, "https://radar.example.com/wms")

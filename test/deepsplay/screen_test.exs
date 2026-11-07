@@ -60,6 +60,27 @@ defmodule Deepsplay.ScreenTest do
              ]
     end
 
+    test "reads descriptions of the manifest and its page entries", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        title       = "Lobby"
+        description = "What the lobby shows during the day."
+
+        [[page]]
+        path        = "a.html?cells=200"
+        description = "Fast version for the hall"
+
+        [[page]]
+        path = "a.html"
+        """,
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, screen} = Screen.load(root)
+      assert screen.description == "What the lobby shows during the day."
+      assert [%{description: "Fast version for the hall"}, %{description: nil}] = screen.pages
+    end
+
     test "applies defaults", %{tmp_dir: root} do
       write(root, %{"screen.toml" => @one_page, "pages/a.html" => "a"})
 
@@ -286,6 +307,7 @@ defmodule Deepsplay.ScreenTest do
     refresh   = true
     accepted_types = ["image/png"]
     cache_size = "20MB"
+    description = "DWD rain radar frames"
 
     [[page]]
     path = "a.html"
@@ -307,6 +329,7 @@ defmodule Deepsplay.ScreenTest do
       assert {radar.header, radar.query} == {nil, nil}
       assert radar.accepted_types == ["image/png"]
       assert radar.cache_size == 20_000_000
+      assert radar.description == "DWD rain radar frames"
     end
 
     test "with a cache_size the host allows", %{tmp_dir: root} do

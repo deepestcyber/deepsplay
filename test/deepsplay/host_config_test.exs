@@ -254,6 +254,35 @@ defmodule Deepsplay.HostConfigTest do
       assert Enum.any?(errors, &(&1 =~ "server.repo_upstream_hosts must be a list of host names"))
     end
 
+    test "descriptions of configurations and upstreams" do
+      toml =
+        minimal(~s(description = "  Kiosk at the entrance  ")) <>
+          """
+          [upstream.weather]
+          base_url    = "https://api.example.com"
+          description = "Forecasts for the lobby"
+          """
+
+      assert {:ok, host_config} = parse(toml)
+      assert host_config.configs["lobby"].description == "Kiosk at the entrance"
+      assert host_config.upstreams["weather"].description == "Forecasts for the lobby"
+
+      assert {:ok, host_config} = parse(minimal(~s(description = "  ")))
+      assert host_config.configs["lobby"].description == nil
+
+      long = String.duplicate("x", 501)
+
+      assert Enum.any?(
+               errors(minimal(~s(description = "#{long}"))),
+               &(&1 =~ "at most 500 characters")
+             )
+
+      assert Enum.any?(
+               errors(minimal("description = 3")),
+               &(&1 =~ ".description must be a string")
+             )
+    end
+
     test "shared state settings" do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.state_dir == "/cache/.state"

@@ -26,6 +26,7 @@ defmodule Deepsplay.HostConfig.Upstream do
     :stale_ttl,
     :accepted_types,
     :cache_size,
+    :description,
     methods: ["GET"],
     refresh: false,
     origin: :host,
@@ -44,6 +45,7 @@ defmodule Deepsplay.HostConfig.Upstream do
           stale_ttl: pos_integer() | nil,
           accepted_types: [String.t()] | nil,
           cache_size: pos_integer() | nil,
+          description: String.t() | nil,
           refresh: boolean(),
           origin: :host | :manifest,
           timeout: pos_integer()

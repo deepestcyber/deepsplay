@@ -22,6 +22,7 @@ defmodule Deepsplay.TomlSchema do
           | :duration
           | :size
           | :boolean
+          | :description
           | :non_neg_integer
           | :positive_number
           | :string_list
@@ -94,6 +95,22 @@ defmodule Deepsplay.TomlSchema do
       :error -> {:error, ~s(must be a size such as "200MB", "1.5GiB" or a number of bytes)}
     end
   end
+
+  # Free text describing something (shown as text, never as HTML); trimmed,
+  # empty counts as not set.
+  def cast(:description, value) when is_binary(value) do
+    case String.trim(value) do
+      "" ->
+        {:ok, nil}
+
+      text ->
+        if String.length(text) <= 500,
+          do: {:ok, text},
+          else: {:error, "must be at most 500 characters"}
+    end
+  end
+
+  def cast(:description, _value), do: {:error, "must be a string"}
 
   def cast(:boolean, value) when is_boolean(value), do: {:ok, value}
   def cast(:boolean, _value), do: {:error, "must be true or false"}

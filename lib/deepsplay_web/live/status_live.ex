@@ -198,6 +198,12 @@ defmodule DeepsplayWeb.StatusLive do
                     {row.config.name}
                   </.link>
                   <span :if={row.default} class="ml-1 text-xs text-base-content/50">default</span>
+                  <div
+                    :if={row.config.description}
+                    class="config-description max-w-xs text-xs font-normal text-base-content/60"
+                  >
+                    {row.config.description}
+                  </div>
                   <div>
                     <.link navigate={~p"/catalog/#{row.config.name}"} class="text-xs hover:underline">
                       catalog
@@ -305,6 +311,12 @@ defmodule DeepsplayWeb.StatusLive do
                   <div class="font-medium">{row.upstream.name}</div>
                   <div class="break-all font-mono text-xs text-base-content/50">
                     {row.upstream.base_url}
+                  </div>
+                  <div
+                    :if={row.upstream.description}
+                    class="upstream-description max-w-xs text-xs text-base-content/60"
+                  >
+                    {row.upstream.description}
                   </div>
                 </td>
                 <td class="px-3 py-2">

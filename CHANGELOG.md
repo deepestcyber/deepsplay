@@ -57,6 +57,8 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   count in powers of 1024: existing values shrink by about 5% (`MB`) or 7%
   (`GB`); the default `upstream_cache_size` is now 200,000,000 bytes. Pages
   show sizes in SI units.
+- Optional `description` for configurations, host and manifest upstreams,
+  manifests and page entries, shown on the status page and in the catalog.
 
 ## 0.1.0 – 2026-11-07
 

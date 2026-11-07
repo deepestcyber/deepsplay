@@ -9,7 +9,8 @@ defmodule Deepsplay.Screen.Upstreams do
 
   Allowed keys: `url` (`https` only), `cache_ttl` (required, at least one
   minute), `stale_ttl`, `refresh`, `timeout`, `accepted_types` and
-  `cache_size` (ADR 22; at most the host's `upstream_cache_size`). The host decides whether a
+  `cache_size` (ADR 22; at most the host's `upstream_cache_size`), and
+  `description`. The host decides whether a
   configuration accepts them, and for which hosts.
   """
 
@@ -26,6 +27,7 @@ defmodule Deepsplay.Screen.Upstreams do
     {"refresh", :refresh, :boolean, default: false},
     {"accepted_types", :accepted_types, &Upstream.cast_accepted_types/1, default: nil},
     {"cache_size", :cache_size, :size, default: nil},
+    {"description", :description, :description, default: nil},
     {"timeout", :timeout, :duration, default: 15_000}
   ]
 

@@ -29,6 +29,7 @@ defmodule Deepsplay.Screen do
   @max_size 64 * 1024
 
   defstruct title: nil,
+            description: nil,
             rotation: :sequential,
             pages: [],
             params: %{},
@@ -37,6 +38,7 @@ defmodule Deepsplay.Screen do
 
   @type t :: %__MODULE__{
           title: String.t() | nil,
+          description: String.t() | nil,
           rotation: :sequential | :random,
           pages: [Page.t(), ...],
           params: %{String.t() => String.t()},
@@ -49,6 +51,7 @@ defmodule Deepsplay.Screen do
 
   @top_fields [
     {"title", :title, :string, default: nil},
+    {"description", :description, :description, default: nil},
     {"rotation", :rotation, {:enum, ["sequential", "random"]}, default: "sequential"},
     {"duration", :duration, :duration, default: @default_duration}
   ]
@@ -57,7 +60,8 @@ defmodule Deepsplay.Screen do
     {"path", :path, &__MODULE__.cast_page_ref/1, []},
     {"duration", :duration, :duration, default: nil},
     {"weight", :weight, :positive_number, default: 1.0},
-    {"uses", :uses, :string_list, default: []}
+    {"uses", :uses, :string_list, default: []},
+    {"description", :description, :description, default: nil}
   ]
 
   @doc """
@@ -268,6 +272,7 @@ defmodule Deepsplay.Screen do
         {:ok,
          %__MODULE__{
            title: top.title,
+           description: top.description,
            rotation: rotation(top.rotation),
            pages: Enum.map(pages, &%{&1 | duration: &1.duration || top.duration}),
            params: params,

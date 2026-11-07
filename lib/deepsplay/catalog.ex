@@ -35,6 +35,7 @@ defmodule Deepsplay.Catalog do
           query: String.t() | nil,
           duration: pos_integer(),
           weight: float(),
+          description: String.t() | nil,
           params: [{String.t(), String.t(), String.t()}]
         }
 
@@ -119,6 +120,7 @@ defmodule Deepsplay.Catalog do
         query: page.query,
         duration: page.duration,
         weight: page.weight,
+        description: page.description,
         params: own ++ explained
       }
     end)

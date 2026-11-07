@@ -25,20 +25,23 @@ defmodule DeepsplayWeb.CatalogLiveTest do
 
   @files %{
     "screen.toml" => """
-    title    = "Lobby"
-    duration = "20s"
+    title       = "Lobby"
+    description = "Day rotation <b>for</b> the lobby."
+    duration    = "20s"
 
     [params]
     theme = "neon"
 
     [upstream.radar]
-    url       = "https://radar.example.com/wms"
-    cache_ttl = "5m"
-    refresh   = true
+    url         = "https://radar.example.com/wms"
+    cache_ttl   = "5m"
+    refresh     = true
+    description = "Rain radar frames"
 
     [[page]]
     path = "life.html?cells=40"
     uses = ["radar"]
+    description = "Large cells for the entrance"
 
     [[page]]
     path = "fragment.html"
@@ -111,6 +114,17 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     assert has_element?(view, "#upstream-radar", "Used by: life.html")
 
     assert has_element?(view, "#catalog-state", "No values.")
+
+    # Descriptions, shown as text.
+    assert has_element?(
+             view,
+             "#catalog-manifest-description",
+             "Day rotation <b>for</b> the lobby."
+           )
+
+    refute has_element?(view, "#catalog-manifest-description b")
+    assert has_element?(view, "#rotation-0 .rotation-description", "Large cells for the entrance")
+    assert has_element?(view, "#upstream-radar", "Rain radar frames")
   end
 
   test "the configuration page shows shared state, shortened", %{conn: conn} = ctx do

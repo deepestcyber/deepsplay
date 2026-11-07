@@ -251,6 +251,10 @@ defmodule DeepsplayWeb.CatalogConfigLive do
     ~H"""
     <section id="catalog-header" class="rounded-lg border border-base-300 p-4 text-sm">
       <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
+        <%= if @catalog.config.description do %>
+          <dt class="text-base-content/50">About</dt>
+          <dd id="catalog-config-description">{@catalog.config.description}</dd>
+        <% end %>
         <dt class="text-base-content/50">Source</dt>
         <dd class="break-all font-mono text-xs">{source(@catalog.config)}</dd>
         <dt class="text-base-content/50">Revision</dt>
@@ -261,6 +265,13 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         <dd class="font-mono text-xs">
           {@catalog.config.manifest} · {@catalog.current.screen.rotation}
           <span :if={@catalog.current.screen.title}>· {@catalog.current.screen.title}</span>
+          <div
+            :if={@catalog.current.screen.description}
+            id="catalog-manifest-description"
+            class="font-sans text-sm"
+          >
+            {@catalog.current.screen.description}
+          </div>
         </dd>
         <dt class="text-base-content/50">Defaults</dt>
         <dd id="catalog-defaults" class="font-mono text-xs">
@@ -298,7 +309,12 @@ defmodule DeepsplayWeb.CatalogConfigLive do
               id={"rotation-#{i}"}
               class="border-t border-base-300 align-top"
             >
-              <td class="px-3 py-2 font-mono text-xs">{entry.path}</td>
+              <td class="px-3 py-2">
+                <div class="font-mono text-xs">{entry.path}</div>
+                <div :if={entry.description} class="rotation-description text-xs text-base-content/60">
+                  {entry.description}
+                </div>
+              </td>
               <td class="px-3 py-2">{PageParams.format_duration(entry.duration)}</td>
               <td class="px-3 py-2">{entry.weight}</td>
               <td class="px-3 py-2 font-mono text-xs">
@@ -404,6 +420,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
           <h3 class="font-semibold">{upstream.name}</h3>
           <span class="font-mono text-xs text-base-content/50 break-all">{upstream.base_url}</span>
         </div>
+        <p :if={upstream.description} class="mt-1 text-base-content/70">{upstream.description}</p>
         <p class="mt-2 font-mono text-xs">
           cache {PageParams.format_duration(upstream.cache_ttl)}
           <span :if={upstream.stale_ttl}>

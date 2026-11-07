@@ -43,9 +43,10 @@ Use lowercase file names with dashes.
 `screen.toml` lists the pages and how they rotate:
 
 ```toml
-title    = "Lobby"
-rotation = "sequential"        # or "random"
-duration = "20s"               # display time of pages without their own; default 15s
+title       = "Lobby"
+description = "Daytime rotation for the lobby screens."   # optional
+rotation    = "sequential"     # or "random"
+duration    = "20s"            # display time of pages without their own; default 15s
 
 [params]                       # default parameters for pages that declare them
 theme = "dark"
@@ -54,15 +55,19 @@ theme = "dark"
 path = "welcome.html"
 
 [[page]]
-path     = "life/index.html?cells=40"   # a query is passed on to the page
-duration = "45s"
-weight   = 2.0                 # random rotation only: shown more often
+path        = "life/index.html?cells=40"   # a query is passed on to the page
+duration    = "45s"
+weight      = 2.0              # random rotation only: shown more often
+description = "Large cells, readable from the door"   # optional: why this entry
 ```
 
 - `rotation = "random"` picks the next page weighted by `weight` (default 1.0)
   and never shows the same page twice in a row.
 - Durations are whole numbers with `ms`, `s`, `m` or `h`.
 - A page that calls an upstream (see below) lists it: `uses = ["weather"]`.
+- `description` (optional, at most 500 characters) says what a rotation or
+  an entry is for; the catalog shows it. The page's own description belongs
+  in its parameter block (below).
 
 A revision whose manifest is invalid (or names missing files) is never shown;
 screens keep the last good one, and `/status` says what is wrong.
@@ -200,6 +205,7 @@ There are two kinds of upstreams:
   refresh        = true           # optional: fetch again before it expires
   accepted_types = ["image/png"]  # optional: other answers count as failures
   cache_size     = "20MB"         # optional: most this upstream may take in the cache
+  description    = "DWD rain radar frames"   # optional
 
   [[page]]
   path = "radar.html"
