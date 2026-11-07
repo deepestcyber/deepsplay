@@ -184,8 +184,7 @@ Built (2026-11-07):
 ## 5. Repository conventions and template
 
 Status: done (2026-11-07), decided in
-[ADR 18](../adr/0018-content-repository-conventions-and-template.md); not
-built yet.
+[ADR 18](../adr/0018-content-repository-conventions-and-template.md).
 
 Goal: a recommended layout and set of helpers for content repositories, so new
 repositories start well.
@@ -213,8 +212,21 @@ Decided:
   development configuration shows it, and its pages point to building an own
   repository.
 
-To build: the guide, the template repository, the development configuration
-pointing to it, and `Deepsplay.api` in the page helper.
+Built (2026-11-07):
+
+- The guide `docs/pages.md`: quick start, layout, manifest, documenting pages,
+  reading parameters, shared helpers, added parameters, external data, trying
+  pages (catalog, pinning, local development), guidelines, and several
+  displays from one repository; linked from the README.
+- The template repository, published as
+  [deepestcyber/deepsplay-template](https://github.com/deepestcyber/deepsplay-template)
+  (a GitHub template repository):
+  manifest with a default duration and parameter, a documented welcome page
+  with variants loading a fragment (`page = false`), a clock page in its own
+  folder, and a small theme helper with `Deepsplay.helper` and a progress bar.
+  Checked with deepsplay: no catalog warnings, parameters added as expected.
+- `config/deepsplay.dev.toml` shows the template repository.
+- `Deepsplay.api` was built with part 1.
 
 ## Changes along the way
 

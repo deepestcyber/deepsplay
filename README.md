@@ -14,6 +14,8 @@ up new commits on their own.
 
 - [Outline](docs/outline.md): concept and design
 - [Architecture decisions](docs/adr/)
+- [Building content repositories](docs/pages.md): pages, parameters,
+  helpers, manifests
 - [Deployment](docs/deployment.md): container image, Docker Compose, NixOS,
   kiosk screens
 - [Development plans and progress](docs/development/)
@@ -29,6 +31,7 @@ iex -S mix phx.server     # http://localhost:4000
 mix precommit             # compile, format, tests
 ```
 
-Dev uses `config/deepsplay.dev.toml`, or your own gitignored
-`config/deepsplay.local.toml` if it exists. A configuration with
+Dev uses `config/deepsplay.dev.toml`, which shows the
+[template repository](https://github.com/deepestcyber/deepsplay-template), or
+your own gitignored `config/deepsplay.local.toml` if it exists. A configuration with
 `path = "/abs/dir"` serves a local directory live, so every save shows at once.

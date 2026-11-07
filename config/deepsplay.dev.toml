@@ -6,13 +6,16 @@
 
 [server]
 cache_dir      = "tmp/cache"
-default_config = "lobby"
+default_config = "template"
 poll_interval  = "30s"
 keep_revisions = 3
 
+# The template repository, so a fresh setup shows something (ADR 18). For
+# your own content, create a repository from it and add it here or in your
+# config/deepsplay.local.toml; see docs/pages.md.
 [[config]]
-name = "lobby"
-repo = "https://github.com/example/lobby-screen.git"
+name = "template"
+repo = "https://github.com/deepestcyber/deepsplay-template.git"
 ref  = "main"
 
 # A local repository, for building pages without pushing anywhere (ADR 6).
