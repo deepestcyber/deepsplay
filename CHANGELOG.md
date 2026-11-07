@@ -52,6 +52,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   XML error sent with `200`, count as failures: not cached, stale answer
   served) and `cache_size` (an upstream's share of the cache), for host and
   manifest upstreams (ADR 22).
+- Sizes take SI units (`kB`, `MB`, `GB`, powers of 1000) and binary units
+  (`KiB`, `MiB`, `GiB`, powers of 1024), and decimals. `MB` and `GB` used to
+  count in powers of 1024: existing values shrink by about 5% (`MB`) or 7%
+  (`GB`); the default `upstream_cache_size` is now 200,000,000 bytes. Pages
+  show sizes in SI units.
 
 ## 0.1.0 – 2026-11-07
 

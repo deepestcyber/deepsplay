@@ -306,15 +306,15 @@ defmodule Deepsplay.ScreenTest do
       assert {radar.cache_ttl, radar.stale_ttl, radar.refresh} == {300_000, 3_600_000, true}
       assert {radar.header, radar.query} == {nil, nil}
       assert radar.accepted_types == ["image/png"]
-      assert radar.cache_size == 20 * 1024 * 1024
+      assert radar.cache_size == 20_000_000
     end
 
     test "with a cache_size the host allows", %{tmp_dir: root} do
       write(root, %{"screen.toml" => @radar, "pages/a.html" => "a"})
 
-      assert {:ok, _screen} = Screen.load(root, config: lobby(), max_cache_size: 20 * 1024 * 1024)
+      assert {:ok, _screen} = Screen.load(root, config: lobby(), max_cache_size: 20_000_000)
 
-      assert errors(root, config: lobby(), max_cache_size: 10 * 1024 * 1024) == [
+      assert errors(root, config: lobby(), max_cache_size: 10_000_000) == [
                "upstream.radar.cache_size must not be larger than the host's upstream_cache_size"
              ]
     end

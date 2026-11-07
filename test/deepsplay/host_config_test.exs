@@ -65,7 +65,7 @@ defmodule Deepsplay.HostConfigTest do
       assert host_config.default_config == "lobby"
       assert host_config.poll_interval == 60_000
       assert host_config.keep_revisions == 5
-      assert host_config.upstream_cache_size == 1024 ** 3
+      assert host_config.upstream_cache_size == 1_000_000_000
 
       assert %{
                "lobby" => %Config{
@@ -136,7 +136,7 @@ defmodule Deepsplay.HostConfigTest do
                stale_ttl: 3_600_000,
                refresh: true,
                accepted_types: ["image/png", "text/*"],
-               cache_size: 20 * 1024 * 1024,
+               cache_size: 20_000_000,
                timeout: 5_000
              }
     end
@@ -298,7 +298,7 @@ defmodule Deepsplay.HostConfigTest do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.poll_interval == 30_000
       assert host_config.keep_revisions == 3
-      assert host_config.upstream_cache_size == 200 * 1024 ** 2
+      assert host_config.upstream_cache_size == 200_000_000
     end
 
     test "expands a relative cache_dir" do

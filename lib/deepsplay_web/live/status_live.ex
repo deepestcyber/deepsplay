@@ -11,6 +11,8 @@ defmodule DeepsplayWeb.StatusLive do
 
   use DeepsplayWeb, :live_view
 
+  alias Deepsplay.ByteSize
+
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.PageParams
   alias Deepsplay.RepoUrl
@@ -448,9 +450,7 @@ defmodule DeepsplayWeb.StatusLive do
   defp count(1, one, _many), do: "1 #{one}"
   defp count(n, _one, many), do: "#{n} #{many}"
 
-  defp bytes(size) when size >= 1024 * 1024, do: "#{Float.round(size / (1024 * 1024), 1)} MB"
-  defp bytes(size) when size >= 1024, do: "#{Float.round(size / 1024, 1)} KB"
-  defp bytes(size), do: "#{size} B"
+  defp bytes(size), do: ByteSize.format(size)
 
   defp time(nil), do: "–"
 

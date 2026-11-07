@@ -36,7 +36,7 @@ defmodule Deepsplay.UpstreamProxy.Cache do
 
   @tasks Deepsplay.UpstreamProxy.Tasks
   @sweep 60_000
-  @default_size 200 * 1024 * 1024
+  @default_size 200_000_000
 
   @typedoc """
   What a fetch function returns: a value to cache, one to pass on only, or a

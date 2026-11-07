@@ -10,7 +10,7 @@ Status values: `open`, `in progress`, `done`.
 | # | Part | Status |
 | --- | --- | --- |
 | 1 | Descriptions for configurations, upstreams, manifests and pages | open |
-| 2 | Byte sizes with SI and binary units | open |
+| 2 | Byte sizes with SI and binary units | done |
 | 3 | Reload the host configuration on change | open |
 | 4 | Page metadata: author, credits, license | open |
 | 5 | Time windows and overrides | open |
@@ -49,7 +49,11 @@ namespace belongs to a configuration; there is one `[server]`.
 
 ## 2. Byte sizes with SI and binary units
 
-Status: open
+Status: done (2026-11-07)
+
+Built as decided, in `Deepsplay.ByteSize` (`parse/1` for the `:size` type
+of `Deepsplay.TomlSchema`, `format/1` for the status page and catalog).
+`TB` and units in other spellings are refused.
 
 Today: sizes (`upstream_cache_size`, `cache_size`) accept `B`, `KB`, `MB`,
 `GB`, all counted in powers of 1024, so `"200MB"` is 209,715,200 bytes. The
