@@ -16,6 +16,9 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - Default parameters per configuration (`params = {…}`) and per manifest
   (`[params]`), and the display time for parameters with `from = "duration"`,
   are added to the URLs of pages that declare them (ADR 16).
+- Page catalog at `/catalog`: per configuration the rotation, all pages with
+  their documentation and parameters, helpers and warnings; preview at
+  different screen sizes and a playground for parameters (ADR 17).
 
 ## 0.1.0 – 2026-11-07
 

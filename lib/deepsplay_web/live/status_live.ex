@@ -72,9 +72,14 @@ defmodule DeepsplayWeb.StatusLive do
     <Layouts.app flash={@flash}>
       <div class="flex items-baseline justify-between gap-4">
         <h1 class="text-2xl font-semibold tracking-tight">Status</h1>
-        <p id="status-version" class="font-mono text-sm text-base-content/60">
-          deepsplay {version()}
-        </p>
+        <div class="flex items-baseline gap-4">
+          <.link navigate={~p"/catalog"} id="status-catalog-link" class="text-sm hover:underline">
+            Catalog
+          </.link>
+          <p id="status-version" class="font-mono text-sm text-base-content/60">
+            deepsplay {version()}
+          </p>
+        </div>
       </div>
 
       <section :if={match?({:error, _}, @host_config)} id="status-host-config-error">
@@ -109,6 +114,11 @@ defmodule DeepsplayWeb.StatusLive do
                     {row.config.name}
                   </.link>
                   <span :if={row.default} class="ml-1 text-xs text-base-content/50">default</span>
+                  <div>
+                    <.link navigate={~p"/catalog/#{row.config.name}"} class="text-xs hover:underline">
+                      catalog
+                    </.link>
+                  </div>
                 </td>
                 <td class="px-3 py-2 font-mono text-xs">
                   <%= if row.config.path do %>

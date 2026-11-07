@@ -44,9 +44,10 @@ live (new revisions, and every change of a local directory).
   phone) and "custom", which only then shows width and height fields; the
   default is 1920×1080. Pages are not limited to any size or aspect ratio.
 - Playground: per page, a form built from its parameter definitions (a select
-  for `enum`, number fields with limits, a colour picker for `color`, a
-  checkbox for `bool`, a text field for `duration` and `string`). It updates
-  the preview as values change and produces the pinned link to copy.
+  for `enum`, number fields with limits, a colour picker for `color`, a select
+  with "default / on / off" for `bool`, a text field for `duration` and
+  `string`). Fields left empty keep the page's default. It updates the preview
+  as values change and produces the pinned link to copy.
 - Files marked `page = false` (ADR 14) are listed under "Other files" with
   their description, without pin link, preview or playground.
 

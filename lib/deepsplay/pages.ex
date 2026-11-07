@@ -29,6 +29,21 @@ defmodule Deepsplay.Pages do
   end
 
   @doc """
+  All HTML files (`.html`, `.htm`) below `pages/`, relative to it and sorted;
+  hidden files and symlinks are left out, as they are never served.
+  """
+  @spec files(Path.t(), String.t()) :: [String.t()]
+  def files(pages_dir, key) do
+    cached({:files, pages_dir, key}, fn ->
+      ["**/*.html", "**/*.htm"]
+      |> Enum.flat_map(&Path.wildcard(Path.join(pages_dir, &1)))
+      |> Enum.map(&Path.relative_to(&1, pages_dir))
+      |> Enum.filter(&match?({:ok, _}, RevisionFile.resolve(pages_dir, &1)))
+      |> Enum.sort()
+    end)
+  end
+
+  @doc """
   The documentation of a page, by its path relative to `pages/` (without
   query). `:none` for an undocumented page; `:error` if the path is not a
   deliverable file.

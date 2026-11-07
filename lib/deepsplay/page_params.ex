@@ -37,6 +37,17 @@ defmodule Deepsplay.PageParams do
   @spec for_page(context(), String.t(), String.t() | nil, pos_integer() | nil) ::
           {added(), [String.t()], [String.t()]}
   def for_page(context, path, query, duration) do
+    {explained, warnings, declared} = explain(context, path, query, duration)
+    {Enum.map(explained, fn {name, value, _origin} -> {name, value} end), warnings, declared}
+  end
+
+  @doc """
+  Like `for_page/4`, with the origin of each added value: `"configuration"`,
+  `"manifest"` or `"display time"`.
+  """
+  @spec explain(context(), String.t(), String.t() | nil, pos_integer() | nil) ::
+          {[{String.t(), String.t(), String.t()}], [String.t()], [String.t()]}
+  def explain(context, path, query, duration) do
     case Pages.doc(context.pages_dir, context.key, path) do
       {:ok, doc} ->
         {params, _collisions} =
@@ -51,11 +62,17 @@ defmodule Deepsplay.PageParams do
           |> Enum.reduce({[], []}, fn {name, {param, _origin}}, {added, warnings} ->
             case pick(context, name, param, duration, path) do
               {nil, w} -> {added, warnings ++ w}
-              {value, w} -> {added ++ [{name, value}], warnings ++ w}
+              {{value, origin}, w} -> {added ++ [{name, value, origin}], warnings ++ w}
             end
           end)
 
-        {added, warnings, Map.keys(params)}
+        # A fragment in a rotation is likely a mistake (ADR 14).
+        fragment =
+          if duration && doc.page == false,
+            do: [~s(#{path} is marked page = false but is in the rotation)],
+            else: []
+
+        {added, warnings ++ fragment, Map.keys(params)}
 
       _undocumented ->
         {[], [], []}
@@ -125,7 +142,7 @@ defmodule Deepsplay.PageParams do
       {origin, value}, {nil, warnings} ->
         case Param.cast(param, value) do
           {:ok, _typed} ->
-            {:halt, {value, warnings}}
+            {:halt, {{value, origin}, warnings}}
 
           :error ->
             warning = ~s(#{origin} value #{name}=#{inspect(value)} is invalid for #{path})

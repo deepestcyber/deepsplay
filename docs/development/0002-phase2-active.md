@@ -144,7 +144,7 @@ Built (2026-11-07):
 ## 4. Page catalog
 
 Status: done (2026-11-07), decided in [ADR 17](../adr/0017-page-catalog.md);
-not built yet.
+built.
 
 Goal: a page, linked from `/status`, that shows what each configuration shows,
 what each page does and accepts, and lets you try pages in different settings.
@@ -164,9 +164,22 @@ Decided:
 - Files marked `page = false` (ADR 14) are listed under "Other files", without
   pin link, preview or playground.
 
-To build (after parts 1 to 3): the two LiveViews, the shared per-revision
-reading of page definitions and helpers (also used by part 3), preview and
-playground, links from `/status`.
+Built (2026-11-07):
+
+- `Deepsplay.Catalog`: everything for one configuration from its current
+  revision (all HTML files via `Pages.files/2`, documentation, combined
+  parameters with origins and the value each gets in this configuration, the
+  rotation with added parameters and their origins, helpers with their pages,
+  all warnings).
+- `DeepsplayWeb.CatalogLive` (`/catalog`) and `CatalogConfigLive`
+  (`/catalog/<name>`), updating live; linked from `/status`.
+- Preview of one page at a time in an iframe at the chosen size, scaled by a
+  colocated hook (`.FitFrame`); presets plus custom width and height.
+- Playground: form from the parameter definitions (`bool` as a select with
+  default/on/off, so "not set" stays possible); empty fields keep the page's
+  default; updates the preview and the pinned link.
+- `PageParams.explain/4` reports where added values come from; a manifest
+  rotating a `page = false` file gets a warning (also on the status page).
 
 ## 5. Repository conventions and template
 

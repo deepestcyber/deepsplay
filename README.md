@@ -7,7 +7,8 @@ up new commits on their own.
 - Content repositories hold a manifest (`screen.toml`) and the pages in
   `pages/`; screens open `/` or `/c/<name>` and rotate the pages in the browser.
 - Secrets stay on the server; pages reach external APIs through a proxy.
-- `/status` shows configurations, connected screens and recent errors.
+- `/status` shows configurations, connected screens and recent errors;
+  `/catalog` documents every page and lets you preview and try them.
 
 ## Documentation
 

@@ -1,0 +1,193 @@
+defmodule DeepsplayWeb.CatalogLiveTest do
+  # Not async: uses the global host configuration.
+  use DeepsplayWeb.ConnCase, async: false
+
+  import Phoenix.LiveViewTest
+  import Deepsplay.ScreenFixture
+
+  alias Deepsplay.GitFixture
+  alias Deepsplay.Revisions
+
+  @moduletag :tmp_dir
+
+  @theme """
+  const T = Deepsplay.helper("theme", `
+  description = "Colours."
+  [params.theme]
+  type    = "enum"
+  values  = ["default", "neon"]
+  default = "default"
+  [params.duration]
+  type = "duration"
+  from = "duration"
+  `)
+  """
+
+  @files %{
+    "screen.toml" => """
+    title    = "Lobby"
+    duration = "20s"
+
+    [params]
+    theme = "neon"
+
+    [[page]]
+    path = "life.html?cells=40"
+
+    [[page]]
+    path = "fragment.html"
+    """,
+    "pages/shared/theme.js" => @theme,
+    "pages/life.html" => """
+    <title>Game of Life</title>
+    <script type="application/toml" id="deepsplay-page">
+    description = "Cells."
+    uses = ["theme"]
+    [params.cells]
+    type    = "int"
+    default = 90
+    min     = 4
+    description = "Cells along the shorter side."
+    [params.tint]
+    type = "color"
+    [[variants]]
+    label = "Large"
+    query = "cells=20"
+    </script>
+    """,
+    "pages/fragment.html" => """
+    <script type="application/toml" id="deepsplay-page">
+    page = false
+    description = "Loaded by life."
+    </script>
+    """,
+    "pages/plain.html" => "<h1>plain</h1>"
+  }
+
+  setup %{tmp_dir: tmp_dir} do
+    ctx = setup_screen(tmp_dir, @files)
+    {:ok, _sha} = Revisions.refresh(ctx.config)
+    ctx
+  end
+
+  test "the overview lists configurations", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/catalog")
+
+    assert has_element?(view, "#catalog-config-lobby", "3 files")
+    assert has_element?(view, "#catalog-config-lobby", "2 in rotation")
+    assert has_element?(view, "#catalog-config-lobby", "warnings")
+  end
+
+  test "the configuration page shows rotation, pages, helpers and warnings", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/catalog/lobby")
+
+    assert has_element?(view, "#catalog-defaults", "theme=neon")
+
+    # Rotation: own query, provided display time, manifest default, each with origin.
+    assert has_element?(view, "#rotation-0", "cells=40 (page query)")
+    assert has_element?(view, "#rotation-0", "duration=20s (display time)")
+    assert has_element?(view, "#rotation-0", "theme=neon (manifest)")
+
+    # Pages: documented first, then undocumented, then fragments.
+    assert has_element?(view, "#page-life-html", "Game of Life")
+    assert has_element?(view, "#page-life-html", "Cells along the shorter side.")
+    assert has_element?(view, "#page-life-html", "theme")
+    assert has_element?(view, "#page-plain-html", "undocumented")
+    assert has_element?(view, "#page-fragment-html", "not a page")
+    refute has_element?(view, "#page-fragment-html .page-preview")
+
+    assert has_element?(view, "#helper-theme", "Used by: life.html")
+
+    assert has_element?(
+             view,
+             "#catalog-warnings .catalog-warning",
+             "fragment.html is marked page = false but is in the rotation"
+           )
+  end
+
+  test "preview renders the page with added parameters, one at a time", %{conn: conn} = ctx do
+    {:ok, view, _html} = live(conn, ~p"/catalog/lobby")
+    refute has_element?(view, "#catalog-preview")
+
+    view |> element("#page-life-html .page-variant", "Large") |> render_click()
+
+    assert has_element?(view, "#page-life-html #catalog-preview")
+
+    assert has_element?(
+             view,
+             ~s(#preview-iframe[src="/c/lobby/r/#{ctx.sha}/life.html?cells=20&theme=neon"])
+           )
+
+    assert has_element?(view, "#preview-pin", "page=life.html%3Fcells%3D20")
+
+    view |> element("#page-plain-html .page-preview") |> render_click()
+    refute has_element?(view, "#page-life-html #catalog-preview")
+    assert has_element?(view, "#page-plain-html #catalog-preview")
+  end
+
+  test "the size selector shows custom fields only when chosen", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/catalog/lobby")
+    view |> element("#page-life-html .page-preview") |> render_click()
+
+    refute has_element?(view, "#preview-size input[name=width]")
+    assert has_element?(view, ~s(#preview-frame[data-width="1920"][data-height="1080"]))
+
+    view |> form("#preview-size", %{size: "1080x1920"}) |> render_change()
+    assert has_element?(view, ~s(#preview-frame[data-width="1080"][data-height="1920"]))
+
+    view |> form("#preview-size", %{size: "custom"}) |> render_change()
+    assert has_element?(view, "#preview-size input[name=width]")
+
+    view
+    |> form("#preview-size", %{size: "custom", width: "800", height: "600"})
+    |> render_change()
+
+    assert has_element?(view, ~s(#preview-frame[data-width="800"][data-height="600"]))
+  end
+
+  test "the playground builds the query from the form", %{conn: conn} = ctx do
+    {:ok, view, _html} = live(conn, ~p"/catalog/lobby")
+    view |> element("#page-life-html .page-playground") |> render_click()
+
+    assert has_element?(view, "#playground-form select[name='p[theme]']")
+    assert has_element?(view, "#playground-form input[name='p[cells]'][type=number][min='4']")
+    assert has_element?(view, "#playground-form input[name='p[tint]'][type=color]")
+
+    view
+    |> form("#playground-form", %{
+      p: %{"cells" => "12", "theme" => "", "tint" => "#000000", "duration" => ""}
+    })
+    |> render_change()
+
+    assert has_element?(
+             view,
+             ~s(#preview-iframe[src="/c/lobby/r/#{ctx.sha}/life.html?cells=12&theme=neon"])
+           )
+
+    view
+    |> form("#playground-form", %{
+      p: %{"cells" => "12", "theme" => "default", "tint" => "#ff0000", "duration" => "5s"}
+    })
+    |> render_change()
+
+    assert has_element?(
+             view,
+             ~s(#preview-iframe[src="/c/lobby/r/#{ctx.sha}/life.html?cells=12&tint=%23ff0000&duration=5s&theme=default"])
+           )
+  end
+
+  test "updates when a new revision arrives", %{conn: conn} = ctx do
+    {:ok, view, _html} = live(conn, ~p"/catalog/lobby")
+    refute has_element?(view, "#page-new-html")
+
+    GitFixture.commit(ctx.src, %{"pages/new.html" => "<h1>new</h1>"})
+    {:ok, _sha} = Revisions.refresh(ctx.config)
+
+    assert has_element?(view, "#page-new-html")
+  end
+
+  test "an unknown configuration says so", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/catalog/nowhere")
+    assert has_element?(view, "#catalog-unknown-config")
+  end
+end
