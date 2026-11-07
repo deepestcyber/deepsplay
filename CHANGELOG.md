@@ -48,6 +48,10 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   `Deepsplay.state` (`get`, `set`, `delete`, `increment`, `list`, `update`)
   in `deepsplay.js`. The status page lists namespaces; the catalog shows a
   configuration's keys with shortened values.
+- Upstream options `accepted_types` (answers of other content types, e.g. an
+  XML error sent with `200`, count as failures: not cached, stale answer
+  served) and `cache_size` (an upstream's share of the cache), for host and
+  manifest upstreams (ADR 22).
 
 ## 0.1.0 – 2026-11-07
 

@@ -1,5 +1,7 @@
 # Upstream content types and cache size per upstream
 
+Status: completed (2026-11-07)
+
 Some providers answer errors with status `200` and an error document in the
 body. The upstream cache ([ADR 20](../adr/0020-upstream-cache.md)) caches
 every `200`, so such an error is served to all screens for the whole
@@ -20,7 +22,7 @@ Status values: `open`, `in progress`, `done`.
 | 1 | Decision (new ADR 22, amending ADR 19 and ADR 20) | done |
 | 2 | Option `accepted_types` for host and manifest upstreams | done |
 | 3 | Option `cache_size` per upstream | done |
-| 4 | Docs (`docs/pages.md`, host configuration) | open |
+| 4 | Docs (`docs/pages.md`, host configuration) | done |
 
 ## Motivation: DWD rain radar
 
@@ -194,7 +196,7 @@ Sketch:
 
 ## 4. Docs
 
-Status: open
+Status: done (2026-11-07)
 
 - `docs/pages.md`, section "External data": both options in the manifest
   example, one sentence on providers that send errors with `200`, one on

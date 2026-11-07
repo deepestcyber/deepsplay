@@ -52,7 +52,7 @@ defmodule DeepsplayWeb.StatusUpstreamsTest do
 
     assert has_element?(view, "#status-state tr", namespace)
     assert has_element?(view, "#status-state tr", "lobby")
-    assert has_element?(view, "#status-state .state-keys", "1 keys")
+    assert has_element?(view, "#status-state .state-keys", "1 key,")
     assert has_element?(view, "#status-state tr", "no configuration")
   end
 
@@ -73,7 +73,7 @@ defmodule DeepsplayWeb.StatusUpstreamsTest do
     radar = "#upstream-manifest-radar"
     assert has_element?(view, radar, "https://radar.example.com/wms")
     assert has_element?(view, radar, "lobby")
-    assert has_element?(view, "#{radar} .upstream-cache", "1 entries")
+    assert has_element?(view, "#{radar} .upstream-cache", "1 entry,")
     assert has_element?(view, "#{radar} .upstream-cache", "of 1.0 MB")
     assert has_element?(view, "#{radar} .upstream-answers", "1 hits, 1 misses, 1 stale")
     assert has_element?(view, "#{radar} .upstream-error", "answered 503")

@@ -314,7 +314,7 @@ defmodule DeepsplayWeb.StatusLive do
                 <td class="px-3 py-2 whitespace-nowrap">
                   <%= if row.upstream.cache_ttl do %>
                     <div class="upstream-cache">
-                      {row.cache.entries} entries, {bytes(row.cache.size)}<span :if={
+                      {count(row.cache.entries, "entry", "entries")}, {bytes(row.cache.size)}<span :if={
                         row.upstream.cache_size
                       }> of {bytes(row.upstream.cache_size)}</span>
                     </div>
@@ -374,7 +374,7 @@ defmodule DeepsplayWeb.StatusLive do
                   {if info.configs == [], do: "no configuration", else: Enum.join(info.configs, ", ")}
                 </td>
                 <td class="state-keys px-3 py-2 whitespace-nowrap">
-                  {info.keys} keys, {bytes(info.size)}
+                  {count(info.keys, "key", "keys")}, {bytes(info.size)}
                 </td>
                 <td class="px-3 py-2 whitespace-nowrap">{time(info.written_at)}</td>
               </tr>
@@ -444,6 +444,9 @@ defmodule DeepsplayWeb.StatusLive do
   defp state(:unknown_config), do: "unknown configuration"
   defp state(:host_config), do: "host configuration error"
   defp state(other), do: to_string(other)
+
+  defp count(1, one, _many), do: "1 #{one}"
+  defp count(n, _one, many), do: "#{n} #{many}"
 
   defp bytes(size) when size >= 1024 * 1024, do: "#{Float.round(size / (1024 * 1024), 1)} MB"
   defp bytes(size) when size >= 1024, do: "#{Float.round(size / 1024, 1)} KB"

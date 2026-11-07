@@ -194,15 +194,25 @@ There are two kinds of upstreams:
 
   ```toml
   [upstream.radar]
-  url       = "https://maps.dwd.de/geoserver/dwd/wms"
-  cache_ttl = "5m"         # required, at least 1m
-  stale_ttl = "1h"         # optional: serve the old answer while the API fails
-  refresh   = true         # optional: fetch again before it expires
+  url            = "https://maps.dwd.de/geoserver/dwd/wms"
+  cache_ttl      = "5m"           # required, at least 1m
+  stale_ttl      = "1h"           # optional: serve the old answer while the API fails
+  refresh        = true           # optional: fetch again before it expires
+  accepted_types = ["image/png"]  # optional: other answers count as failures
+  cache_size     = "20MB"         # optional: most this upstream may take in the cache
 
   [[page]]
   path = "radar.html"
   uses = ["radar"]
   ```
+
+  Some providers answer errors with status `200` and an error document, e.g.
+  XML instead of the requested image. With `accepted_types`, such an answer
+  is not cached; screens get the stale answer if there is one. The option
+  only judges answers, it sends nothing to the provider; requests expecting
+  different types (images and their XML metadata) use separate upstreams.
+  `cache_size` keeps one busy upstream (e.g. map tiles) from pushing others
+  out of the shared cache.
 
   Only `https` and `GET`, no secrets or extra headers, no redirects, and only
   hosts with public addresses. The host can switch this off or limit it to

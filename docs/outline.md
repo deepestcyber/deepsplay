@@ -206,6 +206,8 @@ value     = "Bearer {secret:weather_api}"
 cache_ttl = "60s"       # one upstream call serves all screens within this time
 stale_ttl = "1h"        # optional: serve the old answer this long while the upstream fails
 refresh   = true        # optional: fetch answers screens use again before they expire
+# accepted_types = ["application/json"]   # optional: answers of other types count as failures
+# cache_size     = "20MB"                 # optional: this upstream's share of the cache
 ```
 
 The proxy:
