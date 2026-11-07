@@ -21,9 +21,21 @@ defmodule DeepsplayWeb.ScreenPlanTest do
              mode: "random",
              apply: "next",
              pages: [
-               %{url: "/c/lobby/r/abc/welcome/index.html", duration: 30_000, weight: 3.0},
-               %{url: "/c/lobby/r/abc/news.html?duration=5s", duration: 5_000, weight: 1.0}
-             ]
+               %{
+                 url: "/c/lobby/r/abc/welcome/index.html",
+                 duration: 30_000,
+                 weight: 3.0,
+                 when: nil
+               },
+               %{
+                 url: "/c/lobby/r/abc/news.html?duration=5s",
+                 duration: 5_000,
+                 weight: 1.0,
+                 when: nil
+               }
+             ],
+             overrides: [],
+             empty: nil
            }
   end
 
@@ -32,8 +44,41 @@ defmodule DeepsplayWeb.ScreenPlanTest do
              sha: "abc",
              mode: "pinned",
              apply: "next",
-             pages: [%{url: "/c/lobby/r/abc/a.html", duration: nil, weight: 1.0}]
+             pages: [%{url: "/c/lobby/r/abc/a.html", duration: nil, weight: 1.0, when: nil}],
+             overrides: [],
+             empty: nil
            }
+  end
+
+  test "rotation/4 carries time windows, overrides and the empty page" do
+    {:ok, [window]} = Deepsplay.TimeWindow.parse(%{"from" => "08:00", "until" => "15:00"})
+
+    screen = %Screen{
+      pages: [%Page{path: "a.html", duration: 1_000, when: [window]}],
+      overrides: [
+        %Deepsplay.Screen.Override{path: "drill.html", query: "x=1", when: [window], priority: 3}
+      ],
+      when_empty: {"idle.html", nil}
+    }
+
+    plan =
+      ScreenPlan.rotation("lobby", "abc", screen,
+        override_added: [{[{"theme", "dark"}], ["duration"]}],
+        empty_added: [{"theme", "dark"}]
+      )
+
+    assert [%{when: [%{from: 480, until: 900, days: nil}]}] = plan.pages
+
+    assert plan.overrides == [
+             %{
+               url: "/c/lobby/r/abc/drill.html?x=1&theme=dark",
+               when: [%{start: nil, end: nil, dates: nil, days: nil, from: 480, until: 900}],
+               priority: 3,
+               duration_params: ["duration"]
+             }
+           ]
+
+    assert plan.empty == %{url: "/c/lobby/r/abc/idle.html?theme=dark"}
   end
 
   test "plans of local directories apply at once" do

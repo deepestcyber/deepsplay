@@ -67,6 +67,10 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   follow, screens of changed configurations reload, an invalid change is
   rejected and shown on the status page while the last good version keeps
   running (ADR 23).
+- Time windows for pages (`when` with `start`/`end`, `dates`, `days`,
+  `from`/`until`), `when_empty` for times without an active page, and
+  `[[override]]` pages that interrupt the rotation during their windows,
+  with priorities; the catalog shows windows and overrides (ADR 25).
 
 ## 0.1.0 – 2026-11-07
 

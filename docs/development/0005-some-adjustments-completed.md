@@ -1,5 +1,7 @@
 # Some adjustments
 
+Status: completed (2026-11-07)
+
 Smaller changes collected while using deepsplay, each too small for a unit of
 its own. Parts are added as they come up.
 
@@ -13,7 +15,7 @@ Status values: `open`, `in progress`, `done`.
 | 2 | Byte sizes with SI and binary units | done |
 | 3 | Reload the host configuration on change | done |
 | 4 | Page metadata: author, credits, license | done |
-| 5 | Time windows and overrides | open |
+| 5 | Time windows and overrides | done |
 
 ## 1. Descriptions for configurations, upstreams, manifests and pages
 
@@ -184,7 +186,29 @@ Sketch:
 
 ## 5. Time windows and overrides
 
-Status: open
+Status: done (2026-11-07)
+
+Built as decided:
+
+- `Deepsplay.TimeWindow` parses and evaluates windows in Elixir;
+  `assets/js/schedule.js` evaluates them in the browser, imported by the
+  rotation hook (`@/js/schedule`). Both pass the shared
+  `test/support/fixtures/time_window_cases.json` (the Node run gets them in
+  the form the server sends, via `TimeWindow.to_plan/1`).
+- Additions to the format, all following from the rules: date ranges wrap
+  over the end of a year or month (`"12-31..01-01"`, `"30..02"`), weekday
+  ranges over the week end (`"fri-mon"`); `02-29` matches in leap years.
+- The plan carries `when` per page, `overrides` (URL, windows, priority,
+  names that get the remaining time) and `empty`. The hook checks at every
+  full minute (all boundaries are whole minutes), re-picks among active
+  pages at each page change, and shows a black screen by fading out and
+  clearing the visible frame; the status page then shows no current page.
+- A new plan with changed overrides applies at the next page change, like
+  other plan changes.
+- The catalog's "active now" uses the server's local time.
+- Checked in headless Chromium against a running server: page shown,
+  override starting on the minute, interrupted page back when it ended,
+  black screen after the last window closed.
 
 Goal: pages can be limited to times (a night page, an event, days of the
 month), screens handle a rotation whose active pages change, down to one or

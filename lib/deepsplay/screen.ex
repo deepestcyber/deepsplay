@@ -20,8 +20,10 @@ defmodule Deepsplay.Screen do
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.HostConfig.Upstream
   alias Deepsplay.RevisionFile
+  alias Deepsplay.Screen.Override
   alias Deepsplay.Screen.Page
   alias Deepsplay.Screen.Upstreams
+  alias Deepsplay.TimeWindow
   alias Deepsplay.TomlSchema
 
   @default_manifest "screen.toml"
@@ -34,6 +36,8 @@ defmodule Deepsplay.Screen do
             pages: [],
             params: %{},
             upstreams: %{},
+            overrides: [],
+            when_empty: :black,
             warnings: []
 
   @type t :: %__MODULE__{
@@ -43,6 +47,8 @@ defmodule Deepsplay.Screen do
           pages: [Page.t(), ...],
           params: %{String.t() => String.t()},
           upstreams: %{String.t() => Upstream.t()},
+          overrides: [Override.t()],
+          when_empty: :black | {String.t(), String.t() | nil},
           warnings: [String.t()]
         }
 
@@ -53,7 +59,8 @@ defmodule Deepsplay.Screen do
     {"title", :title, :string, default: nil},
     {"description", :description, :description, default: nil},
     {"rotation", :rotation, {:enum, ["sequential", "random"]}, default: "sequential"},
-    {"duration", :duration, :duration, default: @default_duration}
+    {"duration", :duration, :duration, default: @default_duration},
+    {"when_empty", :when_empty, &__MODULE__.cast_when_empty/1, default: :black}
   ]
 
   @page_fields [
@@ -61,8 +68,34 @@ defmodule Deepsplay.Screen do
     {"duration", :duration, :duration, default: nil},
     {"weight", :weight, :positive_number, default: 1.0},
     {"uses", :uses, :string_list, default: []},
-    {"description", :description, :description, default: nil}
+    {"description", :description, :description, default: nil},
+    {"when", :when, &__MODULE__.cast_when/1, default: nil}
   ]
+
+  @override_fields [
+    {"path", :path, &__MODULE__.cast_page_ref/1, []},
+    {"when", :when, &__MODULE__.cast_when/1, []},
+    {"priority", :priority, &__MODULE__.cast_priority/1, default: 0},
+    {"description", :description, :description, default: nil},
+    {"uses", :uses, :string_list, default: []}
+  ]
+
+  @doc false
+  def cast_when(value) do
+    case TimeWindow.parse(value) do
+      {:ok, windows} -> {:ok, windows}
+      {:error, message} -> {:error, message}
+    end
+  end
+
+  @doc false
+  def cast_when_empty("black"), do: {:ok, :black}
+  def cast_when_empty(value) when is_binary(value), do: cast_page_ref(value)
+  def cast_when_empty(_value), do: {:error, ~s(must be "black" or a page path)}
+
+  @doc false
+  def cast_priority(value) when is_integer(value), do: {:ok, value}
+  def cast_priority(_value), do: {:error, "must be an integer"}
 
   @doc """
   Splits a page reference into the file path and the query string, if any.
@@ -242,7 +275,7 @@ defmodule Deepsplay.Screen do
     # everything else is checked as top-level fields, including unknown keys.
     {top, top_errors} =
       TomlSchema.fields(
-        Map.drop(data, ["page", "backend", "params", "upstream"]),
+        Map.drop(data, ["page", "backend", "params", "upstream", "override"]),
         "screen",
         @top_fields
       )
@@ -261,13 +294,22 @@ defmodule Deepsplay.Screen do
     # them again.
     names = if is_map(data["upstream"]), do: Map.keys(data["upstream"]), else: []
     {pages, page_errors} = pages(Map.get(data, "page"), root, upstreams ++ names)
+    {overrides, override_errors} = overrides(Map.get(data, "override"), root, upstreams ++ names)
+
+    when_empty_errors =
+      case top.when_empty do
+        {path, _query} -> file_errors(path, root, "screen.when_empty")
+        _black_or_invalid -> []
+      end
 
     warnings =
       if Map.has_key?(data, "backend"),
         do: ["[backend] is not supported yet and is ignored"],
         else: []
 
-    case top_errors ++ param_errors ++ upstream_errors ++ page_errors do
+    case top_errors ++
+           param_errors ++
+           upstream_errors ++ page_errors ++ override_errors ++ when_empty_errors do
       [] ->
         {:ok,
          %__MODULE__{
@@ -277,6 +319,8 @@ defmodule Deepsplay.Screen do
            pages: Enum.map(pages, &%{&1 | duration: &1.duration || top.duration}),
            params: params,
            upstreams: declared,
+           overrides: overrides,
+           when_empty: top.when_empty,
            warnings: warnings
          }}
 
@@ -326,6 +370,44 @@ defmodule Deepsplay.Screen do
   end
 
   defp page(_page, index, _root, _upstreams), do: {nil, ["page ##{index} must be a table"]}
+
+  defp overrides(nil, _root, _upstreams), do: {[], []}
+
+  defp overrides(entries, root, upstreams) when is_list(entries) do
+    {parsed, errors} =
+      entries
+      |> Enum.with_index(1)
+      |> Enum.map_reduce([], fn {entry, index}, acc ->
+        {override, errors} = override(entry, index, root, upstreams)
+        {override, acc ++ errors}
+      end)
+
+    {Enum.reject(parsed, &is_nil/1), errors}
+  end
+
+  defp overrides(_entries, _root, _upstreams),
+    do: {[], ["override must be an array of tables ([[override]])"]}
+
+  defp override(entry, index, root, upstreams) when is_map(entry) do
+    ctx = "override ##{index}"
+    {fields, errors} = TomlSchema.fields(entry, ctx, @override_fields)
+    {path, query} = fields.path || {nil, nil}
+
+    errors =
+      errors ++
+        file_errors(path, root, ctx) ++
+        for upstream <- fields.uses || [], upstream not in upstreams do
+          ~s(#{ctx}: upstream "#{upstream}" is not allowed for this configuration)
+        end
+
+    case errors do
+      [] -> {struct!(Override, %{fields | path: path} |> Map.put(:query, query)), []}
+      errors -> {nil, errors}
+    end
+  end
+
+  defp override(_entry, index, _root, _upstreams),
+    do: {nil, ["override ##{index} must be a table"]}
 
   defp file_errors(nil, _root, _ctx), do: []
 

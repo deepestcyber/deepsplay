@@ -82,14 +82,18 @@ defmodule DeepsplayWeb.ShellRotationTest do
                %{
                  "url" => "/c/lobby/r/#{sha}/welcome.html",
                  "duration" => 30_000,
-                 "weight" => 2.0
+                 "weight" => 2.0,
+                 "when" => nil
                },
                %{
                  "url" => "/c/lobby/r/#{sha}/news/index.html",
                  "duration" => 10_000,
-                 "weight" => 1.0
+                 "weight" => 1.0,
+                 "when" => nil
                }
-             ]
+             ],
+             "overrides" => [],
+             "empty" => nil
            }
 
     assert_push_event(view, "plan", %{sha: ^sha, mode: "random"})
@@ -126,8 +130,15 @@ defmodule DeepsplayWeb.ShellRotationTest do
              "mode" => "pinned",
              "apply" => "next",
              "pages" => [
-               %{"url" => "/c/lobby/r/#{sha}/extra.html", "duration" => nil, "weight" => 1.0}
-             ]
+               %{
+                 "url" => "/c/lobby/r/#{sha}/extra.html",
+                 "duration" => nil,
+                 "weight" => 1.0,
+                 "when" => nil
+               }
+             ],
+             "overrides" => [],
+             "empty" => nil
            }
   end
 

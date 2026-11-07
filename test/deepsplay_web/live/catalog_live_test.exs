@@ -39,9 +39,16 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     refresh     = true
     description = "Rain radar frames"
 
+    [[override]]
+    path        = "life.html"
+    when        = { start = "2099-01-01" }
+    priority    = 2
+    description = "New century"
+
     [[page]]
     path = "life.html?cells=40"
     uses = ["radar"]
+    when = { from = "00:00" }
     description = "Large cells for the entrance"
 
     [[page]]
@@ -135,6 +142,22 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     refute has_element?(view, "#catalog-manifest-description b")
     assert has_element?(view, "#rotation-0 .rotation-description", "Large cells for the entrance")
     assert has_element?(view, "#upstream-radar", "Rain radar frames")
+
+    # Time windows and overrides (ADR 25).
+    assert has_element?(view, "#rotation-0 .rotation-windows", "from 00:00")
+    assert has_element?(view, "#rotation-0 .rotation-windows", "active now")
+    assert has_element?(view, "#override-0", "New century")
+    assert has_element?(view, "#override-0", "start 2099-01-01 · priority 2")
+    assert has_element?(view, "#override-0", "not active now")
+    assert has_element?(view, "#catalog-header", "when nothing is active: black screen")
+  end
+
+  test "an override gets added parameters and the remaining time", ctx do
+    {:ok, current} = Revisions.current(ctx.config)
+
+    # life.html uses the theme helper: theme from the manifest, duration from
+    # the window's remaining time in the browser.
+    assert current.override_added == [{[{"theme", "neon"}], ["duration"]}]
   end
 
   test "the configuration page shows shared state, shortened", %{conn: conn} = ctx do

@@ -164,7 +164,9 @@ defmodule DeepsplayWeb.ShellLive do
     {:ok,
      ScreenPlan.rotation(config.name, current.sha, current.screen,
        local: current.local,
-       added: current.added
+       added: current.added,
+       override_added: current.override_added,
+       empty_added: current.empty_added
      )}
   end
 
@@ -233,7 +235,18 @@ defmodule DeepsplayWeb.ShellLive do
       // visible until the new one has loaded, then they crossfade, and the old
       // frame is cleared so it stops running.
       //
-      // Plan: {sha, mode: "sequential" | "random" | "pinned", pages: [{url, duration, weight}]}
+      // Time windows (ADR 25): at each page change, the next page is picked
+      // among the pages active at that moment. With none active, the plan's
+      // empty page is shown, or a black screen. Overrides interrupt the
+      // rotation while their windows are active; afterwards it continues with
+      // the interrupted page. Windows change only on full minutes, so the hook
+      // checks at every full minute.
+      //
+      // Plan: {sha, mode: "sequential" | "random" | "pinned", apply,
+      //        pages: [{url, duration, weight, when}],
+      //        overrides: [{url, when, priority, duration_params}], empty}
+      import {active, activeIndices, currentOverride, remainingMs, msToNextMinute} from "@/js/schedule"
+
       const LOAD_TIMEOUT = 10000
       const FADE = 500 // matches duration-500 on the frames
 
@@ -242,17 +255,22 @@ defmodule DeepsplayWeb.ShellLive do
           this.frames = [this.createFrame(), this.createFrame()]
           this.active = 0
           this.index = -1
+          this.mode = "rotation" // or "override", "empty"
+          this.overrideIndex = -1
+          this.resumeIndex = -1
           this.plan = null
           this.planKey = null
           this.pending = null
           this.setPlan(JSON.parse(this.el.dataset.plan))
           this.handleEvent("plan", plan => this.setPlan(plan))
+          this.tick()
         },
 
         destroyed() {
           clearTimeout(this.timer)
           clearTimeout(this.loadTimer)
           clearTimeout(this.clearTimer)
+          clearTimeout(this.tickTimer)
         },
 
         // Frames take no pointer input: the mouse always stays over the shell,
@@ -287,49 +305,154 @@ defmodule DeepsplayWeb.ShellLive do
           }
         },
 
-        // Shows the current position of the new plan again, with a fresh timer.
-        reload() {
-          clearTimeout(this.timer)
-          const index = this.index >= 0 && this.index < this.plan.pages.length ? this.index : this.pick()
-          this.display(index)
-        },
-
         restart() {
           clearTimeout(this.timer)
           this.index = -1
-          this.display(this.pick())
+          this.mode = "rotation"
+          this.overrideIndex = -1
+          if (!this.checkOverride()) this.showNext()
         },
 
-        advance() {
+        // Shows the current state of the new plan again, with a fresh timer.
+        reload() {
+          clearTimeout(this.timer)
+          if (this.checkOverride(true)) return
+          const page = this.plan.pages[this.index]
+          if (this.mode === "rotation" && page && active(page.when, new Date())) this.showPage(this.index)
+          else this.showNext()
+        },
+
+        // Checks at every full minute whether an override starts or ends, or
+        // whether a page became active while none was.
+        tick() {
+          this.tickTimer = setTimeout(() => {
+            if (!this.checkOverride() && this.mode === "empty" && this.activeNow().length > 0) {
+              this.showNext()
+            }
+            this.tick()
+          }, msToNextMinute(new Date()) + 50)
+        },
+
+        activeNow() {
+          return activeIndices(this.plan.pages, new Date())
+        },
+
+        // Starts, switches or ends an override. Returns true while one is
+        // shown. `force` shows the current one again.
+        checkOverride(force = false) {
+          if (this.plan.mode === "pinned") return false
+          const now = new Date()
+          const overrides = this.plan.overrides || []
+          const current = currentOverride(overrides, now)
+
+          if (current >= 0) {
+            if (force || this.mode !== "override" || current !== this.overrideIndex) {
+              if (this.mode !== "override") this.resumeIndex = this.mode === "rotation" ? this.index : -1
+              clearTimeout(this.timer)
+              this.mode = "override"
+              this.overrideIndex = current
+              this.display(this.overrideUrl(overrides[current], now), () => {})
+            }
+            return true
+          }
+
+          if (this.mode === "override") {
+            // Continue with the interrupted page, with a fresh display time.
+            this.mode = "rotation"
+            this.overrideIndex = -1
+            const page = this.plan.pages[this.resumeIndex]
+            if (page && active(page.when, now)) this.showPage(this.resumeIndex)
+            else this.showNext()
+          }
+          return false
+        },
+
+        // An override's URL, with the remaining time of its window for
+        // parameters that ask for the display time.
+        overrideUrl(override, now) {
+          const remaining = remainingMs(override.when, now)
+          if (remaining === null || override.duration_params.length === 0) return override.url
+          const added = override.duration_params.map(name => `${encodeURIComponent(name)}=${remaining}ms`)
+          return override.url + (override.url.includes("?") ? "&" : "?") + added.join("&")
+        },
+
+        // The next page among the active ones; with none, the empty page.
+        showNext() {
+          if (this.mode === "override") return
           if (this.pending) {
             this.plan = this.pending
             this.pending = null
             this.index = -1
+            if (this.checkOverride()) return
           }
-          this.display(this.pick())
+
+          const next = this.pick()
+          if (next === null) return this.showEmpty()
+          // A single active page stays on screen without reloading.
+          if (next === this.index && this.mode === "rotation") return this.schedule(this.plan.pages[next])
+          this.showPage(next)
         },
 
-        // Picks the next page index: in order, or weighted at random without
-        // repeating the current page when there is more than one.
+        showPage(index) {
+          const page = this.plan.pages[index]
+          this.mode = "rotation"
+          this.display(page.url, () => {
+            this.index = index
+            this.schedule(page)
+          })
+        },
+
+        showEmpty() {
+          if (this.mode === "empty") return
+          clearTimeout(this.timer)
+          this.mode = "empty"
+          this.index = -1
+          if (this.plan.empty) this.display(this.plan.empty.url, () => {})
+          else this.blank()
+        },
+
+        // A black screen: the visible frame fades out and stops.
+        blank() {
+          clearTimeout(this.loadTimer)
+          const old = this.frames[this.active]
+          old.classList.replace("opacity-100", "opacity-0")
+          this.pushEvent("page", {url: ""})
+          clearTimeout(this.clearTimer)
+          this.clearTimer = setTimeout(() => {
+            old.onload = null
+            old.src = "about:blank"
+          }, FADE)
+        },
+
+        // Picks the next page index among the active pages: in order, or
+        // weighted at random without repeating the current page when there is
+        // more than one. null when no page is active.
         pick() {
           const pages = this.plan.pages
+          const candidates = this.plan.mode === "pinned" ? [0] : this.activeNow()
+          if (candidates.length === 0) return null
+
           if (this.plan.mode !== "random") {
-            return (this.index + 1) % pages.length
+            for (let step = 1; step <= pages.length; step++) {
+              const i = (this.index + step + pages.length) % pages.length
+              if (candidates.includes(i)) return i
+            }
+            return candidates[0]
           }
-          const candidates = pages.map((page, i) => i).filter(i => pages.length === 1 || i !== this.index)
-          const total = candidates.reduce((sum, i) => sum + pages[i].weight, 0)
+
+          const choices = candidates.filter(i => candidates.length === 1 || i !== this.index)
+          const total = choices.reduce((sum, i) => sum + pages[i].weight, 0)
           let r = Math.random() * total
-          for (const i of candidates) {
+          for (const i of choices) {
             r -= pages[i].weight
             if (r < 0) return i
           }
-          return candidates[candidates.length - 1]
+          return choices[choices.length - 1]
         },
 
-        // Loads a page into the hidden frame and crossfades once it has
-        // loaded, or after LOAD_TIMEOUT at the latest.
-        display(index) {
-          const page = this.plan.pages[index]
+        // Loads a URL into the hidden frame and crossfades once it has
+        // loaded, or after LOAD_TIMEOUT at the latest; then calls `shown`.
+        display(url, shown) {
           const frame = this.frames[1 - this.active]
 
           // The hidden frame may still be due to be cleared, or loading
@@ -348,8 +471,7 @@ defmodule DeepsplayWeb.ShellLive do
             old.classList.replace("opacity-100", "opacity-0")
             frame.classList.replace("opacity-0", "opacity-100")
             this.active = 1 - this.active
-            this.index = index
-            this.pushEvent("page", {url: page.url})
+            this.pushEvent("page", {url})
 
             // Stop the old page once it has faded out.
             this.clearTimer = setTimeout(() => {
@@ -357,7 +479,7 @@ defmodule DeepsplayWeb.ShellLive do
               old.src = "about:blank"
             }, FADE)
 
-            this.schedule(page)
+            shown()
           }
 
           frame.onload = () => {
@@ -368,14 +490,15 @@ defmodule DeepsplayWeb.ShellLive do
             swap()
           }
           this.loadTimer = setTimeout(swap, LOAD_TIMEOUT)
-          frame.src = page.url
+          frame.src = url
         },
 
-        // Shows the page for its duration. A single page, or a pinned one,
-        // stays until a new plan arrives.
+        // Shows the page for its duration; a pinned one stays until a new
+        // plan arrives.
         schedule(page) {
-          if (this.plan.mode === "pinned" || this.plan.pages.length === 1) return
-          this.timer = setTimeout(() => this.advance(), page.duration)
+          clearTimeout(this.timer)
+          if (this.plan.mode === "pinned") return
+          this.timer = setTimeout(() => this.showNext(), page.duration)
         },
       }
     </script>

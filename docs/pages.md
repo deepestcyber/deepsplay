@@ -69,6 +69,55 @@ description = "Large cells, readable from the door"   # optional: why this entry
   an entry is for; the catalog shows it. The page's own description belongs
   in its parameter block (below).
 
+### Time windows and overrides
+
+Pages can be limited to times with `when`; overrides interrupt the rotation
+during their windows:
+
+```toml
+when_empty = "black"           # or a page path: shown when no page is active
+
+[[page]]
+path = "night.html"
+when = { from = "22:00", until = "06:00" }   # overnight
+
+[[page]]
+path = "payday.html"
+when = [{ dates = "13..15" }, { dates = "12-24", until = "14:00" }]
+
+[[override]]
+path     = "fire-drill.html"
+when     = { start = "2027-03-04 10:00", end = "2027-03-04 10:15" }
+priority = 10                  # optional, default 0; higher wins
+
+[[override]]
+path = "lunch.html?menu=today"
+when = { days = "mon-fri", from = "11:45", until = "12:00" }
+```
+
+A window can have these fields; all it has must match, and a list of windows
+matches if any does:
+
+| Field | Meaning |
+| --- | --- |
+| `start`, `end` | one continuous period: `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`; either may be left out |
+| `dates` | `YYYY-MM-DD`, `MM-DD` (every year) or `DD` (every month); ranges with `..`; a list |
+| `days` | `mon` to `sun`, a range (`"mon-fri"`) or a list |
+| `from`, `until` | daily time `HH:MM`; `until` before `from` runs overnight; `"24:00"` ends the day |
+
+- Dates are always ISO, times always 24-hour, in the screen's local time;
+  screens need a correct clock. A start is included, an end excluded.
+- At each page change, the next page is chosen among the active ones. A
+  page whose window closes finishes its display time; a single active page
+  stays without reloading; with none active, `when_empty` applies.
+- An override starts at once when its window opens, and the rotation
+  continues with the interrupted page when it ends. Of several active ones,
+  the highest `priority` wins, the first of equal ones. A parameter with
+  `from = "duration"` gets the remaining time of the window. Pinned pages
+  ignore overrides.
+- The catalog shows each entry's windows and whether it is active now (in
+  the server's local time), and lists the overrides.
+
 A revision whose manifest is invalid (or names missing files) is never shown;
 screens keep the last good one, and `/status` says what is wrong.
 

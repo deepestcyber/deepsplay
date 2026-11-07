@@ -265,6 +265,9 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         <dd class="font-mono text-xs">
           {@catalog.config.manifest} · {@catalog.current.screen.rotation}
           <span :if={@catalog.current.screen.title}>· {@catalog.current.screen.title}</span>
+          <div class="font-sans text-xs text-base-content/60">
+            when nothing is active: {when_empty(@catalog.current.screen.when_empty)}
+          </div>
           <div
             :if={@catalog.current.screen.description}
             id="catalog-manifest-description"
@@ -313,6 +316,15 @@ defmodule DeepsplayWeb.CatalogConfigLive do
                 <div class="font-mono text-xs">{entry.path}</div>
                 <div :if={entry.description} class="rotation-description text-xs text-base-content/60">
                   {entry.description}
+                </div>
+                <div :if={entry.windows} class="rotation-windows text-xs text-base-content/60">
+                  {entry.windows}
+                  <span class={[
+                    "ml-1",
+                    if(entry.active, do: "text-green-600", else: "text-base-content/40")
+                  ]}>
+                    {if entry.active, do: "active now", else: "not active now"}
+                  </span>
                 </div>
               </td>
               <td class="px-3 py-2">{PageParams.format_duration(entry.duration)}</td>
@@ -371,6 +383,35 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         </p>
         <p class="mt-1 text-xs text-base-content/50">
           Used by: {if helper.used_by == [], do: "no page", else: Enum.join(helper.used_by, ", ")}
+        </p>
+      </div>
+    </section>
+
+    <section :if={@catalog.overrides != []} id="catalog-overrides">
+      <h2 class="text-lg font-semibold">Overrides</h2>
+      <p class="mt-1 text-xs text-base-content/50">
+        Interrupt the rotation while their windows are active; the highest priority wins,
+        the first of equal ones. Times in the server's local time.
+      </p>
+      <div
+        :for={{override, i} <- Enum.with_index(@catalog.overrides)}
+        id={"override-#{i}"}
+        class="mt-3 rounded-lg border border-base-300 p-4 text-sm"
+      >
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="font-mono text-xs">
+            {override.path}<span :if={override.query}>?{override.query}</span>
+          </span>
+          <span class={[
+            "text-xs",
+            if(override.active, do: "text-green-600", else: "text-base-content/40")
+          ]}>
+            {if override.active, do: "active now", else: "not active now"}
+          </span>
+        </div>
+        <p :if={override.description} class="mt-1 text-base-content/70">{override.description}</p>
+        <p class="mt-1 text-xs text-base-content/60">
+          {override.windows} · priority {override.priority}
         </p>
       </div>
     </section>
@@ -771,4 +812,8 @@ defmodule DeepsplayWeb.CatalogConfigLive do
   defp format_value(_param, value), do: to_string(value)
 
   defp bytes(size), do: ByteSize.format(size)
+
+  defp when_empty(:black), do: "black screen"
+  defp when_empty({path, nil}), do: path
+  defp when_empty({path, query}), do: path <> "?" <> query
 end

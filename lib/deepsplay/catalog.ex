@@ -14,6 +14,7 @@ defmodule Deepsplay.Catalog do
   alias Deepsplay.Pages
   alias Deepsplay.Revisions
   alias Deepsplay.State
+  alias Deepsplay.TimeWindow
 
   @type param_row :: %{
           param: PageDoc.Param.t(),
@@ -36,6 +37,8 @@ defmodule Deepsplay.Catalog do
           duration: pos_integer(),
           weight: float(),
           description: String.t() | nil,
+          windows: String.t() | nil,
+          active: boolean(),
           params: [{String.t(), String.t(), String.t()}]
         }
 
@@ -46,6 +49,7 @@ defmodule Deepsplay.Catalog do
           pages: [page()],
           helpers: [map()],
           upstreams: [map()],
+          overrides: [map()],
           state: map() | nil,
           warnings: [String.t()]
         }
@@ -68,6 +72,7 @@ defmodule Deepsplay.Catalog do
          pages: Enum.sort_by(pages, &{kind_order(&1.kind), &1.path}),
          helpers: helpers(index, pages),
          upstreams: upstreams(current.screen),
+         overrides: overrides(current.screen),
          state: state(config),
          warnings: warnings(current, index, pages)
        }}
@@ -121,6 +126,8 @@ defmodule Deepsplay.Catalog do
         duration: page.duration,
         weight: page.weight,
         description: page.description,
+        windows: page.when && TimeWindow.describe_all(page.when),
+        active: TimeWindow.active?(page.when, now()),
         params: own ++ explained
       }
     end)
@@ -137,6 +144,23 @@ defmodule Deepsplay.Catalog do
       Map.put(helper, :used_by, used_by)
     end)
   end
+
+  # Overrides (ADR 25) with their windows and whether they are active now,
+  # in the server's local time (screens use their own).
+  defp overrides(screen) do
+    for override <- screen.overrides do
+      %{
+        path: override.path,
+        query: override.query,
+        windows: TimeWindow.describe_all(override.when),
+        priority: override.priority,
+        description: override.description,
+        active: TimeWindow.active?(override.when, now())
+      }
+    end
+  end
+
+  defp now, do: NaiveDateTime.local_now()
 
   # Upstreams declared in the manifest (ADR 19), with the rotation pages
   # listing them.

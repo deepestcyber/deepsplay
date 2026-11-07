@@ -107,6 +107,19 @@ defmodule Deepsplay.PageParams do
   end
 
   @doc """
+  The parameters for an override (ADR 25): those added as for a pinned page,
+  and the names that get the remaining time of the override's window in the
+  browser (`from = "duration"`, unless set otherwise).
+  """
+  @spec for_override(context(), String.t(), String.t() | nil) :: {added(), [String.t()]}
+  def for_override(context, path, query) do
+    {added, _warnings, _declared} = for_page(context, path, query, nil)
+    # Any display time shows which names it would fill.
+    {explained, _warnings, _declared} = explain(context, path, query, 1_000)
+    {added, for({name, _value, "display time"} <- explained, do: name)}
+  end
+
+  @doc """
   Appends added parameters to a page's own query.
   """
   @spec merge_query(String.t() | nil, added()) :: String.t() | nil

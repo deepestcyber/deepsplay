@@ -30,6 +30,8 @@ defmodule Deepsplay.Revisions do
           screen: Screen.t(),
           local: boolean(),
           added: [PageParams.added()],
+          override_added: [{PageParams.added(), [String.t()]}],
+          empty_added: PageParams.added(),
           param_warnings: [String.t()]
         }
 
@@ -113,8 +115,27 @@ defmodule Deepsplay.Revisions do
       {:ok, screen} ->
         current = %{sha: sha, pages_dir: Screen.pages_dir(root), screen: screen, local: local}
         # Parameters added to each page of the rotation (ADR 16).
-        {added, warnings} = PageParams.for_rotation(param_context(config, current))
-        {:ok, Map.merge(current, %{added: added, param_warnings: warnings})}
+        context = param_context(config, current)
+        {added, warnings} = PageParams.for_rotation(context)
+
+        # Overrides and the page shown when nothing is active (ADR 25).
+        override_added =
+          for override <- screen.overrides,
+              do: PageParams.for_override(context, override.path, override.query)
+
+        empty_added =
+          case screen.when_empty do
+            {path, query} -> context |> PageParams.for_page(path, query, nil) |> elem(0)
+            :black -> []
+          end
+
+        {:ok,
+         Map.merge(current, %{
+           added: added,
+           override_added: override_added,
+           empty_added: empty_added,
+           param_warnings: warnings
+         })}
 
       {:error, errors} ->
         {:error, errors}

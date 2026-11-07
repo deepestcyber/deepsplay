@@ -1,0 +1,62 @@
+[
+  {
+    "name": "daily window",
+    "toml": "when = { from = \"08:00\", until = \"15:00\" }",
+    "checks": [["2027-01-04T07:59", false], ["2027-01-04T08:00", true], ["2027-01-04T14:59", true], ["2027-01-04T15:00", false]]
+  },
+  {
+    "name": "overnight belongs to the day it started",
+    "toml": "when = { days = \"fri\", from = \"22:00\", until = \"06:00\" }",
+    "checks": [["2027-01-08T21:59", false], ["2027-01-08T22:00", true], ["2027-01-09T05:59", true], ["2027-01-09T06:00", false], ["2027-01-09T23:00", false], ["2027-01-08T03:00", false]]
+  },
+  {
+    "name": "from only, until only, until 24:00",
+    "toml": "when = [{ from = \"23:00\" }, { until = \"01:00\" }, { days = \"sun\", from = \"12:00\", until = \"24:00\" }]",
+    "checks": [["2027-01-04T23:30", true], ["2027-01-04T00:30", true], ["2027-01-04T12:00", false], ["2027-01-10T23:59", true], ["2027-01-10T12:00", true]]
+  },
+  {
+    "name": "continuous period",
+    "toml": "when = { start = \"2027-01-02 04:00\", end = \"2027-01-03 10:00\" }",
+    "checks": [["2027-01-02T03:59", false], ["2027-01-02T04:00", true], ["2027-01-02T23:00", true], ["2027-01-03T09:59", true], ["2027-01-03T10:00", false]]
+  },
+  {
+    "name": "open-ended periods and dates without time",
+    "toml": "when = [{ start = \"2027-06-01\" }, { end = \"2027-01-01\" }]",
+    "checks": [["2026-12-31T23:59", true], ["2027-01-01T00:00", false], ["2027-05-31T23:59", false], ["2027-06-01T00:00", true]]
+  },
+  {
+    "name": "daily window on a range of days",
+    "toml": "when = { dates = \"2027-01-02..2027-01-03\", from = \"04:00\", until = \"10:00\" }",
+    "checks": [["2027-01-02T04:00", true], ["2027-01-02T12:00", false], ["2027-01-03T09:00", true], ["2027-01-04T05:00", false], ["2027-01-01T05:00", false]]
+  },
+  {
+    "name": "days of each month",
+    "toml": "when = { dates = \"13..15\" }",
+    "checks": [["2027-02-12T12:00", false], ["2027-02-13T00:00", true], ["2027-03-15T23:59", true], ["2027-03-16T00:00", false]]
+  },
+  {
+    "name": "yearly dates, single and wrapping over new year",
+    "toml": "when = { dates = [\"12-24\", \"12-31..01-01\"] }",
+    "checks": [["2027-12-24T10:00", true], ["2028-12-24T10:00", true], ["2027-12-25T10:00", false], ["2027-12-31T10:00", true], ["2028-01-01T10:00", true], ["2028-01-02T10:00", false]]
+  },
+  {
+    "name": "monthly range wrapping over the month end",
+    "toml": "when = { dates = \"30..02\" }",
+    "checks": [["2027-01-30T10:00", true], ["2027-01-31T10:00", true], ["2027-02-01T10:00", true], ["2027-02-02T10:00", true], ["2027-02-03T10:00", false], ["2027-01-29T10:00", false]]
+  },
+  {
+    "name": "weekday ranges, wrapping and lists",
+    "toml": "when = [{ days = \"mon-wed\" }, { days = [\"fri-sat\"] }]",
+    "checks": [["2027-01-04T10:00", true], ["2027-01-06T10:00", true], ["2027-01-07T10:00", false], ["2027-01-08T10:00", true], ["2027-01-09T10:00", true], ["2027-01-10T10:00", false]]
+  },
+  {
+    "name": "fields combine, windows add up",
+    "toml": "when = [{ start = \"2027-03-01\", end = \"2027-03-06\", days = \"mon-fri\", from = \"08:00\", until = \"15:00\" }, { dates = \"12-24\", until = \"14:00\" }]",
+    "checks": [["2027-03-01T08:00", true], ["2027-03-05T14:59", true], ["2027-03-05T15:00", false], ["2027-03-08T09:00", false], ["2027-02-26T09:00", false], ["2027-12-24T13:59", true], ["2027-12-24T14:00", false]]
+  },
+  {
+    "name": "February 29 matches in leap years only",
+    "toml": "when = { dates = \"02-29\" }",
+    "checks": [["2028-02-29T10:00", true], ["2027-03-01T10:00", false], ["2028-03-01T10:00", false]]
+  }
+]

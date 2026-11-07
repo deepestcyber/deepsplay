@@ -298,6 +298,81 @@ defmodule Deepsplay.ScreenTest do
     end
   end
 
+  describe "load/2 with time windows and overrides" do
+    test "reads windows, when_empty and overrides", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        when_empty = "idle.html?dim=1"
+
+        [[page]]
+        path = "a.html"
+        when = { from = "08:00", until = "15:00" }
+
+        [[page]]
+        path = "a.html"
+
+        [[override]]
+        path        = "drill.html"
+        when        = { start = "2027-03-04 10:00", end = "2027-03-04 10:15" }
+        priority    = 10
+        description = "Fire drill"
+
+        [[override]]
+        path = "a.html?lunch=1"
+        when = [{ days = "mon-fri", from = "11:45", until = "12:00" }]
+        """,
+        "pages/a.html" => "a",
+        "pages/idle.html" => "idle",
+        "pages/drill.html" => "drill"
+      })
+
+      assert {:ok, screen} = Screen.load(root)
+      assert [%{when: [%{from: 480, until: 900}]}, %{when: nil}] = screen.pages
+      assert screen.when_empty == {"idle.html", "dim=1"}
+
+      assert [drill, lunch] = screen.overrides
+      assert {drill.path, drill.priority, drill.description} == {"drill.html", 10, "Fire drill"}
+      assert {lunch.path, lunch.query, lunch.priority} == {"a.html", "lunch=1", 0}
+      assert [%{days: [1, 2, 3, 4, 5]}] = lunch.when
+    end
+
+    test "defaults: black when empty, no overrides", %{tmp_dir: root} do
+      write(root, %{"screen.toml" => @one_page, "pages/a.html" => "a"})
+      assert {:ok, %{when_empty: :black, overrides: []}} = Screen.load(root)
+    end
+
+    test "invalid windows, when_empty and overrides", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        when_empty = "missing.html"
+
+        [[page]]
+        path = "a.html"
+        when = { from = "8:00" }
+
+        [[override]]
+        path = "a.html"
+
+        [[override]]
+        path     = "gone.html"
+        when     = { from = "08:00" }
+        priority = "high"
+        uses     = ["nope"]
+        """,
+        "pages/a.html" => "a"
+      })
+
+      assert errors(root) == [
+               ~s[page #1.when from must be "HH:MM" (24-hour)],
+               "override #1.when is missing",
+               "override #2.priority must be an integer",
+               ~s(override #2.path "gone.html" is not a file in pages/),
+               ~s(override #2: upstream "nope" is not allowed for this configuration),
+               ~s(screen.when_empty.path "missing.html" is not a file in pages/)
+             ]
+    end
+  end
+
   describe "load/2 with upstreams in the manifest" do
     @radar """
     [upstream.radar]

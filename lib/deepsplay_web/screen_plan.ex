@@ -1,8 +1,11 @@
 defmodule DeepsplayWeb.ScreenPlan do
   @moduledoc """
   The plan a screen rotates through (ADR 9): the revision, the mode, and the
-  pages with their URLs, durations and weights. It is sent to the browser,
-  which does the rotation.
+  pages with their URLs, durations, weights and time windows; the overrides
+  with their windows and priorities; and the page shown when no page is
+  active (`empty`, `nil` for a black screen; ADR 25). It is sent to the
+  browser, which does the rotation. Time windows are in the form of
+  `Deepsplay.TimeWindow.to_plan/1`.
 
   `apply` says when the browser switches to a new plan: `"next"` at the next
   page change, `"now"` at once, reloading the current page (local directories
@@ -11,12 +14,24 @@ defmodule DeepsplayWeb.ScreenPlan do
 
   alias Deepsplay.PageParams
   alias Deepsplay.Screen
+  alias Deepsplay.TimeWindow
 
   @type t :: %{
           sha: String.t(),
           mode: String.t(),
           apply: String.t(),
-          pages: [%{url: String.t(), duration: pos_integer() | nil, weight: float()}]
+          pages: [
+            %{
+              url: String.t(),
+              duration: pos_integer() | nil,
+              weight: float(),
+              when: [map()] | nil
+            }
+          ],
+          overrides: [
+            %{url: String.t(), when: [map()], priority: integer(), duration_params: [String.t()]}
+          ],
+          empty: %{url: String.t()} | nil
         }
 
   @doc """
@@ -24,7 +39,9 @@ defmodule DeepsplayWeb.ScreenPlan do
   """
   #
   # Options: `:local` (apply at once), `:added` (parameters to add to each
-  # page, in the manifest's order; ADR 16).
+  # page, in the manifest's order; ADR 16), `:override_added` (parameters
+  # and remaining-time names per override), `:empty_added` (parameters for
+  # the `when_empty` page).
   @spec rotation(String.t(), String.t(), Screen.t(), keyword()) :: t()
   def rotation(name, sha, %Screen{} = screen, opts \\ []) do
     added = Keyword.get(opts, :added, Enum.map(screen.pages, fn _ -> [] end))
@@ -40,9 +57,47 @@ defmodule DeepsplayWeb.ScreenPlan do
           %{
             url: page_url(name, sha, page.path, PageParams.merge_query(page.query, page_added)),
             duration: page.duration,
-            weight: page.weight
+            weight: page.weight,
+            when: TimeWindow.to_plan(page.when)
           }
-        end)
+        end),
+      overrides: overrides(name, sha, screen, opts),
+      empty: empty(name, sha, screen, opts)
+    }
+  end
+
+  defp overrides(name, sha, screen, opts) do
+    added = Keyword.get(opts, :override_added, Enum.map(screen.overrides, fn _ -> {[], []} end))
+
+    screen.overrides
+    |> Enum.zip(added)
+    |> Enum.map(fn {override, {override_added, duration_params}} ->
+      %{
+        url:
+          page_url(
+            name,
+            sha,
+            override.path,
+            PageParams.merge_query(override.query, override_added)
+          ),
+        when: TimeWindow.to_plan(override.when),
+        priority: override.priority,
+        duration_params: duration_params
+      }
+    end)
+  end
+
+  defp empty(_name, _sha, %Screen{when_empty: :black}, _opts), do: nil
+
+  defp empty(name, sha, %Screen{when_empty: {path, query}}, opts) do
+    %{
+      url:
+        page_url(
+          name,
+          sha,
+          path,
+          PageParams.merge_query(query, Keyword.get(opts, :empty_added, []))
+        )
     }
   end
 
@@ -56,7 +111,9 @@ defmodule DeepsplayWeb.ScreenPlan do
       sha: sha,
       mode: "pinned",
       apply: apply_mode(opts),
-      pages: [%{url: page_url(name, sha, path, query), duration: nil, weight: 1.0}]
+      pages: [%{url: page_url(name, sha, path, query), duration: nil, weight: 1.0, when: nil}],
+      overrides: [],
+      empty: nil
     }
   end
 
