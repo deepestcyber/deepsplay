@@ -32,6 +32,11 @@ defmodule DeepsplayWeb.ProxyControllerTest do
         base_url  = "https://cache.example.com"
         cache_ttl = "60s"
 
+        [upstream.stale]
+        base_url  = "https://stale.example.com"
+        cache_ttl = "60s"
+        stale_ttl = "1h"
+
         [upstream.writer]
         base_url = "https://write.example.com"
         methods  = ["GET", "POST"]
@@ -39,7 +44,7 @@ defmodule DeepsplayWeb.ProxyControllerTest do
         [[config]]
         name      = "lobby"
         path      = "/srv/lobby"
-        upstreams = ["weather", "cached", "writer"]
+        upstreams = ["weather", "cached", "stale", "writer"]
 
         [[config]]
         name = "kitchen"
@@ -145,6 +150,109 @@ defmodule DeepsplayWeb.ProxyControllerTest do
     assert_received :called
   end
 
+  test "marks cacheable answers with their cache state and age", %{conn: conn} do
+    Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 200, "fresh"))
+
+    miss = get(conn, "/c/lobby/api/cached/data")
+    assert get_resp_header(miss, "x-deepsplay-cache") == ["miss"]
+    assert get_resp_header(miss, "age") == ["0"]
+
+    hit = get(build_conn(), "/c/lobby/api/cached/data")
+    assert get_resp_header(hit, "x-deepsplay-cache") == ["hit"]
+    assert [age] = get_resp_header(hit, "age")
+    assert String.to_integer(age) >= 0
+
+    uncached = get(build_conn(), "/c/lobby/api/writer/data")
+    assert get_resp_header(uncached, "x-deepsplay-cache") == []
+  end
+
+  test "concurrent requests for the same answer share one upstream call" do
+    test = self()
+
+    Req.Test.stub(@stub, fn upstream ->
+      send(test, {:called, self()})
+      assert_receive :go, 5_000
+      Plug.Conn.send_resp(upstream, 200, "fresh")
+    end)
+
+    requests =
+      for _ <- 1..5,
+          do: Task.async(fn -> build_conn() |> get("/c/lobby/api/cached/data") end)
+
+    assert_receive {:called, upstream}, 5_000
+    await_waiters(5)
+    send(upstream, :go)
+
+    for conn <- Task.await_many(requests) do
+      assert response(conn, 200) == "fresh"
+      assert get_resp_header(conn, "x-deepsplay-cache") == ["miss"]
+    end
+
+    refute_received {:called, _pid}
+  end
+
+  test "a failed fetch reaches all waiters and is not cached" do
+    test = self()
+
+    Req.Test.stub(@stub, fn upstream ->
+      send(test, {:called, self()})
+      assert_receive :go, 5_000
+      Plug.Conn.send_resp(upstream, 503, "busy")
+    end)
+
+    requests =
+      for _ <- 1..3,
+          do: Task.async(fn -> build_conn() |> get("/c/lobby/api/cached/data") end)
+
+    assert_receive {:called, upstream}, 5_000
+    await_waiters(3)
+    send(upstream, :go)
+
+    for conn <- Task.await_many(requests), do: assert(response(conn, 503) == "busy")
+    refute_received {:called, _pid}
+
+    Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 200, "fresh"))
+    assert build_conn() |> get("/c/lobby/api/cached/data") |> response(200) == "fresh"
+  end
+
+  test "serves stale answers while the upstream fails", %{conn: conn} do
+    Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 200, "old"))
+    assert conn |> get("/c/lobby/api/stale/data") |> response(200) == "old"
+    Cache.expire_all()
+
+    for failure <- [
+          &Plug.Conn.send_resp(&1, 503, "busy"),
+          &Plug.Conn.send_resp(&1, 429, "slow down"),
+          &Req.Test.transport_error(&1, :timeout),
+          &Req.Test.transport_error(&1, :econnrefused)
+        ] do
+      Req.Test.stub(@stub, failure)
+
+      capture_log(fn ->
+        stale = get(build_conn(), "/c/lobby/api/stale/data")
+        assert response(stale, 200) == "old"
+        assert get_resp_header(stale, "x-deepsplay-cache") == ["stale"]
+      end)
+    end
+
+    Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 404, "gone"))
+    assert build_conn() |> get("/c/lobby/api/stale/data") |> response(404) == "gone"
+
+    Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 200, "new"))
+    fresh = get(build_conn(), "/c/lobby/api/stale/data")
+    assert response(fresh, 200) == "new"
+    assert get_resp_header(fresh, "x-deepsplay-cache") == ["miss"]
+  end
+
+  test "passes failures on without stale_ttl", %{conn: conn} do
+    Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 200, "old"))
+    assert conn |> get("/c/lobby/api/cached/data") |> response(200) == "old"
+    Cache.expire_all()
+
+    Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 503, "busy"))
+    assert build_conn() |> get("/c/lobby/api/cached/data") |> response(503) == "busy"
+  end
+
   test "answers 504 on timeouts and 502 on other failures, logging them", %{conn: conn} do
     Req.Test.stub(@stub, &Req.Test.transport_error(&1, :timeout))
     log = capture_log(fn -> assert conn |> get("/c/lobby/api/weather/x") |> response(504) end)
@@ -164,5 +272,17 @@ defmodule DeepsplayWeb.ProxyControllerTest do
     capture_log(fn ->
       assert conn |> get("/c/lobby/api/weather/big") |> response(502) =~ "larger than 5 MB"
     end)
+  end
+
+  # Waits until the running fetch has the given number of waiting requests.
+  defp await_waiters(count) do
+    waiters =
+      Cache
+      |> :sys.get_state()
+      |> Map.fetch!(:fetches)
+      |> Map.values()
+      |> Enum.map(&length(&1.waiters))
+
+    if waiters != [count], do: await_waiters(count)
   end
 end

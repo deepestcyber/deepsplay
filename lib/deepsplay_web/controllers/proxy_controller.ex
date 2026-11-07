@@ -7,6 +7,7 @@ defmodule DeepsplayWeb.ProxyController do
   use DeepsplayWeb, :controller
 
   alias Deepsplay.HostConfig.Store
+  alias Deepsplay.Revisions
   alias Deepsplay.UpstreamProxy
 
   @max_request_body 1024 * 1024
@@ -22,7 +23,8 @@ defmodule DeepsplayWeb.ProxyController do
            headers: conn.req_headers,
            body: body
          },
-         {:ok, response} <- UpstreamProxy.forward(config, upstreams, upstream, request) do
+         declared = Revisions.manifest_upstreams(config),
+         {:ok, response} <- UpstreamProxy.forward(config, upstreams, upstream, request, declared) do
       conn
       |> merge_resp_headers(response.headers)
       |> put_resp_header("x-content-type-options", "nosniff")

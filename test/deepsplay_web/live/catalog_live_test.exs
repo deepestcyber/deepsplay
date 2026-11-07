@@ -31,8 +31,14 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     [params]
     theme = "neon"
 
+    [upstream.radar]
+    url       = "https://radar.example.com/wms"
+    cache_ttl = "5m"
+    refresh   = true
+
     [[page]]
     path = "life.html?cells=40"
+    uses = ["radar"]
 
     [[page]]
     path = "fragment.html"
@@ -97,6 +103,11 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     refute has_element?(view, "#page-fragment-html .page-preview")
 
     assert has_element?(view, "#helper-theme", "Used by: life.html")
+
+    assert has_element?(view, "#upstream-radar", "https://radar.example.com/wms")
+    assert has_element?(view, "#upstream-radar", "cache 300s")
+    assert has_element?(view, "#upstream-radar", "refresh")
+    assert has_element?(view, "#upstream-radar", "Used by: life.html")
 
     assert has_element?(
              view,

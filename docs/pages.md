@@ -173,8 +173,8 @@ it in the manifest. A pinned page gets the same values, but no display time.
 
 ### External data
 
-Pages never contain API keys. The host defines upstreams with their secrets,
-and pages call them through deepsplay:
+Pages call external APIs through deepsplay rather than directly, so all
+screens share one cached answer and pages never contain API keys:
 
 ```js
 const url = Deepsplay.api("weather", "/current?city=berlin")
@@ -182,8 +182,39 @@ const data = await (await fetch(url)).json()
 ```
 
 `Deepsplay.api` builds the right URL for the page's configuration, however
-deep the page lies in `pages/`. The upstream must be allowed for the
-configuration and listed in the page's `uses` in the manifest.
+deep the page lies in `pages/`. The page lists the upstream in its `uses` in
+the manifest.
+
+There are two kinds of upstreams:
+
+- **Upstreams of the host**: defined in the host configuration, with secrets
+  if the API needs a key, and allowed per configuration.
+- **Upstreams in the manifest**: open APIs without keys can be declared by
+  the repository itself:
+
+  ```toml
+  [upstream.radar]
+  url       = "https://maps.dwd.de/geoserver/dwd/wms"
+  cache_ttl = "5m"         # required, at least 1m
+  stale_ttl = "1h"         # optional: serve the old answer while the API fails
+  refresh   = true         # optional: fetch again before it expires
+
+  [[page]]
+  path = "radar.html"
+  uses = ["radar"]
+  ```
+
+  Only `https` and `GET`, no secrets or extra headers, no redirects, and only
+  hosts with public addresses. The host can switch this off or limit it to
+  certain hosts; the catalog shows the declared upstreams.
+
+All screens share an upstream's answers, and requests for the same URL
+arriving at once lead to one upstream call. Cached answers carry
+`X-Deepsplay-Cache` (`hit`, `miss`, or `stale` for an old answer served while
+the provider fails) and `Age` in seconds. deepsplay passes the request on
+unchanged, so screens share an answer only for the same URL: a page asking
+for time-dependent data rounds the time to what the provider offers, e.g. to
+5 minutes.
 
 ## Trying pages
 

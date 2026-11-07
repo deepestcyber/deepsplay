@@ -61,6 +61,13 @@ defmodule Deepsplay.Pages do
     end)
   end
 
+  @doc """
+  Keeps any other value derived from a revision, under a key that includes
+  the revision key.
+  """
+  @spec memo(term(), (-> value)) :: value when value: term()
+  def memo(key, compute), do: cached({:memo, key}, compute)
+
   @doc false
   # Forgets everything; for tests.
   def clear, do: :ets.delete_all_objects(@table)

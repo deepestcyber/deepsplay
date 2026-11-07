@@ -355,6 +355,30 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         </p>
       </div>
     </section>
+
+    <section :if={@catalog.upstreams != []} id="catalog-upstreams">
+      <h2 class="text-lg font-semibold">Upstreams in the manifest</h2>
+      <div
+        :for={%{upstream: upstream, used_by: used_by} <- @catalog.upstreams}
+        id={"upstream-#{upstream.name}"}
+        class="mt-3 rounded-lg border border-base-300 p-4 text-sm"
+      >
+        <div class="flex items-baseline justify-between gap-2">
+          <h3 class="font-semibold">{upstream.name}</h3>
+          <span class="font-mono text-xs text-base-content/50 break-all">{upstream.base_url}</span>
+        </div>
+        <p class="mt-2 font-mono text-xs">
+          cache {PageParams.format_duration(upstream.cache_ttl)}
+          <span :if={upstream.stale_ttl}>
+            · stale {PageParams.format_duration(upstream.stale_ttl)}
+          </span>
+          <span :if={upstream.refresh}>· refresh</span>
+        </p>
+        <p class="mt-1 text-xs text-base-content/50">
+          Used by: {if used_by == [], do: "no page", else: Enum.join(used_by, ", ")}
+        </p>
+      </div>
+    </section>
     """
   end
 

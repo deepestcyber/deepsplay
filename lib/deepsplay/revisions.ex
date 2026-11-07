@@ -13,6 +13,7 @@ defmodule Deepsplay.Revisions do
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.LocalWatcher
   alias Deepsplay.PageParams
+  alias Deepsplay.Pages
   alias Deepsplay.RevisionStore
   alias Deepsplay.Screen
   alias Deepsplay.Status
@@ -104,7 +105,11 @@ defmodule Deepsplay.Revisions do
   defp load(config, sha, dir, local) do
     root = Screen.root(dir, config)
 
-    case Screen.load(root, manifest: config.manifest, upstreams: config.upstreams) do
+    # A revision's manifest does not change; the proxy asks for it with every
+    # request to a manifest upstream.
+    options = Screen.options(config)
+
+    case Pages.memo({:screen, root, sha, options}, fn -> Screen.load(root, options) end) do
       {:ok, screen} ->
         current = %{sha: sha, pages_dir: Screen.pages_dir(root), screen: screen, local: local}
         # Parameters added to each page of the rotation (ADR 16).
@@ -113,6 +118,18 @@ defmodule Deepsplay.Revisions do
 
       {:error, errors} ->
         {:error, errors}
+    end
+  end
+
+  @doc """
+  Upstreams declared in the manifest of the configuration's current revision
+  (ADR 19).
+  """
+  @spec manifest_upstreams(Config.t()) :: %{String.t() => Deepsplay.HostConfig.Upstream.t()}
+  def manifest_upstreams(%Config{} = config) do
+    case current(config) do
+      {:ok, current} -> current.screen.upstreams
+      _none_or_error -> %{}
     end
   end
 

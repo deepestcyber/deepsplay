@@ -21,7 +21,10 @@ defmodule Deepsplay.HostConfig do
     :configs,
     upstreams: %{},
     poll_interval: 30_000,
-    keep_revisions: 3
+    keep_revisions: 3,
+    upstream_cache_size: 200 * 1024 * 1024,
+    repo_upstreams: true,
+    repo_upstream_hosts: []
   ]
 
   @type t :: %__MODULE__{
@@ -29,6 +32,9 @@ defmodule Deepsplay.HostConfig do
           default_config: String.t(),
           poll_interval: pos_integer(),
           keep_revisions: non_neg_integer(),
+          upstream_cache_size: pos_integer(),
+          repo_upstreams: boolean(),
+          repo_upstream_hosts: [String.t()],
           configs: %{String.t() => Config.t()},
           upstreams: %{String.t() => Upstream.t()}
         }
@@ -41,7 +47,10 @@ defmodule Deepsplay.HostConfig do
     {"cache_dir", :cache_dir, :string, []},
     {"default_config", :default_config, :string, []},
     {"poll_interval", :poll_interval, :duration, default: 30_000},
-    {"keep_revisions", :keep_revisions, :non_neg_integer, default: 3}
+    {"keep_revisions", :keep_revisions, :non_neg_integer, default: 3},
+    {"upstream_cache_size", :upstream_cache_size, :size, default: 200 * 1024 * 1024},
+    {"repo_upstreams", :repo_upstreams, :boolean, default: true},
+    {"repo_upstream_hosts", :repo_upstream_hosts, &__MODULE__.cast_host_patterns/1, default: []}
   ]
 
   @doc """
@@ -118,7 +127,10 @@ defmodule Deepsplay.HostConfig do
            default_config: server.default_config,
            poll_interval: server.poll_interval,
            keep_revisions: server.keep_revisions,
-           configs: Map.new(configs, &{&1.name, &1}),
+           upstream_cache_size: server.upstream_cache_size,
+           repo_upstreams: server.repo_upstreams,
+           repo_upstream_hosts: server.repo_upstream_hosts,
+           configs: Map.new(configs, &{&1.name, with_server_defaults(&1, server)}),
            upstreams: upstreams
          }}
 
@@ -126,6 +138,40 @@ defmodule Deepsplay.HostConfig do
         {:error, errors}
     end
   end
+
+  # Settings a configuration can override; unset ones come from [server].
+  defp with_server_defaults(config, server) do
+    %{
+      config
+      | repo_upstreams: default(config.repo_upstreams, server.repo_upstreams),
+        repo_upstream_hosts: default(config.repo_upstream_hosts, server.repo_upstream_hosts)
+    }
+  end
+
+  defp default(nil, value), do: value
+  defp default(value, _default), do: value
+
+  @doc false
+  # Host name patterns for manifest upstreams (ADR 19): "dwd.de" matches that
+  # name, "*.dwd.de" its subdomains.
+  def cast_host_patterns(value) when is_list(value) do
+    if Enum.all?(value, &host_pattern?/1),
+      do: {:ok, Enum.map(value, &String.downcase/1)},
+      else: {:error, ~s(must be a list of host names, optionally starting with "*.")}
+  end
+
+  def cast_host_patterns(_value), do: {:error, "must be a list of host names"}
+
+  defp host_pattern?(pattern) when is_binary(pattern) do
+    name = String.replace_prefix(pattern, "*.", "")
+
+    Regex.match?(
+      ~r/^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$/,
+      name
+    )
+  end
+
+  defp host_pattern?(_pattern), do: false
 
   defp server(nil), do: {nil, ["[server] table is missing"]}
 
@@ -162,6 +208,8 @@ defmodule Deepsplay.HostConfig do
         {"query", :query, :string, default: nil},
         {"query_value", :query_value, :string, default: nil},
         {"cache_ttl", :cache_ttl, :duration, default: nil},
+        {"stale_ttl", :stale_ttl, :duration, default: nil},
+        {"refresh", :refresh, :boolean, default: false},
         {"timeout", :timeout, :duration, default: 15_000}
       ])
 
@@ -169,6 +217,10 @@ defmodule Deepsplay.HostConfig do
       errors ++
         pair_errors(table, ctx, "header", "value") ++
         pair_errors(table, ctx, "query", "query_value") ++
+        for key <- ["stale_ttl", "refresh"],
+            Map.has_key?(table, key) and not Map.has_key?(table, "cache_ttl") do
+          ~s(#{ctx}: "#{key}" needs "cache_ttl")
+        end ++
         for template <- [fields.value, fields.query_value],
             is_binary(template),
             secret <- Secrets.references(template),
@@ -332,7 +384,9 @@ defmodule Deepsplay.HostConfig do
       {"manifest", :manifest, &cast_manifest/1, default: Screen.default_manifest()},
       {"credential", :credential, :string, default: nil},
       {"upstreams", :upstreams, :string_list, default: []},
-      {"params", :params, :params, default: %{}}
+      {"params", :params, :params, default: %{}},
+      {"repo_upstreams", :repo_upstreams, :boolean, default: nil},
+      {"repo_upstream_hosts", :repo_upstream_hosts, &cast_host_patterns/1, default: nil}
     ]
   end
 

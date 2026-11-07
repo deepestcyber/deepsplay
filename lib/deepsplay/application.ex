@@ -17,6 +17,8 @@ defmodule Deepsplay.Application do
       {Registry, keys: :unique, name: Deepsplay.RevisionStore.Registry},
       {DynamicSupervisor, name: Deepsplay.RevisionStore.Supervisor, strategy: :one_for_one},
       Deepsplay.Status,
+      {Task.Supervisor, name: Deepsplay.UpstreamProxy.Tasks},
+      Deepsplay.UpstreamProxy.Stats,
       Deepsplay.UpstreamProxy.Cache,
       Deepsplay.Pages,
       {Registry, keys: :unique, name: Deepsplay.LocalWatcher.Registry},

@@ -1,8 +1,9 @@
 defmodule DeepsplayWeb.StatusLive do
   @moduledoc """
   The status page at `/status`: every configuration with its current revision,
-  last and next check and last error; the connected screens; and the most
-  recent errors. It updates live.
+  last and next check and last error; the connected screens; the upstreams
+  with their cache (ADR 20); and the most recent errors. It updates live;
+  upstream counters every few seconds.
 
   There are no alerts and no login; the page is meant for the internal network.
   """
@@ -10,16 +11,23 @@ defmodule DeepsplayWeb.StatusLive do
   use DeepsplayWeb, :live_view
 
   alias Deepsplay.HostConfig.Store
+  alias Deepsplay.PageParams
   alias Deepsplay.RepoUrl
   alias Deepsplay.Revisions
   alias Deepsplay.Status
+  alias Deepsplay.UpstreamProxy
+  alias Deepsplay.UpstreamProxy.Cache
+  alias Deepsplay.UpstreamProxy.Stats
   alias DeepsplayWeb.Presence
+
+  @upstream_interval 5_000
 
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Status.subscribe_all()
       Phoenix.PubSub.subscribe(Deepsplay.PubSub, Presence.topic())
+      :timer.send_interval(@upstream_interval, :upstreams)
     end
 
     {:ok, socket |> assign(page_title: "Status") |> load()}
@@ -31,6 +39,8 @@ defmodule DeepsplayWeb.StatusLive do
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket),
     do: {:noreply, load(socket)}
 
+  def handle_info(:upstreams, socket), do: {:noreply, assign_upstreams(socket)}
+
   defp load(socket) do
     assign(socket,
       host_config: Store.get(),
@@ -38,6 +48,57 @@ defmodule DeepsplayWeb.StatusLive do
       screens: screens(),
       errors: Status.recent_errors()
     )
+    |> assign_upstreams()
+  end
+
+  defp assign_upstreams(socket),
+    do: assign(socket, upstreams: upstreams(), cache_size: Cache.size())
+
+  # Host upstreams, then upstreams declared in manifests, grouped by target as
+  # their cache entries are.
+  defp upstreams do
+    case Store.get() do
+      {:ok, host_config} ->
+        groups = Cache.groups()
+        configs = host_config.configs |> Map.values() |> Enum.sort_by(& &1.name)
+
+        host =
+          for {name, upstream} <- Enum.sort(host_config.upstreams) do
+            used_by = for config <- configs, name in config.upstreams, do: config.name
+            row(upstream, "host configuration", used_by, groups)
+          end
+
+        manifest =
+          configs
+          |> Enum.flat_map(fn config ->
+            for {_name, upstream} <- Revisions.manifest_upstreams(config),
+                do: {upstream, config.name}
+          end)
+          |> Enum.group_by(fn {upstream, _config} -> upstream.base_url end)
+          |> Enum.sort()
+          |> Enum.map(fn {_url, [{upstream, _config} | _rest] = declared} ->
+            used_by = Enum.map(declared, fn {_upstream, config} -> config end) |> Enum.uniq()
+            row(upstream, "manifest", used_by, groups)
+          end)
+
+        host ++ manifest
+
+      {:error, _errors} ->
+        []
+    end
+  end
+
+  defp row(upstream, origin, used_by, groups) do
+    group = UpstreamProxy.stats_group(upstream)
+
+    %{
+      id: "upstream-" <> String.replace("#{origin}-#{upstream.name}", ~r/[^A-Za-z0-9]+/, "-"),
+      upstream: upstream,
+      origin: origin,
+      used_by: used_by,
+      cache: Map.get(groups, group, %{entries: 0, size: 0}),
+      stats: Stats.get(group)
+    }
   end
 
   defp configs do
@@ -196,6 +257,70 @@ defmodule DeepsplayWeb.StatusLive do
         </div>
       </section>
 
+      <section id="status-upstreams">
+        <h2 class="text-lg font-semibold">
+          Upstreams
+          <span class="text-sm font-normal text-base-content/50">
+            cache {bytes(@cache_size.size)} of {bytes(@cache_size.max_size)}
+          </span>
+        </h2>
+        <p :if={@upstreams == []} class="mt-2 text-sm text-base-content/60">No upstreams.</p>
+        <div :if={@upstreams != []} class="mt-3 overflow-x-auto rounded-lg border border-base-300">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-base-200 text-xs uppercase tracking-wide text-base-content/60">
+              <tr>
+                <th class="px-3 py-2">Upstream</th>
+                <th class="px-3 py-2">Defined in</th>
+                <th class="px-3 py-2">Cache</th>
+                <th class="px-3 py-2">Answers</th>
+                <th class="px-3 py-2">Last call</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={row <- @upstreams} id={row.id} class="border-t border-base-300 align-top">
+                <td class="px-3 py-2">
+                  <div class="font-medium">{row.upstream.name}</div>
+                  <div class="break-all font-mono text-xs text-base-content/50">
+                    {row.upstream.base_url}
+                  </div>
+                </td>
+                <td class="px-3 py-2">
+                  <div>{row.origin}</div>
+                  <div class="text-xs text-base-content/50">
+                    {if row.used_by == [], do: "no configuration", else: Enum.join(row.used_by, ", ")}
+                  </div>
+                </td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <%= if row.upstream.cache_ttl do %>
+                    <div class="upstream-cache">
+                      {row.cache.entries} entries, {bytes(row.cache.size)}
+                    </div>
+                    <div class="text-xs text-base-content/50">
+                      {PageParams.format_duration(row.upstream.cache_ttl)}<span :if={
+                        row.upstream.stale_ttl
+                      }>, stale {PageParams.format_duration(row.upstream.stale_ttl)}</span><span :if={
+                        row.upstream.refresh
+                      }>, refresh</span>
+                    </div>
+                  <% else %>
+                    <span class="text-base-content/50">not cached</span>
+                  <% end %>
+                </td>
+                <td class="upstream-answers px-3 py-2 whitespace-nowrap">
+                  {row.stats.hits} hits, {row.stats.misses} misses, {row.stats.stale} stale
+                </td>
+                <td class="px-3 py-2">
+                  <div class="whitespace-nowrap">{time(row.stats.last_fetch_at)}</div>
+                  <div :if={row.stats.last_error} class="upstream-error text-xs text-red-500">
+                    {time(row.stats.last_error_at)}: {row.stats.last_error}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section id="status-errors">
         <h2 class="text-lg font-semibold">Recent errors</h2>
         <p :if={@errors == []} class="mt-2 text-sm text-base-content/60">
@@ -257,6 +382,10 @@ defmodule DeepsplayWeb.StatusLive do
   defp state(:unknown_config), do: "unknown configuration"
   defp state(:host_config), do: "host configuration error"
   defp state(other), do: to_string(other)
+
+  defp bytes(size) when size >= 1024 * 1024, do: "#{Float.round(size / (1024 * 1024), 1)} MB"
+  defp bytes(size) when size >= 1024, do: "#{Float.round(size / 1024, 1)} KB"
+  defp bytes(size), do: "#{size} B"
 
   defp time(nil), do: "–"
 

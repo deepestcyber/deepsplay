@@ -79,6 +79,9 @@ cache_dir      = "/var/lib/display/cache"
 default_config = "lobby"
 poll_interval  = "30s"      # per repository and ref, with jitter
 keep_revisions = 3          # previous revisions kept per repository
+upstream_cache_size = "200MB"   # upstream answers, in memory and on disk
+repo_upstreams      = true      # manifests may declare upstreams without secrets
+repo_upstream_hosts = []        # ... for these hosts only, e.g. ["*.dwd.de"]; empty: any
 
 [[config]]
 name      = "lobby"
@@ -199,6 +202,8 @@ value     = "Bearer {secret:weather_api}"
 # query       = "appid"                    # alternatively or additionally,
 # query_value = "{secret:weather_api}"     # the secret as a query parameter
 cache_ttl = "60s"       # one upstream call serves all screens within this time
+stale_ttl = "1h"        # optional: serve the old answer this long while the upstream fails
+refresh   = true        # optional: fetch answers screens use again before they expire
 ```
 
 The proxy:
@@ -206,7 +211,7 @@ The proxy:
 - joins the path to `base_url` after normalizing it and rejects `..` and absolute URLs;
 - forwards only the listed methods and drops cookies and the client's `Authorization` header;
 - applies timeouts and a response size limit;
-- caches answers for `cache_ttl`, which keeps many screens from using up an upstream rate limit.
+- caches answers for `cache_ttl`, which keeps many screens from using up an upstream rate limit; concurrent requests share one upstream call, with `refresh` answers screens still use are fetched again before they expire, and with `stale_ttl` an expired answer is served while the upstream fails (ADR 20).
 
 Secret values are never logged, never shown on the status page (only names) and never substituted into served files. Credentials for fetching private repositories come from the same secrets file.
 

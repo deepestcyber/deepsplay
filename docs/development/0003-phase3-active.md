@@ -14,13 +14,13 @@ Status values: `open`, `in progress`, `done`.
 
 | # | Part | Status |
 | --- | --- | --- |
-| 1 | Upstream cache for expensive and rate-limited providers | in progress |
+| 1 | Upstream cache for expensive and rate-limited providers | done |
 | 2 | Shared state for pages | open |
 | 3 | Sidecars | open |
 
 ## 1. Upstream cache for expensive and rate-limited providers
 
-Status: in progress (decided, not built)
+Status: done (2026-11-07), decided in ADR 19 and ADR 20; built
 
 Goal: data from expensive or rate-limited providers is fetched as rarely as
 possible and stays available when the provider fails, for all screens at once.
@@ -53,7 +53,7 @@ upstreams:
   last three times `cache_ttl`, shortly before they expire.
 - **Persistence and limits**: `upstream_cache_size` for memory and disk
   together, least recently used dropped first; every entry also in
-  `cache_dir/upstream/`, loaded again on start (wall-clock expiry).
+  `cache_dir/.upstream/`, loaded again on start (wall-clock expiry).
 - **Status page**: per upstream origin, entries, hits, misses, stale answers,
   last fetch and error; total size against the limit.
 
@@ -62,7 +62,49 @@ ADR 19 details: server settings `repo_upstreams` (default `true`) and
 configuration; resolved addresses all checked, connection to a checked
 address with the host name for TLS and `Host`.
 
-Planning is complete; next is building.
+Planning is complete. Build steps, each tested on its own:
+
+1. Coalescing, `X-Deepsplay-Cache` and `Age`: built (2026-11-07). Fetches run
+   in tasks of `Deepsplay.UpstreamProxy.Tasks`, started by the cache process,
+   which keeps the waiting requests per key; a task carries `$callers` of the
+   request that started it.
+2. Stale answers (`stale_ttl`): built (2026-11-07). `stale_ttl` needs
+   `cache_ttl`. A stale value also replaces a crashed fetch or a request that
+   waited longer than allowed.
+3. Size limit with least-recently-used eviction, and persistence: built
+   (2026-11-07). Sizes are measured as `:erlang.external_size/1` of the
+   cached answer; recent use is ordered by a monotonic counter, not a clock.
+   A single answer larger than the limit is not cached. Disk writes and
+   deletes run in order in `Cache.Disk`, one file per entry named by a hash of
+   its key; the cache syncs them on shutdown. Tests keep the shared cache in
+   memory (`persist_upstream_cache`) and start their own caches for
+   persistence.
+4. Scheduled refresh (`refresh = true`): built (2026-11-07). `refresh` needs
+   `cache_ttl`. The refresh runs a tenth of `cache_ttl` before expiry (at most
+   5 seconds before), reusing the fetch of the request that cached the entry.
+   A refresh keeps the time of the last request, so entries nobody asks for
+   stop. Entries loaded from disk join the refresh on their first request. A
+   failed refresh is not retried; the entry expires and the next request
+   fetches (or gets the stale answer).
+5. Manifest upstreams: parsing, host switch, address check, catalog (ADR 19):
+   built (2026-11-07). Manifest upstreams use the `Upstream` struct with
+   `origin: :manifest` (parsed in `Deepsplay.Screen.Upstreams`); invalid ones
+   still count as declared for `uses`. The manifest of a revision is kept in
+   memory (`Pages.memo`), as the proxy reads it with every request.
+   `UpstreamProxy.Address` resolves all addresses (tests use
+   `:proxy_resolver`) and refuses non-public ones; the request goes to the
+   address with Mint's `hostname` option, checked against DWD: TLS
+   verification works, a wrong name fails. A manifest upstream named like a
+   host upstream the configuration allows is an error; one named like a host
+   upstream the configuration does not allow is used.
+6. Cache state on the status page: built (2026-11-07). Counters live in
+   `UpstreamProxy.Stats` (since the start, in memory), grouped like cache
+   entries: host upstreams by name, manifest upstreams by URL. The cache
+   keeps the group per entry (also on disk) for entry counts and sizes. A
+   `429` or `5xx` answer counts as the last error, as do transport errors.
+   The status page lists host upstreams, then manifest upstreams with the
+   configurations declaring them, and refreshes the counters every 5
+   seconds.
 
 ## 2. Shared state for pages
 

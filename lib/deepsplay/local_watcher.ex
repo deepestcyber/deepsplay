@@ -129,10 +129,7 @@ defmodule Deepsplay.LocalWatcher do
     token = :crypto.strong_rand_bytes(20) |> Base.encode16(case: :lower)
     Registry.update_value(@registry, state.config.name, fn _old -> token end)
 
-    case Screen.load(state.root,
-           manifest: state.config.manifest,
-           upstreams: state.config.upstreams
-         ) do
+    case Screen.load(state.root, Screen.options(state.config)) do
       {:ok, _screen} ->
         Status.update(state.config.name, %{checked_at: now(), error: nil, error_at: nil})
 

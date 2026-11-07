@@ -61,10 +61,11 @@ Scheduled refresh:
 
 Persistence and limits:
 
-- A server setting `upstream_cache_size` (e.g. `"200MB"`) limits the cache,
-  memory and disk together; the least recently used entries are dropped
-  first.
-- Every cached entry is also written to `cache_dir/upstream/`, in the
+- A server setting `upstream_cache_size` (default `"200MB"`) limits the
+  cache, memory and disk together; the least recently used entries are
+  dropped first.
+- Every cached entry is also written to `cache_dir/.upstream/` (hidden, as
+  the cache cleanup of ADR 6 removes other directories), in the
   background. On start, entries are loaded again: fresh while within
   `cache_ttl`, then stale while within `stale_ttl`, otherwise deleted. Expiry
   on disk uses wall-clock time.

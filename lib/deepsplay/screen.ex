@@ -17,21 +17,29 @@ defmodule Deepsplay.Screen do
   """
 
   alias Deepsplay.HostConfig.Config
+  alias Deepsplay.HostConfig.Upstream
   alias Deepsplay.RevisionFile
   alias Deepsplay.Screen.Page
+  alias Deepsplay.Screen.Upstreams
   alias Deepsplay.TomlSchema
 
   @default_manifest "screen.toml"
   @pages_dir "pages"
   @max_size 64 * 1024
 
-  defstruct title: nil, rotation: :sequential, pages: [], params: %{}, warnings: []
+  defstruct title: nil,
+            rotation: :sequential,
+            pages: [],
+            params: %{},
+            upstreams: %{},
+            warnings: []
 
   @type t :: %__MODULE__{
           title: String.t() | nil,
           rotation: :sequential | :random,
           pages: [Page.t(), ...],
           params: %{String.t() => String.t()},
+          upstreams: %{String.t() => Upstream.t()},
           warnings: [String.t()]
         }
 
@@ -117,6 +125,13 @@ defmodule Deepsplay.Screen do
   def default_manifest, do: @default_manifest
 
   @doc """
+  Options for `load/2` from a configuration.
+  """
+  @spec options(Config.t()) :: keyword()
+  def options(%Config{} = config),
+    do: [manifest: config.manifest, upstreams: config.upstreams, config: config]
+
+  @doc """
   Returns a validator for `Deepsplay.RevisionStore.publish/3`: it accepts a
   revision only if its manifest is valid for `config`.
   """
@@ -126,7 +141,7 @@ defmodule Deepsplay.Screen do
       root = root(rev_dir, config)
 
       if File.dir?(root) do
-        case load(root, manifest: config.manifest, upstreams: config.upstreams) do
+        case load(root, options(config)) do
           {:ok, _screen} -> :ok
           {:error, errors} -> {:error, Enum.join(errors, "; ")}
         end
@@ -146,8 +161,10 @@ defmodule Deepsplay.Screen do
 
     * `:manifest` - manifest path relative to `root`, default
       `"#{@default_manifest}"`
-    * `:upstreams` - upstreams the configuration may use; a page that `uses`
-      any other is an error
+    * `:upstreams` - host upstreams the configuration may use; a page that
+      `uses` any other, or one not declared in the manifest, is an error
+    * `:config` - the configuration, for its rules on upstreams declared in
+      the manifest (ADR 19); without it they are allowed for any host
   """
   @spec load(Path.t(), keyword()) :: {:ok, t()} | {:error, [String.t()]}
   def load(root, opts \\ []) do
@@ -157,7 +174,8 @@ defmodule Deepsplay.Screen do
     with {:ok, toml} <- read(Path.join(root, manifest), manifest),
          {:ok, data} <- decode(toml, manifest),
          :ok <- check_pages_dir(pages_dir) do
-      build(data, pages_dir, Keyword.get(opts, :upstreams, []))
+      config = Keyword.get(opts, :config, %Config{name: "", upstreams: opts[:upstreams] || []})
+      build(data, pages_dir, Keyword.get(opts, :upstreams, []), config)
     end
   end
 
@@ -200,11 +218,17 @@ defmodule Deepsplay.Screen do
     end
   end
 
-  defp build(data, root, upstreams) do
-    # `page` and `backend` are read separately; everything else is checked as
-    # top-level fields, including unknown keys.
+  defp build(data, root, upstreams, config) do
+    # `page`, `backend`, `params` and `upstream` are read separately;
+    # everything else is checked as top-level fields, including unknown keys.
     {top, top_errors} =
-      TomlSchema.fields(Map.drop(data, ["page", "backend", "params"]), "screen", @top_fields)
+      TomlSchema.fields(
+        Map.drop(data, ["page", "backend", "params", "upstream"]),
+        "screen",
+        @top_fields
+      )
+
+    {declared, upstream_errors} = Upstreams.parse(Map.get(data, "upstream"), config)
 
     # Default parameters for the manifest's pages (ADR 16).
     {params, param_errors} =
@@ -213,14 +237,17 @@ defmodule Deepsplay.Screen do
         {:error, why} -> {%{}, ["screen.params #{why}"]}
       end
 
-    {pages, page_errors} = pages(Map.get(data, "page"), root, upstreams)
+    # Invalid upstreams still count as declared, so their pages do not report
+    # them again.
+    names = if is_map(data["upstream"]), do: Map.keys(data["upstream"]), else: []
+    {pages, page_errors} = pages(Map.get(data, "page"), root, upstreams ++ names)
 
     warnings =
       if Map.has_key?(data, "backend"),
         do: ["[backend] is not supported yet and is ignored"],
         else: []
 
-    case top_errors ++ param_errors ++ page_errors do
+    case top_errors ++ param_errors ++ upstream_errors ++ page_errors do
       [] ->
         {:ok,
          %__MODULE__{
@@ -228,6 +255,7 @@ defmodule Deepsplay.Screen do
            rotation: rotation(top.rotation),
            pages: Enum.map(pages, &%{&1 | duration: &1.duration || top.duration}),
            params: params,
+           upstreams: declared,
            warnings: warnings
          }}
 

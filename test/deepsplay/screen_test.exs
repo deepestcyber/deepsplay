@@ -277,6 +277,82 @@ defmodule Deepsplay.ScreenTest do
     end
   end
 
+  describe "load/2 with upstreams in the manifest" do
+    @radar """
+    [upstream.radar]
+    url       = "https://maps.dwd.de/geoserver/dwd/wms/"
+    cache_ttl = "5m"
+    stale_ttl = "1h"
+    refresh   = true
+
+    [[page]]
+    path = "a.html"
+    uses = ["radar"]
+    """
+
+    defp lobby(fields \\ []), do: struct!(%Config{name: "lobby", upstreams: ["weather"]}, fields)
+
+    test "reads them as upstreams of the configuration", %{tmp_dir: root} do
+      write(root, %{"screen.toml" => @radar, "pages/a.html" => "a"})
+
+      assert {:ok, screen} = Screen.load(root, config: lobby(), upstreams: ["weather"])
+
+      assert %{"radar" => radar} = screen.upstreams
+      assert radar.base_url == "https://maps.dwd.de/geoserver/dwd/wms"
+      assert radar.origin == :manifest
+      assert radar.methods == ["GET"]
+      assert {radar.cache_ttl, radar.stale_ttl, radar.refresh} == {300_000, 3_600_000, true}
+      assert {radar.header, radar.query} == {nil, nil}
+    end
+
+    test "only for allowed hosts", %{tmp_dir: root} do
+      write(root, %{"screen.toml" => @radar, "pages/a.html" => "a"})
+
+      assert {:ok, _screen} = Screen.load(root, config: lobby(repo_upstream_hosts: ["*.dwd.de"]))
+
+      assert {:ok, _screen} =
+               Screen.load(root, config: lobby(repo_upstream_hosts: ["maps.dwd.de"]))
+
+      assert errors(root, config: lobby(repo_upstream_hosts: ["dwd.de", "*.example.com"])) ==
+               [~s(upstream.radar.url: host "maps.dwd.de" is not allowed for this configuration)]
+
+      assert errors(root, config: lobby(repo_upstreams: false)) ==
+               ["upstreams in the manifest are not allowed for this configuration"]
+    end
+
+    test "with restricted keys and values", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        [upstream.weather]
+        url       = "https://weather.example.com"
+        cache_ttl = "5m"
+
+        [upstream.plain]
+        url       = "http://plain.example.com"
+        cache_ttl = "30s"
+        header    = "Authorization"
+
+        [upstream.nottl]
+        url = "https://nottl.example.com/?a=1"
+
+        [[page]]
+        path = "a.html"
+        uses = ["plain"]
+        """,
+        "pages/a.html" => "a"
+      })
+
+      assert errors(root, config: lobby(), upstreams: ["weather"]) == [
+               "upstream.nottl.url must be an https URL without credentials, query or fragment",
+               "upstream.nottl.cache_ttl is missing",
+               "upstream.plain.url must be an https URL without credentials, query or fragment",
+               ~s(upstream.plain: unknown key "header"),
+               "upstream.plain.cache_ttl must be at least 1m",
+               "upstream.weather: an upstream of the host configuration has this name"
+             ]
+    end
+  end
+
   describe "validator/1" do
     defp config(fields \\ []) do
       struct!(%Config{name: "lobby", repo: "file:///x", ref: "main"}, fields)

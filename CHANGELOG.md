@@ -21,6 +21,26 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   different screen sizes and a playground for parameters (ADR 17).
 - Guide for building content repositories (`docs/pages.md`); the development
   configuration shows the template repository (ADR 18).
+- The upstream proxy coalesces requests: concurrent requests for the same
+  cacheable answer share one upstream call. Cacheable answers carry
+  `X-Deepsplay-Cache` (`hit`, `miss` or `stale`) and `Age` (ADR 20).
+- Upstream option `stale_ttl`: an expired answer is kept that long and served
+  while the upstream fails (timeout, connection error, `429` or `5xx`)
+  (ADR 20).
+- The upstream cache is limited by `upstream_cache_size` (default 200 MB),
+  dropping the least recently used answers, and kept in
+  `cache_dir/.upstream/` across restarts (ADR 20).
+- Upstream option `refresh = true`: answers requested within the last three
+  times `cache_ttl` are fetched again shortly before they expire, so screens
+  get cache hits and the upstream one call per `cache_ttl` (ADR 20).
+- Manifests can declare upstreams for open APIs (`[upstream.<name>]` with
+  `url` and `cache_ttl`): `https` and `GET` only, no secrets, only hosts with
+  public addresses. The host allows them by default and can switch them off
+  or limit them to host patterns (`repo_upstreams`, `repo_upstream_hosts`,
+  per server or configuration); the catalog shows them (ADR 19).
+- The status page lists upstreams with where they are defined, their cache
+  entries and size, hits, misses, stale answers, last call and last error,
+  and the total cache size (ADR 20).
 
 ## 0.1.0 – 2026-11-07
 

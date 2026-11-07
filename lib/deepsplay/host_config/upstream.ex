@@ -5,6 +5,9 @@ defmodule Deepsplay.HostConfig.Upstream do
 
   `value` and `query_value` are templates; `{secret:name}` is replaced by the
   secret's value when a request is forwarded.
+
+  Upstreams declared in a manifest (ADR 19) use the same struct with
+  `origin: :manifest`: no secrets, `GET` only.
   """
 
   @enforce_keys [:name, :base_url]
@@ -16,7 +19,10 @@ defmodule Deepsplay.HostConfig.Upstream do
     :query,
     :query_value,
     :cache_ttl,
+    :stale_ttl,
     methods: ["GET"],
+    refresh: false,
+    origin: :host,
     timeout: 15_000
   ]
 
@@ -29,6 +35,9 @@ defmodule Deepsplay.HostConfig.Upstream do
           query: String.t() | nil,
           query_value: String.t() | nil,
           cache_ttl: pos_integer() | nil,
+          stale_ttl: pos_integer() | nil,
+          refresh: boolean(),
+          origin: :host | :manifest,
           timeout: pos_integer()
         }
 end

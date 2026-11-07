@@ -2,7 +2,7 @@ defmodule Deepsplay.Catalog do
   @moduledoc """
   What the page catalog shows for a configuration (ADR 17): its current
   revision, rotation, pages with their documentation and parameters, helpers,
-  and all warnings.
+  upstreams declared in the manifest (ADR 19), and all warnings.
   """
 
   alias Deepsplay.HelperIndex
@@ -41,6 +41,7 @@ defmodule Deepsplay.Catalog do
           rotation: [rotation_entry()],
           pages: [page()],
           helpers: [map()],
+          upstreams: [map()],
           warnings: [String.t()]
         }
 
@@ -61,6 +62,7 @@ defmodule Deepsplay.Catalog do
          rotation: rotation(context, current),
          pages: Enum.sort_by(pages, &{kind_order(&1.kind), &1.path}),
          helpers: helpers(index, pages),
+         upstreams: upstreams(current.screen),
          warnings: warnings(current, index, pages)
        }}
     end
@@ -126,6 +128,18 @@ defmodule Deepsplay.Catalog do
         for %{doc: %PageDoc{uses: uses}, path: path} <- pages, helper.name in uses, do: path
 
       Map.put(helper, :used_by, used_by)
+    end)
+  end
+
+  # Upstreams declared in the manifest (ADR 19), with the rotation pages
+  # listing them.
+  defp upstreams(screen) do
+    screen.upstreams
+    |> Map.values()
+    |> Enum.sort_by(& &1.name)
+    |> Enum.map(fn upstream ->
+      used_by = for page <- screen.pages, upstream.name in page.uses, uniq: true, do: page.path
+      %{upstream: upstream, used_by: used_by}
     end)
   end
 

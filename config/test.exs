@@ -33,3 +33,10 @@ config :deepsplay, :start_pollers, false
 
 # The upstream proxy talks to Req.Test stubs instead of the network.
 config :deepsplay, :proxy_req_options, plug: {Req.Test, Deepsplay.UpstreamProxy}
+
+# The shared upstream cache stays in memory; tests of persistence start their
+# own cache with a directory.
+config :deepsplay, :persist_upstream_cache, false
+
+# Name resolution for upstreams declared in manifests (ADR 19), without DNS.
+config :deepsplay, :proxy_resolver, &Deepsplay.TestResolver.resolve/1

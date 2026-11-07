@@ -20,6 +20,8 @@ defmodule Deepsplay.TomlSchema do
   @type type ::
           :string
           | :duration
+          | :size
+          | :boolean
           | :non_neg_integer
           | :positive_number
           | :string_list
@@ -85,6 +87,24 @@ defmodule Deepsplay.TomlSchema do
       :error -> {:error, ~s(must be a duration such as "30s", "5m" or "1h")}
     end
   end
+
+  def cast(:size, value) when is_integer(value) and value > 0, do: {:ok, value}
+
+  def cast(:size, value) when is_binary(value) do
+    case Regex.run(~r/^\s*(\d+)\s*(B|KB|MB|GB)\s*$/, value) do
+      [_all, number, unit] when number != "0" ->
+        factor = %{"B" => 1, "KB" => 1024, "MB" => 1024 ** 2, "GB" => 1024 ** 3}
+        {:ok, String.to_integer(number) * Map.fetch!(factor, unit)}
+
+      _other ->
+        {:error, ~s(must be a size such as "200MB", "1GB" or a number of bytes)}
+    end
+  end
+
+  def cast(:size, _value), do: {:error, ~s(must be a size such as "200MB")}
+
+  def cast(:boolean, value) when is_boolean(value), do: {:ok, value}
+  def cast(:boolean, _value), do: {:error, "must be true or false"}
 
   def cast(:non_neg_integer, value) when is_integer(value) and value >= 0, do: {:ok, value}
   def cast(:non_neg_integer, _value), do: {:error, "must be a non-negative integer"}

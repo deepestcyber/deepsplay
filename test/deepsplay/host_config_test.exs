@@ -12,6 +12,7 @@ defmodule Deepsplay.HostConfigTest do
   default_config = "lobby"
   poll_interval  = "1m"
   keep_revisions = 5
+  upstream_cache_size = "1GB"
 
   [[config]]
   name      = "lobby"
@@ -62,6 +63,7 @@ defmodule Deepsplay.HostConfigTest do
       assert host_config.default_config == "lobby"
       assert host_config.poll_interval == 60_000
       assert host_config.keep_revisions == 5
+      assert host_config.upstream_cache_size == 1024 ** 3
 
       assert %{
                "lobby" => %Config{
@@ -111,6 +113,8 @@ defmodule Deepsplay.HostConfigTest do
           query       = "appid"
           query_value = "{secret:weather_api}"
           cache_ttl   = "60s"
+          stale_ttl   = "1h"
+          refresh     = true
           timeout     = "5s"
           """
 
@@ -125,8 +129,75 @@ defmodule Deepsplay.HostConfigTest do
                query: "appid",
                query_value: "{secret:weather_api}",
                cache_ttl: 60_000,
+               stale_ttl: 3_600_000,
+               refresh: true,
                timeout: 5_000
              }
+    end
+
+    test "stale_ttl and refresh need cache_ttl" do
+      toml =
+        minimal() <>
+          """
+          [upstream.weather]
+          base_url  = "https://api.example.com"
+          stale_ttl = "1h"
+          refresh   = true
+          """
+
+      assert {:error, errors} = parse(toml)
+      assert ~s(upstream.weather: "stale_ttl" needs "cache_ttl") in errors
+      assert ~s(upstream.weather: "refresh" needs "cache_ttl") in errors
+    end
+
+    test "manifest upstream rules: server defaults and per-configuration overrides" do
+      toml = """
+      [server]
+      cache_dir           = "/cache"
+      default_config      = "lobby"
+      repo_upstream_hosts = ["*.dwd.de", "Example.com"]
+
+      [[config]]
+      name = "lobby"
+      path = "/srv/lobby"
+
+      [[config]]
+      name           = "kitchen"
+      path           = "/srv/kitchen"
+      repo_upstreams = false
+
+      [[config]]
+      name                = "hall"
+      path                = "/srv/hall"
+      repo_upstream_hosts = []
+      """
+
+      assert {:ok, host_config} = parse(toml)
+      %{"lobby" => lobby, "kitchen" => kitchen, "hall" => hall} = host_config.configs
+
+      assert {lobby.repo_upstreams, lobby.repo_upstream_hosts} ==
+               {true, ["*.dwd.de", "example.com"]}
+
+      assert Config.repo_upstream_host?(lobby, "maps.dwd.de")
+      refute Config.repo_upstream_host?(lobby, "dwd.de")
+      assert Config.repo_upstream_host?(lobby, "EXAMPLE.com")
+      refute Config.repo_upstream_host?(lobby, "www.example.com")
+
+      refute Config.repo_upstream_host?(kitchen, "maps.dwd.de")
+      assert Config.repo_upstream_host?(hall, "anything.example.org")
+    end
+
+    test "invalid manifest upstream rules" do
+      toml =
+        String.replace(
+          minimal(),
+          ~s(default_config = "lobby"),
+          ~s(default_config = "lobby"\nrepo_upstreams = "yes"\nrepo_upstream_hosts = ["*", "a b"])
+        )
+
+      errors = errors(toml)
+      assert "server.repo_upstreams must be true or false" in errors
+      assert Enum.any?(errors, &(&1 =~ "server.repo_upstream_hosts must be a list of host names"))
     end
 
     test "reads default parameters for pages" do
@@ -144,6 +215,7 @@ defmodule Deepsplay.HostConfigTest do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.poll_interval == 30_000
       assert host_config.keep_revisions == 3
+      assert host_config.upstream_cache_size == 200 * 1024 ** 2
     end
 
     test "expands a relative cache_dir" do
@@ -203,12 +275,13 @@ defmodule Deepsplay.HostConfigTest do
         String.replace(
           minimal(),
           ~s(default_config = "lobby"),
-          ~s(default_config = "lobby"\npoll_interval = "soon"\nkeep_revisions = -1)
+          ~s(default_config = "lobby"\npoll_interval = "soon"\nkeep_revisions = -1\nupstream_cache_size = "lots")
         )
 
       errors = errors(toml)
       assert Enum.any?(errors, &(&1 =~ "server.poll_interval must be a duration"))
       assert "server.keep_revisions must be a non-negative integer" in errors
+      assert Enum.any?(errors, &(&1 =~ "server.upstream_cache_size must be a size"))
     end
 
     test "subdirectories outside the repository" do
