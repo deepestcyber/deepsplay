@@ -219,7 +219,18 @@ Build steps, each tested on its own:
    Nothing runs yet.
 2. Backend supervisor: environment sync with `uv`, start with a clean
    environment and memory limit, readiness, restarts with backoff, output
-   kept for the status page.
+   kept for the status page: built (2026-11-07). `Deepsplay.Backend` runs one
+   backend: `uv sync --frozen` into an environment outside the revision
+   (`Backend.env_dir/3`: one per `uv.lock` and `pyproject.toml`), Python
+   installed by `uv` below its own directory, then
+   `env -i ... /bin/sh -c 'ulimit -v N; exec "$@"'`, so the process has a
+   clean environment and keeps its own process id (stopped with TERM, KILL
+   after 5 s). Readiness polled every 250 ms. A crash before the first
+   readiness fails the start; later crashes restart with backoff (1 s,
+   doubling, at most 60 s) until 5 within 5 minutes. The last 100 output
+   lines and the last crash are kept. Tests (tag `:uv`, skipped without
+   `uv`) run a real stdlib-only Python backend from
+   `test/support/fixtures/backend`. Not yet wired into publishing.
 3. Two-step publishing: a revision with a backend is remembered and
    announced only once its process is ready.
 4. Proxy at `/c/<name>/backend/*`.
