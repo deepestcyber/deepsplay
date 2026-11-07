@@ -25,6 +25,15 @@ uid 10001.
 A missing or invalid host configuration does not stop the container: every
 screen and `/status` show the errors.
 
+Backends of content repositories (ADR 26, only for configurations with
+`backend = true`) are Python processes started by deepsplay in the
+container. The image includes `uv`, which downloads Python and packages at
+runtime into `cache_dir`, so the container needs internet access for new
+backends or changed dependencies. `backend_memory` limits a backend's
+memory; `tini` reaps processes they leave behind. Backends run as the
+deepsplay user and can read what it can: allow them only for trusted
+repositories.
+
 Changes to the host configuration and the secrets file are picked up while
 running, within about 5 seconds (ADR 23); `SIGHUP` (e.g. `docker kill -s HUP
 deepsplay`) checks at once. An invalid change is not applied: the last good

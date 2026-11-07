@@ -1,5 +1,7 @@
 # Phase 3: server services for pages
 
+Status: completed (2026-11-08)
+
 Phase 3 plans what deepsplay offers pages on the server side, so that pages
 stay plain HTML in most cases: better caching of upstream data, shared state,
 and, for genuinely custom logic, sidecars. It starts with planning; each part
@@ -16,7 +18,7 @@ Status values: `open`, `in progress`, `done`.
 | --- | --- | --- |
 | 1 | Upstream cache for expensive and rate-limited providers | done |
 | 2 | Shared state for pages | done |
-| 3 | Sidecars | in progress |
+| 3 | Sidecars | done |
 
 ## 1. Upstream cache for expensive and rate-limited providers
 
@@ -176,7 +178,7 @@ Build steps, each tested on its own:
 
 ## 3. Sidecars
 
-Status: in progress (decided, not built)
+Status: done (2026-11-08), decided in ADR 26; built
 
 Goal: a content repository can bring a server-side component of its own for
 logic that parts 1 and 2 do not cover. deepsplay starts it, supervises it and
@@ -263,4 +265,14 @@ Build steps, each tested on its own:
    alone leave it running; a manifest without `[backend]` stops it. Starting
    runs in a task beside the watcher. A backend change also announces a new
    page token, so screens reload their page (harmless in development).
-6. Status page and catalog; `uv` in the container image; guide.
+6. Status page and catalog; `uv` in the container image; guide: built
+   (2026-11-08). The status page lists configurations that allow backends,
+   with state, revision, port, start time, restarts, error or last crash,
+   and the recent output (collapsed); the catalog shows command, dir,
+   health, secrets and state. The image copies `uv` (pinned,
+   `ghcr.io/astral-sh/uv`) and runs under `tini`, which reaps processes
+   left behind by backends. Guide section "Backends" in `docs/pages.md`,
+   notes in `docs/deployment.md`. Checked with a local image build (amd64):
+   `uv` runs as the deepsplay user and installs Python itself (`uv sync` of
+   the test backend), the server runs under `tini` and stops with exit code
+   0.

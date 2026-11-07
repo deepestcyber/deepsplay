@@ -2,7 +2,8 @@ defmodule DeepsplayWeb.StatusLive do
   @moduledoc """
   The status page at `/status`: every configuration with its current revision,
   last and next check and last error; the connected screens; the upstreams
-  with their cache (ADR 20); the namespaces of shared state (ADR 21); and the
+  with their cache (ADR 20); the namespaces of shared state (ADR 21); the
+  backends of configurations (ADR 26); and the
   most recent errors. It updates live; upstream counters and shared state
   every few seconds.
 
@@ -13,6 +14,7 @@ defmodule DeepsplayWeb.StatusLive do
 
   alias Deepsplay.ByteSize
 
+  alias Deepsplay.Backends
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.HostConfig.Watcher
   alias Deepsplay.PageParams
@@ -61,7 +63,28 @@ defmodule DeepsplayWeb.StatusLive do
   end
 
   defp assign_upstreams(socket),
-    do: assign(socket, upstreams: upstreams(), cache_size: Cache.size(), states: states())
+    do:
+      assign(socket,
+        upstreams: upstreams(),
+        cache_size: Cache.size(),
+        states: states(),
+        backends: backends()
+      )
+
+  # Configurations that allow backends, with their running backend if any.
+  defp backends do
+    running = Backends.all()
+
+    case Store.get() do
+      {:ok, host_config} ->
+        for {name, config} <- Enum.sort(host_config.configs), config.backend or running[name] do
+          %{name: name, backend: running[name], status: Status.get(name)}
+        end
+
+      {:error, _errors} ->
+        []
+    end
+  end
 
   # Namespaces with values, with the configurations using them; a namespace
   # no configuration uses any more is listed too.
@@ -427,6 +450,52 @@ defmodule DeepsplayWeb.StatusLive do
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section :if={@backends != []} id="status-backends">
+        <h2 class="text-lg font-semibold">Backends</h2>
+        <div
+          :for={row <- @backends}
+          id={"backend-#{row.name}"}
+          class="mt-3 rounded-lg border border-base-300 p-4 text-sm"
+        >
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <span class="font-medium">{row.name}</span>
+            <%= if row.backend do %>
+              <span class="backend-state font-mono text-xs">
+                {row.backend.info.state} · revision {short(row.backend.sha)} · port {row.backend.info.port}
+              </span>
+            <% else %>
+              <span class="backend-state text-xs text-base-content/50">not running</span>
+            <% end %>
+          </div>
+          <%= if row.backend do %>
+            <p class="mt-1 text-xs text-base-content/60">
+              started {time(row.backend.info.started_at)} · {count(
+                row.backend.info.restarts,
+                "restart",
+                "restarts"
+              )}
+            </p>
+            <p :if={row.backend.info.error} class="backend-error mt-1 text-xs text-red-500">
+              {row.backend.info.error}
+            </p>
+            <p
+              :if={row.backend.info.last_crash && !row.backend.info.error}
+              class="mt-1 text-xs text-amber-500"
+            >
+              last crash: {row.backend.info.last_crash}
+            </p>
+            <details :if={row.backend.info.output != []} class="mt-2">
+              <summary class="cursor-pointer text-xs text-base-content/60">Recent output</summary>
+              <pre class="backend-output mt-1 max-h-64 overflow-auto rounded bg-base-200 p-2 text-xs"><%= Enum.join(row.backend.info.output, "\n") %></pre>
+            </details>
+          <% else %>
+            <p :if={row.status.error} class="backend-error mt-1 text-xs text-red-500">
+              {row.status.error}
+            </p>
+          <% end %>
         </div>
       </section>
 

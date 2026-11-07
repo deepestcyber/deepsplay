@@ -23,6 +23,8 @@ ARG DEBIAN_VERSION=trixie-20260623-slim
 
 ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
+# uv for backends of content repositories (ADR 26); it installs Python itself.
+ARG UV_VERSION=0.11.21
 
 FROM ${BUILDER_IMAGE} AS builder
 
@@ -74,12 +76,18 @@ RUN mix release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 FROM ${RUNNER_IMAGE} AS final
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates \
-    git openssh-client \
+    git openssh-client tini \
   && rm -rf /var/lib/apt/lists/*
+
+# Backends (ADR 26): uv installs their Python and packages at runtime, into
+# the cache on the volume.
+COPY --from=uv /uv /usr/local/bin/uv
 
 # Set the locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
@@ -111,9 +119,8 @@ COPY --from=builder --chown=deepsplay:root /app/_build/${MIX_ENV}/rel/deepsplay 
 
 USER deepsplay
 
-# If using an environment that doesn't automatically reap zombie processes, it is
-# advised to add an init process such as tini via `apt-get install`
-# above and adding an entrypoint. See https://github.com/krallin/tini for details
-# ENTRYPOINT ["/tini", "--"]
+# tini reaps processes left behind by backends and passes signals on
+# (SIGHUP reloads the host configuration, ADR 23).
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 CMD ["/app/bin/server"]

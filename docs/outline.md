@@ -146,7 +146,7 @@ Validation runs on every new revision, before it is published:
 - `pages/` exists, and every `path` names a regular, non-hidden file in it. A query string on a path is passed on to the page; only the file part is checked.
 - `rotation` is `sequential` or `random`; every `weight` is a number greater than 0; every `duration` (of the manifest or a page) is a valid duration. A page without `duration` uses the manifest's, or 15 seconds.
 - Every `uses` entry is an upstream the configuration is allowed to use. Otherwise the revision is rejected, not served with a broken page.
-- A `[backend]` table is ignored with a warning on the status page (see Extension points for sidecars).
+- A `[backend]` table runs a backend for configurations that allow it, and is ignored with a warning otherwise (see Extension points for sidecars, ADR 26).
 
 A revision that fails validation is never published. The previous good revision stays on screen.
 
@@ -251,7 +251,7 @@ In phase 1 every repository is trusted, because only the host defines configurat
 
 ## Extension points for sidecars
 
-Sidecars are not part of phase 1, but the architecture should not block them. A sidecar would be a process in any language, started and supervised by the app, that a page reaches over HTTP through the server.
+Sidecars were not part of phase 1, but the architecture was kept open for them. Phase 3 built them as backends ([ADR 26](adr/0026-sidecars.md)): Python processes installed with `uv`, started and supervised by the app, that a page reaches over HTTP through the server, for configurations the host allows. The points below were the starting point.
 
 - **Reserved names.** `backend` is reserved as a manifest table and as the URL prefix `/c/<config>/backend/*`. In phase 1 a `[backend]` table is ignored with a warning.
 - **Immutable revision directories.** A sidecar can later run from `rev/<sha>/`, because that directory never changes. Everything per revision is identified by `(repo-key, sha)`.

@@ -46,6 +46,25 @@ defmodule Deepsplay.Backends do
   @spec keep_only([String.t()]) :: :ok
   def keep_only(names), do: GenServer.call(__MODULE__, {:keep_only, names})
 
+  @doc """
+  All current backends with their revision and `Deepsplay.Backend.info/1`,
+  by configuration name.
+  """
+  @spec all() :: %{String.t() => %{sha: String.t(), info: Backend.info()}}
+  def all do
+    for {name, %{sha: sha, pid: pid}} <- GenServer.call(__MODULE__, :all),
+        info = safe_info(pid),
+        info != nil,
+        into: %{},
+        do: {name, %{sha: sha, info: info}}
+  end
+
+  defp safe_info(pid) do
+    Backend.info(pid)
+  catch
+    :exit, _gone -> nil
+  end
+
   @doc "The current backend of a configuration: `%{sha, pid}`, or `nil`."
   @spec current(String.t()) :: %{sha: String.t(), pid: pid()} | nil
   def current(name), do: GenServer.call(__MODULE__, {:current, name})
@@ -104,6 +123,7 @@ defmodule Deepsplay.Backends do
 
   @impl true
   def handle_call({:current, name}, _from, state), do: {:reply, Map.get(state, name), state}
+  def handle_call(:all, _from, state), do: {:reply, state, state}
 
   def handle_call({:swap, name, sha, pid}, _from, state) do
     Process.monitor(pid)

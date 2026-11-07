@@ -6,6 +6,7 @@ defmodule Deepsplay.Catalog do
   all warnings.
   """
 
+  alias Deepsplay.Backends
   alias Deepsplay.HelperIndex
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.HostConfig.Config
@@ -50,6 +51,7 @@ defmodule Deepsplay.Catalog do
           helpers: [map()],
           upstreams: [map()],
           overrides: [map()],
+          backend: map() | nil,
           state: map() | nil,
           warnings: [String.t()]
         }
@@ -73,6 +75,7 @@ defmodule Deepsplay.Catalog do
          helpers: helpers(index, pages),
          upstreams: upstreams(current.screen),
          overrides: overrides(current.screen),
+         backend: backend(config, current.screen),
          state: state(config),
          warnings: warnings(current, index, pages)
        }}
@@ -161,6 +164,19 @@ defmodule Deepsplay.Catalog do
   end
 
   defp now, do: NaiveDateTime.local_now()
+
+  # The backend (ADR 26) and the state of its process.
+  defp backend(_config, %{backend: nil}), do: nil
+
+  defp backend(config, %{backend: spec}) do
+    state =
+      case Backends.all()[config.name] do
+        %{info: info} -> info.state
+        nil -> :not_running
+      end
+
+    %{spec: spec, state: state}
+  end
 
   # Upstreams declared in the manifest (ADR 19), with the rotation pages
   # listing them.

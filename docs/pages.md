@@ -333,6 +333,45 @@ await S.update("shared/names", names => [...(names || []), "Ada"])
 The same works without the helper over HTTP at `/c/<config>/state/<key>`
 (`GET`, `PUT`, `DELETE`, `POST {"increment": n}`, `GET ?prefix=` to list).
 
+### Backends
+
+For logic that upstreams and shared state do not cover, a repository can
+bring a backend: a small Python web app that deepsplay installs with `uv`,
+runs and keeps running. Pages reach it at `/c/<config>/backend/`.
+
+```toml
+[backend]
+dir     = "backend"     # with pyproject.toml and uv.lock; not inside pages/
+command = ["uvicorn", "app:app", "--host", "127.0.0.1", "--port", "{port}"]
+health  = "/health"     # optional: answers 2xx once the app is ready
+secrets = ["weather_api"]
+```
+
+```js
+const config = location.pathname.split("/")[2]
+const data = await (await fetch(`/c/${config}/backend/forecast`)).json()
+```
+
+- The host must allow it for the configuration (`backend = true`);
+  otherwise the block is ignored with a warning on the status page and the
+  backend answers `404`. Backends run code from the repository on the
+  server, so hosts allow them only for repositories they trust.
+- The app listens on `127.0.0.1` at the port it gets (`{port}` in `command`,
+  also `PORT`). Its environment holds only `PORT`, `HOME`,
+  `DEEPSPLAY_CONFIG`, `DEEPSPLAY_URL` (deepsplay itself, e.g. for shared
+  state), `DEEPSPLAY_DATA_DIR` (a directory that persists) and the secrets it
+  names and the host allows.
+- Dependencies come from `uv.lock` (`uv sync --frozen`); `uv` installs the
+  Python version the project asks for. Keep `.venv` out of the repository.
+- A new revision is shown only once its backend is ready; if it fails, the
+  previous revision and its backend keep running and the status page shows
+  why, with the backend's recent output.
+- Requests pass `Accept`, `Accept-Language` and `Content-Type`, no cookies;
+  answers are limited to 5 MB and 30 seconds. No WebSockets or server-sent
+  events for now.
+- With a local directory (`path =`), the backend restarts when files in
+  `dir` change.
+
 ## Trying pages
 
 - **Catalog**: `/catalog/<config>` shows the rotation, every page with its

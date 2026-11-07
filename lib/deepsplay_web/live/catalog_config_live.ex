@@ -387,6 +387,22 @@ defmodule DeepsplayWeb.CatalogConfigLive do
       </div>
     </section>
 
+    <section :if={@catalog.backend} id="catalog-backend">
+      <h2 class="text-lg font-semibold">Backend</h2>
+      <div class="mt-3 rounded-lg border border-base-300 p-4 text-sm">
+        <p class="font-mono text-xs">{Enum.join(@catalog.backend.spec.command, " ")}</p>
+        <p class="mt-1 text-xs text-base-content/60">
+          in {@catalog.backend.spec.dir}/<span :if={@catalog.backend.spec.health}> · health {@catalog.backend.spec.health}</span><span :if={
+            @catalog.backend.spec.secrets != []
+          }> · secrets {Enum.join(@catalog.backend.spec.secrets, ", ")}</span>
+        </p>
+        <p class="backend-state mt-1 text-xs">
+          {@catalog.backend.state |> to_string() |> String.replace("_", " ")} · reached at
+          <span class="font-mono">/c/{@catalog.config.name}/backend/</span>
+        </p>
+      </div>
+    </section>
+
     <section :if={@catalog.overrides != []} id="catalog-overrides">
       <h2 class="text-lg font-semibold">Overrides</h2>
       <p class="mt-1 text-xs text-base-content/50">

@@ -5,6 +5,7 @@ defmodule Deepsplay.BackendPublishTest do
 
   import ExUnit.CaptureLog
   import Phoenix.ConnTest
+  import Phoenix.LiveViewTest
   import Plug.Conn, only: [put_req_header: 3]
 
   @endpoint DeepsplayWeb.Endpoint
@@ -178,6 +179,21 @@ defmodule Deepsplay.BackendPublishTest do
 
     Backends.stop("lobby")
     assert build_conn() |> get("/c/lobby/backend/health") |> response(404) =~ "no backend"
+  end
+
+  test "the status page and the catalog show the backend", ctx do
+    {:ok, sha} = Revisions.refresh(ctx.lobby)
+
+    {:ok, view, _html} = live(build_conn(), "/status")
+    assert has_element?(view, "#backend-lobby .backend-state", "ready")
+    assert has_element?(view, "#backend-lobby .backend-state", String.slice(sha, 0, 12))
+    assert has_element?(view, "#backend-lobby .backend-output", "starting on")
+    refute has_element?(view, "#backend-plain")
+
+    {:ok, view, _html} = live(build_conn(), "/catalog/lobby")
+    assert has_element?(view, "#catalog-backend", "python app.py {port}")
+    assert has_element?(view, "#catalog-backend .backend-state", "ready")
+    assert has_element?(view, "#catalog-backend", "/c/lobby/backend/")
   end
 
   test "configurations without backend = true do not run it", ctx do

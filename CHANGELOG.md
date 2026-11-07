@@ -71,6 +71,13 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   `from`/`until`), `when_empty` for times without an active page, and
   `[[override]]` pages that interrupt the rotation during their windows,
   with priorities; the catalog shows windows and overrides (ADR 25).
+- Backends: a content repository can bring a Python backend (`[backend]` in
+  the manifest), installed with `uv`, supervised by deepsplay and reached by
+  its pages at `/c/<config>/backend/`. Only for configurations with
+  `backend = true`; a revision is shown once its backend is ready. Secrets
+  per configuration (`backend_secrets`), memory limit (`backend_memory`),
+  restarts on changes of local directories; the status page shows state and
+  recent output. The container image includes `uv` and `tini` (ADR 26).
 
 ## 0.1.0 – 2026-11-07
 
