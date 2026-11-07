@@ -4,6 +4,10 @@ defmodule Deepsplay.BackendPublishTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
+  import Phoenix.ConnTest
+  import Plug.Conn, only: [put_req_header: 3]
+
+  @endpoint DeepsplayWeb.Endpoint
 
   alias Deepsplay.Backend
   alias Deepsplay.Backends
@@ -139,6 +143,41 @@ defmodule Deepsplay.BackendPublishTest do
 
     capture_log(fn -> assert {:error, {:fetch, _}} = Revisions.refresh(ctx.lobby) end)
     assert %{sha: ^good} = Backends.current("lobby")
+  end
+
+  test "pages reach the backend through the proxy", ctx do
+    {:ok, _sha} = Revisions.refresh(ctx.lobby)
+
+    assert build_conn() |> get("/c/lobby/backend/health") |> response(200) == "ok"
+
+    env = build_conn() |> get("/c/lobby/backend/env") |> response(200) |> Jason.decode!()
+    assert env["DEEPSPLAY_CONFIG"] == "lobby"
+
+    echo =
+      build_conn()
+      |> put_req_header("accept", "application/json")
+      |> put_req_header("cookie", "session=1")
+      |> get("/c/lobby/backend/echo?x=1&y=a%20b")
+      |> response(200)
+      |> Jason.decode!()
+
+    assert echo == %{"path" => "/echo?x=1&y=a+b", "accept" => "application/json"}
+
+    conn =
+      build_conn()
+      |> put_req_header("content-type", "application/json")
+      |> post("/c/lobby/backend/items", ~s({"a":1}))
+
+    assert response(conn, 201) == ~s(got {"a":1})
+
+    assert build_conn() |> get("/c/lobby/backend/missing") |> response(404) == ""
+    assert build_conn() |> get("/c/lobby/backend/%2e%2e/x") |> response(404) == "invalid path"
+
+    assert build_conn() |> get("/c/plain/backend/health") |> response(404) =~ "no backend"
+    assert build_conn() |> get("/c/nowhere/backend/health") |> response(404) =~ "unknown"
+
+    Backends.stop("lobby")
+    assert build_conn() |> get("/c/lobby/backend/health") |> response(404) =~ "no backend"
   end
 
   test "configurations without backend = true do not run it", ctx do

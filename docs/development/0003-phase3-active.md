@@ -247,6 +247,13 @@ Build steps, each tested on its own:
    configuration starts its backend for the remembered revision; if the
    repository cannot be fetched (e.g. offline), the remembered revision's
    backend is started anyway.
-4. Proxy at `/c/<name>/backend/*`.
+4. Proxy at `/c/<name>/backend/*`: built (2026-11-08).
+   `DeepsplayWeb.BackendController` forwards through `UpstreamProxy.forward/5`
+   with an upstream of `origin: :backend` (base URL `127.0.0.1:<port>`, all
+   methods, 30 s timeout): same path checks, forwarded headers (`Accept`,
+   `Accept-Language`, `Content-Type` only), response headers and 5 MB limit
+   as upstreams, no secrets. Bodies arrive unparsed (the backend path skips
+   `Plug.Parsers`). `404` without a running backend, `503` while it
+   restarts. The test stub for upstream calls does not apply to backends.
 5. Development mode (`uv run`, restart on changes).
 6. Status page and catalog; `uv` in the container image; guide.

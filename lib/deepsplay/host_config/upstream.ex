@@ -11,7 +11,8 @@ defmodule Deepsplay.HostConfig.Upstream do
   share of the cache (ADR 22).
 
   Upstreams declared in a manifest (ADR 19) use the same struct with
-  `origin: :manifest`: no secrets, `GET` only.
+  `origin: :manifest`: no secrets, `GET` only. A configuration's backend
+  (ADR 26) is forwarded to with `origin: :backend`.
   """
 
   @enforce_keys [:name, :base_url]
@@ -47,7 +48,7 @@ defmodule Deepsplay.HostConfig.Upstream do
           cache_size: pos_integer() | nil,
           description: String.t() | nil,
           refresh: boolean(),
-          origin: :host | :manifest,
+          origin: :host | :manifest | :backend,
           timeout: pos_integer()
         }
 

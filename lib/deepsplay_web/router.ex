@@ -25,6 +25,11 @@ defmodule DeepsplayWeb.Router do
     match :*, "/*path", ProxyController, :forward
   end
 
+  # A configuration's backend: no session, no CSRF, any method (ADR 26).
+  scope "/c/:name/backend", DeepsplayWeb do
+    match :*, "/*path", BackendController, :forward
+  end
+
   # Shared state for pages: no session, no CSRF (ADR 21).
   scope "/c/:name/state", DeepsplayWeb do
     get "/", StateController, :list

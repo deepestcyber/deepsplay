@@ -13,7 +13,7 @@ defmodule Deepsplay.UpstreamProxy.Stats do
 
   @table __MODULE__
 
-  @type group :: {:host, String.t()} | {:manifest, String.t()}
+  @type group :: {:host, String.t()} | {:manifest, String.t()} | {:backend, String.t()}
 
   @type t :: %{
           hits: non_neg_integer(),

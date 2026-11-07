@@ -188,6 +188,7 @@ defmodule Deepsplay.UpstreamProxy do
   """
   @spec stats_group(Upstream.t()) :: Stats.group()
   def stats_group(%Upstream{origin: :manifest, base_url: url}), do: {:manifest, url}
+  def stats_group(%Upstream{origin: :backend, name: name}), do: {:backend, name}
   def stats_group(%Upstream{name: name}), do: {:host, name}
 
   defp with_cache_headers(response, state, age_ms) do
@@ -212,7 +213,7 @@ defmodule Deepsplay.UpstreamProxy do
           decode_body: false,
           compressed: false,
           into: &limit_body/2
-        ] ++ Application.get_env(:deepsplay, :proxy_req_options, [])
+        ] ++ test_options(upstream)
 
       result = Req.request(options)
       Stats.fetched(stats_group(upstream))
@@ -235,6 +236,11 @@ defmodule Deepsplay.UpstreamProxy do
       {:error, message} -> failure(config, upstream, 502, message)
     end
   end
+
+  # Tests send upstream calls to a stub; backends are always real local
+  # processes.
+  defp test_options(%Upstream{origin: :backend}), do: []
+  defp test_options(_upstream), do: Application.get_env(:deepsplay, :proxy_req_options, [])
 
   # Manifest upstreams connect to a checked public address, with the host
   # name for TLS verification, SNI and the Host header (ADR 19).

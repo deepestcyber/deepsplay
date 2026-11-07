@@ -8,13 +8,16 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/crash":
+        path = self.path.split("?")[0]
+        if path == "/crash":
             os._exit(3)
-        if self.path == "/health":
+        if path == "/echo":
+            body = json.dumps({"path": self.path, "accept": self.headers.get("Accept")}).encode()
+        elif path == "/health":
             body = b"ok"
-        elif self.path == "/env":
+        elif path == "/env":
             body = json.dumps(dict(os.environ)).encode()
-        elif self.path == "/limit":
+        elif path == "/limit":
             body = json.dumps(resource.getrlimit(resource.RLIMIT_AS)).encode()
         else:
             self.send_response(404)
@@ -23,6 +26,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        self.send_response(201)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"got " + body)
 
     def log_message(self, *args):
         pass
