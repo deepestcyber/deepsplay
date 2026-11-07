@@ -5,6 +5,26 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+## 0.2.0 – 2026-11-08
+
+Phases 2 and 3 and two smaller units (see [docs/development](docs/development/)):
+documented pages with parameters and a page catalog, upstreams with a shared
+cache, shared state, backends, time windows, and live reloading of the host
+configuration.
+
+Changes for existing setups:
+
+- Sizes: `MB` and `GB` now count in powers of 1000; existing values shrink by
+  about 5% (`MB`) or 7% (`GB`), and the default `upstream_cache_size` is now
+  200,000,000 bytes. Use `MiB`/`GiB` for the old meaning.
+- The host configuration and the secrets file are reloaded while running;
+  an invalid edit is rejected and shown on the status page instead of taking
+  effect at the next restart.
+- The container image runs under `tini` (new entrypoint) and includes `uv`.
+- The upstream cache and shared state are kept below `cache_dir`
+  (`.upstream/`, `.state/`); keep `cache_dir` on a persistent volume, or set
+  `state_dir` to keep shared state elsewhere.
+
 - The status page shows the app version.
 - Manifests can set a default `duration` for all pages; a page's `duration` is
   optional and falls back to the manifest's, or to 15 seconds.
