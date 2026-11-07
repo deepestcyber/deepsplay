@@ -2,8 +2,9 @@ defmodule DeepsplayWeb.StatusLive do
   @moduledoc """
   The status page at `/status`: every configuration with its current revision,
   last and next check and last error; the connected screens; the upstreams
-  with their cache (ADR 20); and the most recent errors. It updates live;
-  upstream counters every few seconds.
+  with their cache (ADR 20); the namespaces of shared state (ADR 21); and the
+  most recent errors. It updates live; upstream counters and shared state
+  every few seconds.
 
   There are no alerts and no login; the page is meant for the internal network.
   """
@@ -14,6 +15,7 @@ defmodule DeepsplayWeb.StatusLive do
   alias Deepsplay.PageParams
   alias Deepsplay.RepoUrl
   alias Deepsplay.Revisions
+  alias Deepsplay.State
   alias Deepsplay.Status
   alias Deepsplay.UpstreamProxy
   alias Deepsplay.UpstreamProxy.Cache
@@ -52,7 +54,26 @@ defmodule DeepsplayWeb.StatusLive do
   end
 
   defp assign_upstreams(socket),
-    do: assign(socket, upstreams: upstreams(), cache_size: Cache.size())
+    do: assign(socket, upstreams: upstreams(), cache_size: Cache.size(), states: states())
+
+  # Namespaces with values, with the configurations using them; a namespace
+  # no configuration uses any more is listed too.
+  defp states do
+    users =
+      case Store.get() do
+        {:ok, host_config} ->
+          host_config.configs
+          |> Map.values()
+          |> Enum.sort_by(& &1.name)
+          |> Enum.group_by(&State.namespace(host_config, &1), & &1.name)
+
+        {:error, _errors} ->
+          %{}
+      end
+
+    for info <- State.namespaces(),
+        do: Map.put(info, :configs, Map.get(users, info.namespace, []))
+  end
 
   # Host upstreams, then upstreams declared in manifests, grouped by target as
   # their cache entries are.
@@ -315,6 +336,39 @@ defmodule DeepsplayWeb.StatusLive do
                     {time(row.stats.last_error_at)}: {row.stats.last_error}
                   </div>
                 </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="status-state">
+        <h2 class="text-lg font-semibold">Shared state</h2>
+        <p :if={@states == []} class="mt-2 text-sm text-base-content/60">No shared state.</p>
+        <div :if={@states != []} class="mt-3 overflow-x-auto rounded-lg border border-base-300">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-base-200 text-xs uppercase tracking-wide text-base-content/60">
+              <tr>
+                <th class="px-3 py-2">Namespace</th>
+                <th class="px-3 py-2">Configurations</th>
+                <th class="px-3 py-2">Keys</th>
+                <th class="px-3 py-2">Last write</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={{info, index} <- Enum.with_index(@states)}
+                id={"state-#{index}"}
+                class="border-t border-base-300 align-top"
+              >
+                <td class="px-3 py-2 break-all font-mono text-xs">{info.namespace}</td>
+                <td class="px-3 py-2">
+                  {if info.configs == [], do: "no configuration", else: Enum.join(info.configs, ", ")}
+                </td>
+                <td class="state-keys px-3 py-2 whitespace-nowrap">
+                  {info.keys} keys, {bytes(info.size)}
+                </td>
+                <td class="px-3 py-2 whitespace-nowrap">{time(info.written_at)}</td>
               </tr>
             </tbody>
           </table>

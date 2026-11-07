@@ -46,7 +46,8 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   increments and listing by prefix, shared by the configurations of one
   repository and ref, kept in `state_dir` (ADR 21). Pages use it with
   `Deepsplay.state` (`get`, `set`, `delete`, `increment`, `list`, `update`)
-  in `deepsplay.js`.
+  in `deepsplay.js`. The status page lists namespaces; the catalog shows a
+  configuration's keys with shortened values.
 
 ## 0.1.0 – 2026-11-07
 

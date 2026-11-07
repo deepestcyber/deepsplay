@@ -73,6 +73,7 @@ defmodule DeepsplayWeb.CatalogLiveTest do
   setup %{tmp_dir: tmp_dir} do
     ctx = setup_screen(tmp_dir, @files)
     {:ok, _sha} = Revisions.refresh(ctx.config)
+    Deepsplay.State.clear()
     ctx
   end
 
@@ -108,6 +109,23 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     assert has_element?(view, "#upstream-radar", "cache 300s")
     assert has_element?(view, "#upstream-radar", "refresh")
     assert has_element?(view, "#upstream-radar", "Used by: life.html")
+
+    assert has_element?(view, "#catalog-state", "No values.")
+  end
+
+  test "the configuration page shows shared state, shortened", %{conn: conn} = ctx do
+    {:ok, host_config} = Deepsplay.HostConfig.Store.get()
+    namespace = Deepsplay.State.namespace(host_config, ctx.config)
+    {:ok, _} = Deepsplay.State.put(namespace, "life/gen", ~s({"n": 7}))
+
+    {:ok, _} =
+      Deepsplay.State.put(namespace, "shared/long", Jason.encode!(String.duplicate("x", 500)))
+
+    {:ok, view, _html} = live(conn, ~p"/catalog/lobby")
+
+    assert has_element?(view, "#catalog-state", namespace)
+    assert has_element?(view, "#catalog-state .state-entry", ~s({"n":7}))
+    assert has_element?(view, "#catalog-state .state-entry", "…")
 
     assert has_element?(
              view,

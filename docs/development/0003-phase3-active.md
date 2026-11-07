@@ -15,7 +15,7 @@ Status values: `open`, `in progress`, `done`.
 | # | Part | Status |
 | --- | --- | --- |
 | 1 | Upstream cache for expensive and rate-limited providers | done |
-| 2 | Shared state for pages | in progress |
+| 2 | Shared state for pages | done |
 | 3 | Sidecars | open |
 
 ## 1. Upstream cache for expensive and rate-limited providers
@@ -108,7 +108,7 @@ Planning is complete. Build steps, each tested on its own:
 
 ## 2. Shared state for pages
 
-Status: in progress (decided, not built)
+Status: done (2026-11-07), decided in ADR 21; built
 
 Goal: pages can keep small state on the server, shared by all screens and
 pages of their content, without a server component of their own.
@@ -168,7 +168,11 @@ Build steps, each tested on its own:
    `{ onlyNew: true }`; `update(key, fn)` retries up to 10 times on `412`.
    Errors carry `status`. Tested in Node against a stand-in server, and once
    end to end against a running deepsplay.
-4. Namespaces on the status page, keys in the catalog.
+4. Namespaces on the status page, keys in the catalog: built (2026-11-07).
+   The status page lists namespaces with values, with the configurations
+   using them ("no configuration" for leftovers), refreshed every 5 seconds
+   with the upstreams. The catalog shows the namespace and up to 100 keys
+   with version and value (cut at 120 characters), as of loading the page.
 
 ## 3. Sidecars
 

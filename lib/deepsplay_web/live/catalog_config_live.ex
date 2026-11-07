@@ -356,6 +356,41 @@ defmodule DeepsplayWeb.CatalogConfigLive do
       </div>
     </section>
 
+    <section :if={@catalog.state} id="catalog-state">
+      <h2 class="text-lg font-semibold">Shared state</h2>
+      <p class="mt-1 break-all font-mono text-xs text-base-content/50">
+        {@catalog.state.namespace}
+      </p>
+      <p :if={@catalog.state.total == 0} class="mt-2 text-sm text-base-content/60">No values.</p>
+      <div
+        :if={@catalog.state.total > 0}
+        class="mt-3 overflow-x-auto rounded-lg border border-base-300"
+      >
+        <table class="w-full text-left text-sm">
+          <thead class="bg-base-200 text-xs uppercase tracking-wide text-base-content/60">
+            <tr>
+              <th class="px-3 py-2">Key</th>
+              <th class="px-3 py-2">Version</th>
+              <th class="px-3 py-2">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={entry <- @catalog.state.entries} class="state-entry border-t border-base-300">
+              <td class="px-3 py-2 font-mono text-xs">{entry.key}</td>
+              <td class="px-3 py-2 font-mono text-xs">{entry.version}</td>
+              <td class="px-3 py-2 break-all font-mono text-xs">{entry.value}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p
+        :if={@catalog.state.total > length(@catalog.state.entries)}
+        class="mt-2 text-xs text-base-content/50"
+      >
+        and {@catalog.state.total - length(@catalog.state.entries)} more
+      </p>
+    </section>
+
     <section :if={@catalog.upstreams != []} id="catalog-upstreams">
       <h2 class="text-lg font-semibold">Upstreams in the manifest</h2>
       <div

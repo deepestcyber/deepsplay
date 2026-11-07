@@ -2,15 +2,18 @@ defmodule Deepsplay.Catalog do
   @moduledoc """
   What the page catalog shows for a configuration (ADR 17): its current
   revision, rotation, pages with their documentation and parameters, helpers,
-  upstreams declared in the manifest (ADR 19), and all warnings.
+  upstreams declared in the manifest (ADR 19), its shared state (ADR 21), and
+  all warnings.
   """
 
   alias Deepsplay.HelperIndex
+  alias Deepsplay.HostConfig.Store
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.PageDoc
   alias Deepsplay.PageParams
   alias Deepsplay.Pages
   alias Deepsplay.Revisions
+  alias Deepsplay.State
 
   @type param_row :: %{
           param: PageDoc.Param.t(),
@@ -42,6 +45,7 @@ defmodule Deepsplay.Catalog do
           pages: [page()],
           helpers: [map()],
           upstreams: [map()],
+          state: map() | nil,
           warnings: [String.t()]
         }
 
@@ -63,6 +67,7 @@ defmodule Deepsplay.Catalog do
          pages: Enum.sort_by(pages, &{kind_order(&1.kind), &1.path}),
          helpers: helpers(index, pages),
          upstreams: upstreams(current.screen),
+         state: state(config),
          warnings: warnings(current, index, pages)
        }}
     end
@@ -141,6 +146,34 @@ defmodule Deepsplay.Catalog do
       used_by = for page <- screen.pages, upstream.name in page.uses, uniq: true, do: page.path
       %{upstream: upstream, used_by: used_by}
     end)
+  end
+
+  # The namespace with its first keys and shortened values, or nil without
+  # shared state.
+  @state_keys 100
+  @value_chars 120
+
+  defp state(config) do
+    with {:ok, host_config} <- Store.get(),
+         namespace when is_binary(namespace) <- State.namespace(host_config, config) do
+      keys = State.list(namespace)
+
+      entries =
+        for {key, version} <- Enum.take(keys, @state_keys),
+            {:ok, json, _version} <- [State.get(namespace, key)] do
+          %{key: key, version: version, value: shorten(json)}
+        end
+
+      %{namespace: namespace, entries: entries, total: length(keys)}
+    else
+      _none -> nil
+    end
+  end
+
+  defp shorten(json) do
+    if String.length(json) > @value_chars,
+      do: String.slice(json, 0, @value_chars) <> "…",
+      else: json
   end
 
   defp warnings(current, index, pages) do

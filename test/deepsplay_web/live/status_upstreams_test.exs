@@ -37,7 +37,22 @@ defmodule DeepsplayWeb.StatusUpstreamsTest do
     {:ok, _sha} = Revisions.refresh(ctx.config)
     Cache.clear()
     Stats.clear()
+    Deepsplay.State.clear()
     ctx
+  end
+
+  test "lists namespaces of shared state with their configurations", %{conn: conn} = ctx do
+    {:ok, host_config} = Deepsplay.HostConfig.Store.get()
+    namespace = Deepsplay.State.namespace(host_config, ctx.config)
+    {:ok, _} = Deepsplay.State.put(namespace, "shared/msg", ~s("hi"))
+    {:ok, _} = Deepsplay.State.put("name:old", "k", "1")
+
+    {:ok, view, _html} = live(conn, ~p"/status")
+
+    assert has_element?(view, "#status-state tr", namespace)
+    assert has_element?(view, "#status-state tr", "lobby")
+    assert has_element?(view, "#status-state .state-keys", "1 keys")
+    assert has_element?(view, "#status-state tr", "no configuration")
   end
 
   test "lists upstreams with origin, cache and counters", %{conn: conn} do
