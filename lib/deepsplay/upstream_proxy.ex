@@ -131,7 +131,8 @@ defmodule Deepsplay.UpstreamProxy do
       ttl: upstream.cache_ttl,
       stale_ttl: upstream.stale_ttl,
       refresh: upstream.refresh,
-      group: group
+      group: group,
+      max_size: upstream.cache_size
     }
 
     fetch = fn ->

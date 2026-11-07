@@ -7,7 +7,8 @@ defmodule Deepsplay.HostConfig.Upstream do
   secret's value when a request is forwarded.
 
   `accepted_types` lists the content types accepted as successful answers
-  (ADR 22), lowercase; see `accepts?/2`.
+  (ADR 22), lowercase; see `accepts?/2`. `cache_size` limits the upstream's
+  share of the cache (ADR 22).
 
   Upstreams declared in a manifest (ADR 19) use the same struct with
   `origin: :manifest`: no secrets, `GET` only.
@@ -24,6 +25,7 @@ defmodule Deepsplay.HostConfig.Upstream do
     :cache_ttl,
     :stale_ttl,
     :accepted_types,
+    :cache_size,
     methods: ["GET"],
     refresh: false,
     origin: :host,
@@ -41,6 +43,7 @@ defmodule Deepsplay.HostConfig.Upstream do
           cache_ttl: pos_integer() | nil,
           stale_ttl: pos_integer() | nil,
           accepted_types: [String.t()] | nil,
+          cache_size: pos_integer() | nil,
           refresh: boolean(),
           origin: :host | :manifest,
           timeout: pos_integer()

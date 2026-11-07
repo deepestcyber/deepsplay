@@ -38,6 +38,31 @@ defmodule Deepsplay.UpstreamProxy.CacheTest do
     assert Cache.size(cache).size <= 2 * size + 10
   end
 
+  test "drops a group's own least recently used entries beyond its limit", %{name: name} do
+    size = :erlang.external_size(body(1_000))
+    cache = start_cache(name: name, dir: nil, max_size: 1_000_000)
+    tiles = %{ttl: 60_000, stale_ttl: nil, group: {:host, "tiles"}, max_size: 2 * size + 10}
+    radar = %{ttl: 60_000, stale_ttl: nil, group: {:host, "radar"}}
+
+    assert {:miss, _} = fetch(cache, :radar, body(1_000), radar)
+    assert {:miss, _} = fetch(cache, :t1, body(1_000), tiles)
+    assert {:miss, _} = fetch(cache, :t2, body(1_000), tiles)
+    assert {:hit, _, _} = fetch(cache, :t1, "other", tiles)
+    assert {:miss, _} = fetch(cache, :t3, body(1_000), tiles)
+
+    # :t2 was the group's least recently used; the other group is untouched.
+    assert {:miss, "new"} = fetch(cache, :t2, "new", tiles)
+    assert {:hit, _, _} = fetch(cache, :radar, "other", radar)
+
+    groups = Cache.groups(cache)
+    assert groups[{:host, "tiles"}].size <= 2 * size + 10
+    assert groups[{:host, "radar"}].entries == 1
+
+    # An answer larger than the group's limit is not kept.
+    assert {:miss, _} = fetch(cache, :huge, body(3_000), tiles)
+    assert {:miss, "small"} = fetch(cache, :huge, "small", tiles)
+  end
+
   test "does not keep values larger than the limit", %{name: name} do
     cache = start_cache(name: name, dir: nil, max_size: 100)
 

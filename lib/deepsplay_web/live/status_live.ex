@@ -314,7 +314,9 @@ defmodule DeepsplayWeb.StatusLive do
                 <td class="px-3 py-2 whitespace-nowrap">
                   <%= if row.upstream.cache_ttl do %>
                     <div class="upstream-cache">
-                      {row.cache.entries} entries, {bytes(row.cache.size)}
+                      {row.cache.entries} entries, {bytes(row.cache.size)}<span :if={
+                        row.upstream.cache_size
+                      }> of {bytes(row.upstream.cache_size)}</span>
                     </div>
                     <div class="text-xs text-base-content/50">
                       {PageParams.format_duration(row.upstream.cache_ttl)}<span :if={

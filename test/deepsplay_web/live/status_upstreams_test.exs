@@ -19,6 +19,7 @@ defmodule DeepsplayWeb.StatusUpstreamsTest do
     url       = "https://radar.example.com/wms"
     cache_ttl = "5m"
     stale_ttl = "1h"
+    cache_size = "1MB"
 
     [[page]]
     path = "a.html"
@@ -73,6 +74,7 @@ defmodule DeepsplayWeb.StatusUpstreamsTest do
     assert has_element?(view, radar, "https://radar.example.com/wms")
     assert has_element?(view, radar, "lobby")
     assert has_element?(view, "#{radar} .upstream-cache", "1 entries")
+    assert has_element?(view, "#{radar} .upstream-cache", "of 1.0 MB")
     assert has_element?(view, "#{radar} .upstream-answers", "1 hits, 1 misses, 1 stale")
     assert has_element?(view, "#{radar} .upstream-error", "answered 503")
     assert has_element?(view, "#status-upstreams", "cache")

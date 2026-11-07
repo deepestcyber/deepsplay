@@ -14,7 +14,9 @@ defmodule Deepsplay.UpstreamProxy.Cache do
   takes longer than the request may wait, the stale value is served instead.
 
   The cache is limited in size (`upstream_cache_size`); when full, the least
-  recently used entries are dropped. Entries are also kept on disk in
+  recently used entries are dropped. A group of entries (one upstream) can
+  have a limit of its own (`cache_size`, ADR 22): beyond it, the group's own
+  least recently used entries go first. Entries are also kept on disk in
   `<cache_dir>/.upstream/` (hidden, so the cache cleanup leaves it alone) and
   loaded again on start. Entries past their `stale_ttl` are swept once a
   minute.
@@ -44,13 +46,15 @@ defmodule Deepsplay.UpstreamProxy.Cache do
 
   @typedoc """
   How long to keep a fetched value, in milliseconds, whether to refresh it
-  before it expires, and a label grouping entries for `groups/1`.
+  before it expires, a label grouping entries for `groups/1`, and the most
+  the entries of that group may take (ADR 22).
   """
   @type ttls :: %{
           required(:ttl) => pos_integer(),
           required(:stale_ttl) => non_neg_integer() | nil,
           optional(:refresh) => boolean(),
-          optional(:group) => term()
+          optional(:group) => term(),
+          optional(:max_size) => pos_integer() | nil
         }
 
   @type result ::
@@ -196,6 +200,8 @@ defmodule Deepsplay.UpstreamProxy.Cache do
       disk: disk,
       max_size: max_size,
       size: 0,
+      # Size per group, for groups with a limit of their own.
+      group_sizes: %{},
       # Running fetches: task ref => %{key, ttls, fun, callers, waiters};
       # key => task ref.
       fetches: %{},
@@ -271,15 +277,19 @@ defmodule Deepsplay.UpstreamProxy.Cache do
         end
       end)
 
-    for {record, size} <- rows do
-      row =
-        {record.key, record.value, record.expires, record.fetched, record.keep, size, use_mark(),
-         now, false, Map.get(record, :group)}
+    group_sizes =
+      Enum.reduce(rows, %{}, fn {record, size}, sizes ->
+        group = Map.get(record, :group)
 
-      :ets.insert(state.table, row)
-    end
+        row =
+          {record.key, record.value, record.expires, record.fetched, record.keep, size,
+           use_mark(), now, false, group}
 
-    {:noreply, %{state | size: size}}
+        :ets.insert(state.table, row)
+        Map.update(sizes, group, size, &(&1 + size))
+      end)
+
+    {:noreply, %{state | size: size, group_sizes: group_sizes}}
   end
 
   @impl true
@@ -311,7 +321,7 @@ defmodule Deepsplay.UpstreamProxy.Cache do
   def handle_call(:clear, _from, state) do
     :ets.delete_all_objects(state.table)
     if state.disk, do: Disk.delete_all(state.disk)
-    {:reply, :ok, %{state | size: 0}}
+    {:reply, :ok, %{state | size: 0, group_sizes: %{}}}
   end
 
   def handle_call(:expire_all, _from, state) do
@@ -407,15 +417,20 @@ defmodule Deepsplay.UpstreamProxy.Cache do
     # for stop being refreshed.
     requested = :ets.lookup_element(state.table, key, 8, now)
     state = delete(state, key)
+    group = ttls[:group]
+    group_max = ttls[:max_size]
 
-    if size > state.max_size do
+    if size > state.max_size or (group_max != nil and size > group_max) do
       state
     else
       expires = now + ttls.ttl
       keep = expires + (ttls.stale_ttl || 0)
       refresh? = ttls[:refresh] == true
-      row = {key, value, expires, now, keep, size, use_mark(), requested, refresh?, ttls[:group]}
+      row = {key, value, expires, now, keep, size, use_mark(), requested, refresh?, group}
       :ets.insert(state.table, row)
+
+      state =
+        update_in(state.group_sizes, &Map.update(&1, group, size, fn total -> total + size end))
 
       state =
         if refresh? do
@@ -439,7 +454,9 @@ defmodule Deepsplay.UpstreamProxy.Cache do
         })
       end
 
-      evict(%{state | size: state.size + size})
+      %{state | size: state.size + size}
+      |> evict_group(group, group_max)
+      |> evict()
     end
   end
 
@@ -479,6 +496,27 @@ defmodule Deepsplay.UpstreamProxy.Cache do
     }
   end
 
+  # Drops the group's least recently used entries until it fits its limit.
+  defp evict_group(state, _group, nil), do: state
+
+  defp evict_group(state, group, max) do
+    if Map.get(state.group_sizes, group, 0) <= max do
+      state
+    else
+      state.table
+      |> :ets.select([
+        {{:"$1", :_, :_, :_, :_, :_, :"$2", :_, :_, :"$3"}, [{:"=:=", :"$3", {:const, group}}],
+         [{{:"$2", :"$1"}}]}
+      ])
+      |> Enum.sort()
+      |> Enum.reduce_while(state, fn {_used, key}, state ->
+        if Map.get(state.group_sizes, group, 0) > max,
+          do: {:cont, delete(state, key)},
+          else: {:halt, state}
+      end)
+    end
+  end
+
   # Drops the least recently used entries until the cache fits its limit.
   defp evict(%{size: size, max_size: max} = state) when size <= max, do: state
 
@@ -497,9 +535,15 @@ defmodule Deepsplay.UpstreamProxy.Cache do
 
   defp delete(state, key) do
     case :ets.take(state.table, key) do
-      [{^key, _value, _expires, _fetched, _keep, size, _used, _requested, _refreshing, _group}] ->
+      [{^key, _value, _expires, _fetched, _keep, size, _used, _requested, _refreshing, group}] ->
         if state.disk, do: Disk.delete(state.disk, key)
-        %{state | size: state.size - size, refresh: Map.delete(state.refresh, key)}
+
+        %{
+          state
+          | size: state.size - size,
+            group_sizes: Map.update(state.group_sizes, group, 0, &(&1 - size)),
+            refresh: Map.delete(state.refresh, key)
+        }
 
       [] ->
         state

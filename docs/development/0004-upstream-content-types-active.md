@@ -19,7 +19,7 @@ Status values: `open`, `in progress`, `done`.
 | --- | --- | --- |
 | 1 | Decision (new ADR 22, amending ADR 19 and ADR 20) | done |
 | 2 | Option `accepted_types` for host and manifest upstreams | done |
-| 3 | Option `cache_size` per upstream | open |
+| 3 | Option `cache_size` per upstream | done |
 | 4 | Docs (`docs/pages.md`, host configuration) | open |
 
 ## Motivation: DWD rain radar
@@ -165,7 +165,13 @@ Sketch:
 
 ## 3. Option `cache_size` per upstream
 
-Status: open
+Status: done (2026-11-07)
+
+Built as sketched. The manifest check gets the host's limit through
+`Screen.options/1` (`max_cache_size`). The cache keeps `group_sizes` in its
+state, updated on insert, delete (eviction and sweep go through it), load and
+clear, and evicts within the group before the overall limit. The catalog
+shows `at most 20.0 MB`, the status page `3 entries, 1.2 MB of 20.0 MB`.
 
 Sketch:
 

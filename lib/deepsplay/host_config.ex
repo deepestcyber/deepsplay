@@ -123,7 +123,9 @@ defmodule Deepsplay.HostConfig do
     errors =
       unknown ++
         server_errors ++
-        upstream_errors ++ config_errors ++ default_errors(server, declared_names(data))
+        upstream_errors ++
+        cache_size_errors(upstreams, server) ++
+        config_errors ++ default_errors(server, declared_names(data))
 
     case errors do
       [] ->
@@ -148,6 +150,16 @@ defmodule Deepsplay.HostConfig do
         {:error, errors}
     end
   end
+
+  # An upstream's share of the cache cannot exceed the whole (ADR 22).
+  defp cache_size_errors(upstreams, %{upstream_cache_size: max}) when is_integer(max) do
+    for {name, %Upstream{cache_size: size}} <- Enum.sort(upstreams),
+        is_integer(size) and size > max do
+      "upstream.#{name}.cache_size must not be larger than server.upstream_cache_size"
+    end
+  end
+
+  defp cache_size_errors(_upstreams, _server), do: []
 
   # Settings a configuration can override; unset ones come from [server].
   defp with_server_defaults(config, server) do
@@ -221,6 +233,7 @@ defmodule Deepsplay.HostConfig do
         {"stale_ttl", :stale_ttl, :duration, default: nil},
         {"refresh", :refresh, :boolean, default: false},
         {"accepted_types", :accepted_types, &Upstream.cast_accepted_types/1, default: nil},
+        {"cache_size", :cache_size, :size, default: nil},
         {"timeout", :timeout, :duration, default: 15_000}
       ])
 
@@ -228,7 +241,7 @@ defmodule Deepsplay.HostConfig do
       errors ++
         pair_errors(table, ctx, "header", "value") ++
         pair_errors(table, ctx, "query", "query_value") ++
-        for key <- ["stale_ttl", "refresh", "accepted_types"],
+        for key <- ["stale_ttl", "refresh", "accepted_types", "cache_size"],
             Map.has_key?(table, key) and not Map.has_key?(table, "cache_ttl") do
           ~s(#{ctx}: "#{key}" needs "cache_ttl")
         end ++

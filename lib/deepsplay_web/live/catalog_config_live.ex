@@ -408,6 +408,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
             · stale {PageParams.format_duration(upstream.stale_ttl)}
           </span>
           <span :if={upstream.refresh}>· refresh</span>
+          <span :if={upstream.cache_size}>· at most {bytes(upstream.cache_size)}</span>
         </p>
         <p :if={upstream.accepted_types} class="mt-1 font-mono text-xs text-base-content/60">
           accepts {Enum.join(upstream.accepted_types, ", ")}
@@ -728,4 +729,8 @@ defmodule DeepsplayWeb.CatalogConfigLive do
     do: PageParams.format_duration(ms)
 
   defp format_value(_param, value), do: to_string(value)
+
+  defp bytes(size) when size >= 1024 * 1024, do: "#{Float.round(size / (1024 * 1024), 1)} MB"
+  defp bytes(size) when size >= 1024, do: "#{Float.round(size / 1024, 1)} KB"
+  defp bytes(size), do: "#{size} B"
 end

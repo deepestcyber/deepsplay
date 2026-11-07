@@ -17,6 +17,7 @@ defmodule Deepsplay.Screen do
   """
 
   alias Deepsplay.HostConfig.Config
+  alias Deepsplay.HostConfig.Store
   alias Deepsplay.HostConfig.Upstream
   alias Deepsplay.RevisionFile
   alias Deepsplay.Screen.Page
@@ -128,8 +129,20 @@ defmodule Deepsplay.Screen do
   Options for `load/2` from a configuration.
   """
   @spec options(Config.t()) :: keyword()
-  def options(%Config{} = config),
-    do: [manifest: config.manifest, upstreams: config.upstreams, config: config]
+  def options(%Config{} = config) do
+    max_cache_size =
+      case Store.get() do
+        {:ok, host_config} -> host_config.upstream_cache_size
+        {:error, _errors} -> nil
+      end
+
+    [
+      manifest: config.manifest,
+      upstreams: config.upstreams,
+      config: config,
+      max_cache_size: max_cache_size
+    ]
+  end
 
   @doc """
   Returns a validator for `Deepsplay.RevisionStore.publish/3`: it accepts a
@@ -165,6 +178,8 @@ defmodule Deepsplay.Screen do
       `uses` any other, or one not declared in the manifest, is an error
     * `:config` - the configuration, for its rules on upstreams declared in
       the manifest (ADR 19); without it they are allowed for any host
+    * `:max_cache_size` - the host's `upstream_cache_size`, the most a
+      manifest upstream's `cache_size` may be (ADR 22)
   """
   @spec load(Path.t(), keyword()) :: {:ok, t()} | {:error, [String.t()]}
   def load(root, opts \\ []) do
@@ -175,7 +190,7 @@ defmodule Deepsplay.Screen do
          {:ok, data} <- decode(toml, manifest),
          :ok <- check_pages_dir(pages_dir) do
       config = Keyword.get(opts, :config, %Config{name: "", upstreams: opts[:upstreams] || []})
-      build(data, pages_dir, Keyword.get(opts, :upstreams, []), config)
+      build(data, pages_dir, Keyword.get(opts, :upstreams, []), config, opts[:max_cache_size])
     end
   end
 
@@ -218,7 +233,7 @@ defmodule Deepsplay.Screen do
     end
   end
 
-  defp build(data, root, upstreams, config) do
+  defp build(data, root, upstreams, config, max_cache_size) do
     # `page`, `backend`, `params` and `upstream` are read separately;
     # everything else is checked as top-level fields, including unknown keys.
     {top, top_errors} =
@@ -228,7 +243,8 @@ defmodule Deepsplay.Screen do
         @top_fields
       )
 
-    {declared, upstream_errors} = Upstreams.parse(Map.get(data, "upstream"), config)
+    {declared, upstream_errors} =
+      Upstreams.parse(Map.get(data, "upstream"), config, max_cache_size)
 
     # Default parameters for the manifest's pages (ADR 16).
     {params, param_errors} =

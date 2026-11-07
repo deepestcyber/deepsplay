@@ -118,6 +118,7 @@ defmodule Deepsplay.HostConfigTest do
           stale_ttl   = "1h"
           refresh     = true
           accepted_types = ["Image/PNG", "text/*"]
+          cache_size  = "20MB"
           timeout     = "5s"
           """
 
@@ -135,8 +136,28 @@ defmodule Deepsplay.HostConfigTest do
                stale_ttl: 3_600_000,
                refresh: true,
                accepted_types: ["image/png", "text/*"],
+               cache_size: 20 * 1024 * 1024,
                timeout: 5_000
              }
+    end
+
+    test "an upstream's cache_size cannot exceed upstream_cache_size" do
+      toml =
+        String.replace(
+          minimal(),
+          ~s(default_config = "lobby"),
+          ~s(default_config = "lobby"\nupstream_cache_size = "10MB")
+        ) <>
+          """
+          [upstream.tiles]
+          base_url   = "https://tiles.example.com"
+          cache_ttl  = "1m"
+          cache_size = "20MB"
+          """
+
+      assert "upstream.tiles.cache_size must not be larger than server.upstream_cache_size" in errors(
+               toml
+             )
     end
 
     test "invalid accepted_types" do
@@ -173,10 +194,12 @@ defmodule Deepsplay.HostConfigTest do
           stale_ttl = "1h"
           refresh   = true
           accepted_types = ["image/png"]
+          cache_size = "1MB"
           """
 
       assert {:error, errors} = parse(toml)
       assert ~s(upstream.weather: "accepted_types" needs "cache_ttl") in errors
+      assert ~s(upstream.weather: "cache_size" needs "cache_ttl") in errors
       assert ~s(upstream.weather: "stale_ttl" needs "cache_ttl") in errors
       assert ~s(upstream.weather: "refresh" needs "cache_ttl") in errors
     end
