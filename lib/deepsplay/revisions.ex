@@ -9,6 +9,7 @@ defmodule Deepsplay.Revisions do
 
   require Logger
 
+  alias Deepsplay.Backends
   alias Deepsplay.GitCredentials
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.LocalWatcher
@@ -46,6 +47,11 @@ defmodule Deepsplay.Revisions do
   @doc """
   Fetches the configuration's ref, validates the revision against its manifest
   and, if valid, remembers and announces it.
+
+  For a configuration that allows backends (ADR 26), a revision with a
+  backend is remembered and announced only once its backend is ready; until
+  then, and if the backend fails, the last good revision and its backend
+  stay. A revision without backend stops a running one.
   """
   @spec refresh(Config.t(), keyword()) :: {:ok, String.t()} | {:error, RevisionStore.error()}
   def refresh(%Config{} = config, opts \\ []) do
@@ -59,7 +65,12 @@ defmodule Deepsplay.Revisions do
               git: [env: env]
             ] ++ opts
 
-          RevisionStore.publish(config.repo, config.ref, publish_opts)
+          if config.backend do
+            publish_with_backend(config, publish_opts)
+          else
+            Backends.stop(config.name)
+            RevisionStore.publish(config.repo, config.ref, publish_opts)
+          end
 
         {:error, message} ->
           {:error, {:config, message}}
@@ -76,6 +87,55 @@ defmodule Deepsplay.Revisions do
         Logger.warning(~s(config "#{config.name}": #{message}))
         Status.update(config.name, %{error: message, error_at: DateTime.utc_now()})
         {:error, error}
+    end
+  end
+
+  # Exports and validates without remembering, starts the backend, and
+  # remembers only once it is ready.
+  defp publish_with_backend(config, publish_opts) do
+    with {:ok, sha} <- publish_unremembered(config, publish_opts),
+         {:ok, rev_dir} <- RevisionStore.revision_dir(config.repo, sha, publish_opts),
+         :ok <- start_backend(config, sha, Screen.root(rev_dir, config)),
+         :ok <- RevisionStore.remember(config.repo, remember_key(config), sha, publish_opts) do
+      {:ok, sha}
+    end
+  end
+
+  # Without the repository (e.g. offline at start), the last good revision's
+  # backend still has to run.
+  defp publish_unremembered(config, publish_opts) do
+    case RevisionStore.publish(config.repo, config.ref, [remember: false] ++ publish_opts) do
+      {:error, {:fetch, _message}} = error ->
+        start_last_good_backend(config, publish_opts)
+        error
+
+      result ->
+        result
+    end
+  end
+
+  defp start_last_good_backend(config, publish_opts) do
+    with nil <- Backends.current(config.name),
+         {:ok, sha} <- RevisionStore.last_good(config.repo, remember_key(config), publish_opts),
+         {:ok, rev_dir} <- RevisionStore.revision_dir(config.repo, sha, publish_opts),
+         {:error, error} <- start_backend(config, sha, Screen.root(rev_dir, config)) do
+      Logger.warning(~s(config "#{config.name}": #{RevisionStore.format_error(error)}))
+    end
+  end
+
+  defp start_backend(config, sha, root) do
+    case Screen.load(root, Screen.options(config)) do
+      {:ok, %Screen{backend: nil}} ->
+        Backends.stop(config.name)
+
+      {:ok, %Screen{backend: spec}} ->
+        case Backends.ensure(config, sha, root, spec) do
+          :ok -> :ok
+          {:error, message} -> {:error, {:rejected, sha, "backend: " <> message}}
+        end
+
+      {:error, errors} ->
+        {:error, {:rejected, sha, Enum.join(errors, "; ")}}
     end
   end
 

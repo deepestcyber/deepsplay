@@ -43,8 +43,16 @@ defmodule Deepsplay.RevisionStore.Writer do
   end
 
   @doc false
-  def publish(writer, ref, remember_as, validate, git_opts),
-    do: GenServer.call(writer, {:publish, ref, remember_as, validate, git_opts}, :infinity)
+  def publish(writer, ref, remember_as, validate, git_opts, remember? \\ true),
+    do:
+      GenServer.call(
+        writer,
+        {:publish, ref, remember_as, validate, git_opts, remember?},
+        :infinity
+      )
+
+  @doc false
+  def remember_sha(writer, key, sha), do: GenServer.call(writer, {:remember, key, sha}, :infinity)
 
   @doc false
   def prune(writer, in_use, keep), do: GenServer.call(writer, {:prune, in_use, keep}, :infinity)
@@ -65,19 +73,30 @@ defmodule Deepsplay.RevisionStore.Writer do
   end
 
   @impl true
-  def handle_call({:publish, ref, remember_as, validate, git_opts}, _from, state) do
+  def handle_call({:publish, ref, remember_as, validate, git_opts, remember?}, _from, state) do
     # The directories may have been removed while the writer was running.
     ensure_dirs(state.repo_dir)
 
     result =
       with {:ok, sha} <- fetch(state, ref, git_opts),
            :ok <- export(state, sha, validate, git_opts) do
-        remember(state.repo_dir, remember_as, sha)
+        if remember?, do: remember(state.repo_dir, remember_as, sha)
         {:ok, sha}
       end
 
     clean_tmp(state.repo_dir)
     {:reply, result, state}
+  end
+
+  def handle_call({:remember, key, sha}, _from, state) do
+    ensure_dirs(state.repo_dir)
+
+    if File.dir?(Path.join([state.repo_dir, "rev", sha])) do
+      remember(state.repo_dir, key, sha)
+      {:reply, :ok, state}
+    else
+      {:reply, {:error, {:rejected, sha, "revision is no longer in the cache"}}, state}
+    end
   end
 
   def handle_call({:prune, in_use, keep}, _from, state) do

@@ -22,6 +22,9 @@ defmodule Deepsplay.Application do
       Deepsplay.UpstreamProxy.Cache,
       Deepsplay.State,
       Deepsplay.Pages,
+      # Backends of configurations (ADR 26), before the pollers that start them.
+      {DynamicSupervisor, name: Deepsplay.Backends.Supervisor, strategy: :one_for_one},
+      Deepsplay.Backends,
       {Registry, keys: :unique, name: Deepsplay.LocalWatcher.Registry},
       # One poller per repository and ref (ADR 7), and the cache cleanup.
       Deepsplay.Pollers,

@@ -45,6 +45,9 @@ defmodule Deepsplay.RevisionStore do
     * `:remember_as` - key for the last good SHA, default `ref`. Callers that
       validate differently use separate keys, so each keeps its own last good
       revision.
+    * `:remember` - `false` exports and validates without remembering; the
+      caller remembers later with `remember/4` (a revision whose backend must
+      start first, ADR 26).
     * `:git` - options passed to `Deepsplay.Git.run/2`, such as `:timeout`
     * `:transports` - allowed git transports; defaults to
       `Deepsplay.HostConfig.allowed_transports/0`
@@ -60,7 +63,27 @@ defmodule Deepsplay.RevisionStore do
       validate = Keyword.get(opts, :validate, fn _dir -> :ok end)
       remember_as = Keyword.get(opts, :remember_as, ref)
       git_opts = Keyword.put(Keyword.get(opts, :git, []), :transports, transports)
-      Writer.publish(writer, ref, remember_as, validate, git_opts)
+
+      Writer.publish(
+        writer,
+        ref,
+        remember_as,
+        validate,
+        git_opts,
+        Keyword.get(opts, :remember, true)
+      )
+    end
+  end
+
+  @doc """
+  Remembers `sha` as the last good revision under `key`, for a revision
+  published with `remember: false`.
+  """
+  @spec remember(String.t(), String.t(), String.t(), keyword()) :: :ok | {:error, error()}
+  def remember(url, key, sha, opts \\ []) do
+    with {:ok, cache_dir} <- cache_dir(opts),
+         {:ok, writer} <- Writer.ensure_started(cache_dir, url) do
+      Writer.remember_sha(writer, key, sha)
     end
   end
 

@@ -232,7 +232,21 @@ Build steps, each tested on its own:
    `uv`) run a real stdlib-only Python backend from
    `test/support/fixtures/backend`. Not yet wired into publishing.
 3. Two-step publishing: a revision with a backend is remembered and
-   announced only once its process is ready.
+   announced only once its process is ready: built (2026-11-08). For
+   configurations with `backend = true`, `Revisions.refresh/2` publishes with
+   `remember: false` (export and validate in the repository's writer), then
+   starts the backend outside the writer, so a long `uv sync` blocks only
+   this configuration, and remembers with `RevisionStore.remember/4` once it
+   is ready. `Deepsplay.Backends` keeps the current backend per
+   configuration (`ensure/4` keeps a running one for the same revision,
+   otherwise starts a new one and swaps once ready); a revision without
+   backend, or `backend = false`, stops it; a reloaded host configuration
+   stops backends of removed configurations. Environments in
+   `cache_dir/.backend-envs/`, `uv` in `cache_dir/.uv/`, data in
+   `state_dir/backends/<config>/`. At start, the first poll of each
+   configuration starts its backend for the remembered revision; if the
+   repository cannot be fetched (e.g. offline), the remembered revision's
+   backend is started anyway.
 4. Proxy at `/c/<name>/backend/*`.
 5. Development mode (`uv run`, restart on changes).
 6. Status page and catalog; `uv` in the container image; guide.

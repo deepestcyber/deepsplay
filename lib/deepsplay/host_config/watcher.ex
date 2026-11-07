@@ -23,6 +23,7 @@ defmodule Deepsplay.HostConfig.Watcher do
 
   require Logger
 
+  alias Deepsplay.Backends
   alias Deepsplay.HostConfig
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.Pollers
@@ -171,6 +172,7 @@ defmodule Deepsplay.HostConfig.Watcher do
     changes = changes(old, host_config) ++ if(secrets_changed, do: ["secrets changed"], else: [])
 
     Pollers.reconcile(old, {:ok, host_config})
+    Backends.keep_only(Map.keys(host_config.configs))
     set_cache_size(host_config.upstream_cache_size)
 
     Logger.info(
