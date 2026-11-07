@@ -34,14 +34,18 @@ defmodule Deepsplay.Screen do
           warnings: [String.t()]
         }
 
+  # Display time of a page that sets none, when the manifest sets none either.
+  @default_duration 15_000
+
   @top_fields [
     {"title", :title, :string, default: nil},
-    {"rotation", :rotation, {:enum, ["sequential", "random"]}, default: "sequential"}
+    {"rotation", :rotation, {:enum, ["sequential", "random"]}, default: "sequential"},
+    {"duration", :duration, :duration, default: @default_duration}
   ]
 
   @page_fields [
     {"path", :path, &__MODULE__.cast_page_ref/1, []},
-    {"duration", :duration, :duration, []},
+    {"duration", :duration, :duration, default: nil},
     {"weight", :weight, :positive_number, default: 1.0},
     {"uses", :uses, :string_list, default: []}
   ]
@@ -214,7 +218,7 @@ defmodule Deepsplay.Screen do
          %__MODULE__{
            title: top.title,
            rotation: rotation(top.rotation),
-           pages: pages,
+           pages: Enum.map(pages, &%{&1 | duration: &1.duration || top.duration}),
            warnings: warnings
          }}
 

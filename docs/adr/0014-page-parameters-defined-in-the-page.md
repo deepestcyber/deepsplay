@@ -33,7 +33,7 @@ description = "Cells along the shorter side of the screen."
 label = "Large cells, slow"
 query = "cells=40&gps=4"
 </script>
-<script src="/lib/v1/params.js"></script>
+<script src="/lib/v1/deepsplay.js"></script>
 ```
 
 - The block is a `<script>` with type `application/toml` and id
@@ -52,14 +52,21 @@ query = "cells=40&gps=4"
   `max` and `description`.
 - A variant is a labelled example query (`label`, `query`). deepsplay uses
   variants only in the catalog, as pinned links.
-- deepsplay serves a helper, `params.js`, that reads the block and the URL and
-  returns typed values with defaults applied and limits enforced
-  (`Params.read()`). It bundles its TOML parser. Paths:
-  - `/lib/v1/params.js`: compatible within `v1`; cached for a day, then up to
-    a week with `stale-while-revalidate`. An incompatible change becomes `v2`;
-    `v1` stays served.
-  - `/lib/params@X.Y.Z.js`: one exact version, cached immutably; old versions
-    stay served.
+- deepsplay serves one page helper, `deepsplay.js`, with all functions it
+  offers pages, under a global `Deepsplay`:
+  - `Deepsplay.params()` reads the page's block and the URL and returns the
+    page's own parameters, typed, with defaults applied and limits enforced
+    (it bundles its TOML parser); `Deepsplay.helper` and
+    `Deepsplay.params("<helper>")` serve shared helpers (ADR 15);
+  - `Deepsplay.api(upstream, path)` returns the URL of an upstream of the
+    page's configuration (ADR 8), independent of how deep the page lies in
+    `pages/`.
+- Paths of the helper:
+  - `/lib/v1/deepsplay.js`: compatible within `v1`; cached for a day, then up
+    to a week with `stale-while-revalidate`. An incompatible change becomes
+    `v2`; `v1` stays served.
+  - `/lib/deepsplay@X.Y.Z.js`: one exact version, cached immutably; old
+    versions stay served.
 - deepsplay reads the same block on the server (catalog, defaults per
   configuration). Problems in it are warnings, never a reason to reject a
   revision.
@@ -72,7 +79,7 @@ query = "cells=40&gps=4"
 - Page code gets shorter: no hand-written parameter parsing.
 - deepsplay knows which parameters a page accepts, which defaults per
   configuration and checks of manifest queries can build on.
-- A page using `/lib/v1/params.js` works only when served by deepsplay; in
+- A page using `/lib/v1/deepsplay.js` works only when served by deepsplay; in
   development that means local directory mode (ADR 12).
 - `/lib/` becomes a reserved path (ADR 10).
 - Two TOML parsers (JavaScript and Elixir) read the same block; the blocks

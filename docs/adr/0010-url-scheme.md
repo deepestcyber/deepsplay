@@ -22,7 +22,7 @@ still on an older revision must be able to finish loading it.
 | `/c/<name>/backend/*` | Reserved for sidecars, unused in phase 1 |
 | `/status` | Status page |
 | `/catalog`, `/catalog/<name>` | Page catalog (see [17](0017-page-catalog.md)) |
-| `/lib/v1/<file>`, `/lib/<file>@X.Y.Z.js` | Helpers deepsplay offers pages, such as `params.js` (see [14](0014-page-parameters-defined-in-the-page.md)) |
+| `/lib/v1/deepsplay.js`, `/lib/deepsplay@X.Y.Z.js` | The page helper `deepsplay.js` (see [14](0014-page-parameters-defined-in-the-page.md)) |
 
 - A URL can only select a configuration the host defined, never name an
   arbitrary repository. An unknown name shows the fallback page.

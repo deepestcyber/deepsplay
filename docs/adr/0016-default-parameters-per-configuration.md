@@ -30,8 +30,8 @@ deepsplay adds parameters to the page URLs it builds, from several levels.
   2. configuration `params`,
   3. manifest `[params]`,
   4. values provided through `from`,
-  5. the definition's `default`, applied by `params.js` in the browser and not
-     added to the URL.
+  5. the definition's `default`, applied by `deepsplay.js` in the browser and
+     not added to the URL.
 - A parameter is added only to pages that declare it, themselves or through a
   helper in `uses`. Pages without a definition get nothing added.
 - Pinned pages get the same parameters as in the rotation, from their

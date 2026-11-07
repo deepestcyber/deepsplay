@@ -78,6 +78,31 @@ defmodule Deepsplay.ScreenTest do
                Screen.load(root)
     end
 
+    test "uses the manifest duration for pages without their own", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        duration = "30s"
+
+        [[page]]
+        path = "a.html"
+
+        [[page]]
+        path     = "b.html"
+        duration = "5s"
+        """,
+        "pages/a.html" => "a",
+        "pages/b.html" => "b"
+      })
+
+      assert {:ok, %Screen{pages: [%Page{duration: 30_000}, %Page{duration: 5_000}]}} =
+               Screen.load(root)
+    end
+
+    test "falls back to 15 seconds without any duration", %{tmp_dir: root} do
+      write(root, %{"screen.toml" => ~s([[page]]\npath = "a.html"\n), "pages/a.html" => "a"})
+      assert {:ok, %Screen{pages: [%Page{duration: 15_000}]}} = Screen.load(root)
+    end
+
     test "reads another manifest, sharing the same pages", %{tmp_dir: root} do
       write(root, %{
         "screen.toml" => @one_page,
@@ -157,12 +182,15 @@ defmodule Deepsplay.ScreenTest do
       assert ~s(page #1: unknown key "wieght") in errors
     end
 
-    test "missing required page keys", %{tmp_dir: root} do
+    test "a page without path", %{tmp_dir: root} do
       write(root, %{"screen.toml" => "[[page]]\n", "pages/a.html" => "a"})
-      errors = errors(root)
+      assert errors(root) == ["page #1.path is missing"]
+    end
 
-      assert "page #1.path is missing" in errors
-      assert "page #1.duration is missing" in errors
+    test "an invalid manifest duration", %{tmp_dir: root} do
+      write(root, %{"screen.toml" => ~s(duration = "soon"\n) <> @one_page, "pages/a.html" => "a"})
+      assert [error] = errors(root)
+      assert error =~ "screen.duration must be a duration"
     end
 
     test "paths that are not deliverable files in pages/", %{tmp_dir: root} do
@@ -261,9 +289,13 @@ defmodule Deepsplay.ScreenTest do
     end
 
     test "joins all errors into one message", %{tmp_dir: root} do
-      write(root, %{"screen.toml" => "[[page]]\n", "pages/a.html" => "a"})
+      write(root, %{
+        "screen.toml" => ~s(rotation = "shuffle"\n[[page]]\n),
+        "pages/a.html" => "a"
+      })
 
-      assert {:error, "page #1.path is missing; page #1.duration is missing"} =
+      assert {:error,
+              ~s(screen.rotation must be one of: "sequential", "random"; page #1.path is missing)} =
                Screen.validator(config()).(root)
     end
 

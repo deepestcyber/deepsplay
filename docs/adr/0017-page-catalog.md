@@ -39,8 +39,10 @@ live (new revisions, and every change of a local directory).
 - Pages and variants link to the pinned page (ADR 11) in a new tab, with the
   parameters merged as in ADR 16; a variant's query counts as the page query.
 - Preview: on demand, one at a time (opening one closes the other). The page
-  is rendered in a frame at a real screen size (1920×1080 by default) and
-  scaled down; an aspect selector offers 16:9, 9:16 and 4:3.
+  is rendered in a frame at a real screen size and scaled down to fit. A size
+  selector offers a few presets (landscape and portrait full HD, a square, a
+  phone) and "custom", which only then shows width and height fields; the
+  default is 1920×1080. Pages are not limited to any size or aspect ratio.
 - Playground: per page, a form built from its parameter definitions (a select
   for `enum`, number fields with limits, a colour picker for `color`, a
   checkbox for `bool`, a text field for `duration` and `string`). It updates

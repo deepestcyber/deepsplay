@@ -118,15 +118,15 @@ Only files in `pages/` are delivered; hidden files and directories (names starti
 ```toml
 title    = "Lobby"
 rotation = "random"                # "sequential" (default) or "random"
+duration = "30s"                   # optional default display time; without it 15s
 
 [[page]]
 path     = "welcome/index.html"    # file in pages/; may add a query, e.g. "?duration=30s"
-duration = "30s"
 weight   = 3.0                     # optional, > 0, default 1.0; random rotation only
 
 [[page]]
 path     = "weather/index.html"
-duration = "45s"
+duration = "45s"                   # optional, overrides the manifest's duration
 uses     = ["weather"]             # upstreams this page calls through the server
 ```
 
@@ -134,7 +134,7 @@ Validation runs on every new revision, before it is published:
 
 - The manifest parses, is smaller than a size limit, and contains at least one page.
 - `pages/` exists, and every `path` names a regular, non-hidden file in it. A query string on a path is passed on to the page; only the file part is checked.
-- `rotation` is `sequential` or `random`; every `weight` is a number greater than 0.
+- `rotation` is `sequential` or `random`; every `weight` is a number greater than 0; every `duration` (of the manifest or a page) is a valid duration. A page without `duration` uses the manifest's, or 15 seconds.
 - Every `uses` entry is an upstream the configuration is allowed to use. Otherwise the revision is rejected, not served with a broken page.
 - A `[backend]` table is ignored with a warning on the status page (see Extension points for sidecars).
 
