@@ -15,96 +15,116 @@ Status values: `open`, `in progress`, `done`.
 
 | # | Part | Status |
 | --- | --- | --- |
-| 1 | In-page documentation format | open |
-| 2 | Shared parameters (theme and other helpers) | open |
-| 3 | Default parameters per configuration | open |
-| 4 | Page catalog | open |
+| 1 | In-page documentation format | done |
+| 2 | Shared parameters (theme and other helpers) | done |
+| 3 | Default parameters per configuration | done |
+| 4 | Page catalog | done |
 | 5 | Repository conventions and template | open |
 
 ## 1. In-page documentation format
 
-Status: open
+Status: done (2026-11-07), decided in
+[ADR 14](../adr/0014-page-parameters-defined-in-the-page.md); not built yet.
 
 Goal: pages document themselves, next to their code: a short description and
-their parameters (name, meaning, default, example), optionally variants
-(labelled parameter sets) to try. deepsplay reads this for the catalog
-(part 4).
+their parameters, optionally variants to try. deepsplay reads this for the
+catalog (part 4).
 
-Already decided:
+Decided:
 
-- The documentation lives in the HTML file, not in a separate catalog file.
+- Pages define their parameters in a TOML block,
+  `<script type="application/toml" id="deepsplay-page">`: `title`,
+  `description`, `uses`, `page` (`false` marks a file as not a page),
+  `[params.<name>]` (`type`, `default`, `min`, `max`, `values`,
+  `description`) and `[[variants]]` (`label`, `query`).
+- The same definition drives the page's parameter parsing and the
+  documentation, so defaults are written once. deepsplay serves the helper,
+  `params.js`, at `/lib/v1/params.js` (compatible within `v1`) and at exact
+  version paths; pages may ignore it or copy it.
+- deepsplay finds the block by text search, without an HTML parser; problems
+  are warnings, never rejections.
 
-To plan:
-
-- A format deepsplay can read without a full HTML parser at runtime (the one we
-  have, `lazy_html`, is a native library and would complicate the Nix and Pi
-  builds). Candidates: a dedicated block the browser ignores, e.g.
-  `<script type="application/toml" data-deepsplay>…</script>`, found by its
-  exact start and end tags; `<meta>` tags; a structured HTML comment like the
-  one in `life.html`.
-- What is read at all: title (from `<title>`?), description, parameters,
-  variants; whether TOML is the format inside, like manifests.
-- Where it is read: when a revision is published (cached with the revision) or
-  when the catalog is opened.
-- How invalid documentation is reported: warnings only, it never rejects a
-  revision.
+To build (with part 4 or as its own step): `params.js` with a bundled TOML
+parser and its tests, serving `/lib/` with the caching from ADR 14, the
+server-side reader, and converting `life.html` in tinker as the first example.
 
 ## 2. Shared parameters (theme and other helpers)
 
-Status: open
+Status: done (2026-11-07), decided in
+[ADR 15](../adr/0015-shared-helpers-define-their-parameters.md); not built yet.
 
 Goal: parameters provided by shared helpers (in tinker: `theme`, `font`,
 `font-ui`, `font-mono`, `duration` from `theme/theme.js`) are documented once,
 not in every page.
 
-To plan:
+Decided:
 
-- How a helper documents its parameters (same format as pages, e.g. in the
-  helper's own file or a documentation file next to it).
-- How a page declares that it uses a helper, so the catalog can list the
-  helper's parameters with the page's own.
-- Whether deepsplay knows anything about themes, or only about "parameter
-  sets" in general.
+- A helper registers its definition in its own code:
+  ``Params.define("<name>", `<TOML>`)`` returns its values synchronously and
+  remembers the definition. deepsplay finds it by text search and indexes all
+  helpers in `pages/` by name per revision.
+- Pages name their helpers with `uses = ["theme"]`; the catalog lists helper
+  parameters with the page's, marked by helper.
+- Load order: `params.js`, helpers, page code. `Params.read()` returns the
+  page's own parameters, `Params.get("<name>")` a helper's.
+- Collisions are warnings: the page's definition wins over a helper's; of two
+  helpers with the same name, the first found counts.
+- `enum` values are listed in the definition, also where they mirror files.
+
+To build (with part 1): `Params.define` and `Params.get` in `params.js`, the
+helper index on the server, and converting `theme.js` in tinker.
 
 ## 3. Default parameters per configuration
 
-Status: open
+Status: done (2026-11-07), decided in
+[ADR 16](../adr/0016-default-parameters-per-configuration.md); not built yet.
 
 Goal: a configuration can set parameters, e.g. `theme = "neon"`, that are
-added to the URLs of its pages unless a page sets them itself. One repository
-can then look different per screen without changing pages or manifests.
+added to the URLs of its pages unless a page sets them itself.
 
-To plan:
+Decided:
 
-- Where defaults are set: in the host configuration per configuration, in the
-  manifest, or both; precedence (likely: page query in the manifest, then
-  configuration, then manifest defaults).
-- Whether defaults also apply to pinned pages (ADR 11) and to an explicit
-  `?page=` query.
-- Whether a default goes to every page, or only to pages that document the
-  parameter (part 1) or use the helper that defines it (part 2).
-- Whether deepsplay passes some parameters itself, e.g. `duration` from the
-  manifest, so the progress bar no longer needs it repeated in the page path.
-- Effect on caching: parameters change page URLs, which is fine for
-  revision-keyed URLs.
+- Levels: configuration `params = {…}` in the host configuration, manifest
+  `[params]`, and values deepsplay provides through `from` in a parameter
+  definition (`from = "duration"`: the page's display time).
+- Precedence: page query (manifest path or pinned link), configuration,
+  manifest, provided values, the definition's `default` (in the browser only).
+- Parameters go only to pages that declare them, themselves or through `uses`.
+  Pinned pages get them too (provided values where they exist).
+- Values are checked against the definition; invalid values and undeclared
+  defaults are warnings on the status page.
+
+To build (after parts 1 and 2): `params` in the host configuration and
+`[params]` in manifests, merging in `ScreenPlan` with the page definitions and
+helper index per revision, warnings on the status page, and removing the
+repeated `?duration=` from tinker's manifest.
 
 ## 4. Page catalog
 
-Status: open
+Status: done (2026-11-07), decided in [ADR 17](../adr/0017-page-catalog.md);
+not built yet.
 
-Goal: a page, linked from `/status`, that lists every configuration with its
-pages: the rotation from the manifest (order, duration, weight, query), the
-documented pages with description, parameters and variant links, and all other
-HTML files in `pages/`. Every entry links to the page pinned
-(`/c/<name>?page=…`), variants with their parameters.
+Goal: a page, linked from `/status`, that shows what each configuration shows,
+what each page does and accepts, and lets you try pages in different settings.
 
-To plan:
+Decided:
 
-- One page with a section per configuration, or one page per configuration.
-- Previews: links only, or an explicit preview that loads one page at a time
-  (live previews of all pages would run every animation and call upstreams).
-- How default parameters (part 3) and variants combine in the links.
-- How documentation warnings are shown.
+- `/catalog` (all configurations) and `/catalog/<name>` (one configuration:
+  header with effective defaults, rotation with merged parameters and their
+  origin, all pages with parameter tables and variants, helpers, warnings),
+  updating live.
+- Pin links in a new tab with merged parameters; a variant's query counts as
+  the page query.
+- Preview on demand, one at a time, at a real screen size scaled down, with an
+  aspect selector (16:9, 9:16, 4:3).
+- Playground per page: a form from the parameter definitions that updates the
+  preview and produces the pinned link.
+- Files marked `page = false` (ADR 14) are listed under "Other files", without
+  pin link, preview or playground.
+
+To build (after parts 1 to 3): the two LiveViews, the shared per-revision
+reading of page definitions and helpers (also used by part 3), preview and
+playground, links from `/status`.
 
 ## 5. Repository conventions and template
 
