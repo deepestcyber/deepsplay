@@ -15,7 +15,7 @@ Status values: `open`, `in progress`, `done`.
 | # | Part | Status |
 | --- | --- | --- |
 | 1 | Upstream cache for expensive and rate-limited providers | done |
-| 2 | Shared state for pages | open |
+| 2 | Shared state for pages | in progress |
 | 3 | Sidecars | open |
 
 ## 1. Upstream cache for expensive and rate-limited providers
@@ -108,10 +108,10 @@ Planning is complete. Build steps, each tested on its own:
 
 ## 2. Shared state for pages
 
-Status: open
+Status: in progress (decided, not built)
 
-Goal: pages can keep small state on the server, shared by all screens of a
-configuration, without a server component of their own.
+Goal: pages can keep small state on the server, shared by all screens and
+pages of their content, without a server component of their own.
 
 Already clear:
 
@@ -119,23 +119,32 @@ Already clear:
   a screen's pages (they share one origin) and survives reloads as long as the
   kiosk browser keeps its profile. Phase 2 (repository conventions) recommends
   a key prefix per page.
+- Borders cannot be enforced: pages run in the browser on one origin and can
+  call any URL, including another configuration's state. Separation is a
+  matter of organisation, as for the upstream proxy.
 
-To plan:
+Decided in [ADR 21](../adr/0021-shared-state-for-pages.md):
 
-- **Scope**: per configuration (likely, as for secrets and upstreams) or per
-  repository root shared by configurations with different manifests.
-- **API**: e.g. `GET`, `PUT` and `DELETE` on `/c/<name>/state/<key>` with JSON
-  values; key format; listing keys. A new reserved path in ADR 10.
-- **Limits**: size per value and per configuration, number of keys.
-- **Persistence**: in `cache_dir`, surviving restarts and deploys; format and
-  write strategy.
-- **Concurrent writes**: last write wins, or additionally compare-and-set and
-  atomic increment for counters.
-- **Live updates**: pages subscribe to keys (e.g. server-sent events) so every
-  screen sees a change at once, or pages poll.
-- **Trust**: without login, anyone on the internal network can write. Whether
-  limits are enough, or a write token per configuration is needed.
-- Dev mode with local directories (ADR 12): same store, or one that is reset.
+- **Scope**: shared by all pages of a namespace. The server derives the
+  namespace from the configuration: by default the content root
+  (repository, ref and `subdir`, or a local path); `state = "<name>"` for a
+  named one, `state = false` for none. Keys are free strings (`<page>/...`,
+  `shared/...` by convention).
+- **API** at `/c/<config>/state/` (added to ADR 10): `GET`, `PUT`, `DELETE`
+  per key with JSON values and versions (`ETag`); `If-Match` and
+  `If-None-Match: *` for conditional writes; `POST` with `{"increment": n}`
+  for counters; listing by prefix. `Deepsplay.state` in `deepsplay.js`.
+- **Live updates**: none; pages poll. Server-sent events can follow.
+- **Limits**: 64 KB per value, 1000 keys and 5 MB per namespace.
+- **Persistence**: server setting `state_dir` (default
+  `<cache_dir>/.state/`), one JSON file per namespace, written within a
+  second of a change.
+- **Trust**: no login or token; state is neither secret nor protected.
+  `shared_state = false` on the server, or `state = false` per
+  configuration, switches it off.
+- **Local directories**: same store, path as namespace.
+- **Visibility**: namespaces on the status page; keys and shortened values in
+  the catalog.
 
 ## 3. Sidecars
 

@@ -19,6 +19,7 @@ still on an older revision must be able to finish loading it.
 | `/c/<name>` | Shell for a named configuration |
 | `/c/<name>/r/<sha>/<path>` | File from `pages/` of a revision |
 | `/c/<name>/api/<upstream>/<path>` | Upstream proxy (see [8](0008-secrets-only-on-host-via-upstream-proxy.md)) |
+| `/c/<name>/state/<key>` | Shared state for pages (see [21](0021-shared-state-for-pages.md)) |
 | `/c/<name>/backend/*` | Reserved for sidecars, unused in phase 1 |
 | `/status` | Status page |
 | `/catalog`, `/catalog/<name>` | Page catalog (see [17](0017-page-catalog.md)) |
