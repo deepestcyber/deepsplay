@@ -37,7 +37,7 @@ defmodule DeepsplayWeb.StatusLiveTest do
     assert has_element?(view, "#config-lobby", String.slice(sha, 0, 12))
     assert has_element?(view, "#config-lobby", "Lobby")
     assert has_element?(view, "#config-lobby", "default")
-    assert has_element?(view, "#config-lobby .config-warning", "[backend] is not supported")
+    assert has_element?(view, "#config-lobby .config-warning", "[backend] is ignored")
     assert has_element?(view, "#config-kitchen", "none yet")
     assert has_element?(view, "#config-kitchen .config-error", "fetch failed")
     assert has_element?(view, "#status-errors .error-entry", "kitchen")

@@ -21,7 +21,10 @@ defmodule Deepsplay.HostConfig.Config do
     params: %{},
     repo_upstreams: true,
     repo_upstream_hosts: [],
-    state: :default
+    state: :default,
+    backend: false,
+    backend_secrets: [],
+    backend_memory: nil
   ]
 
   @type t :: %__MODULE__{
@@ -37,7 +40,10 @@ defmodule Deepsplay.HostConfig.Config do
           params: %{String.t() => String.t()},
           repo_upstreams: boolean(),
           repo_upstream_hosts: [String.t()],
-          state: :default | false | String.t()
+          state: :default | false | String.t(),
+          backend: boolean(),
+          backend_secrets: [String.t()],
+          backend_memory: pos_integer() | nil
         }
 
   @doc """

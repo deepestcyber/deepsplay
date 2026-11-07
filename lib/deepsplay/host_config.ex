@@ -325,6 +325,9 @@ defmodule Deepsplay.HostConfig do
       errors ++
         source_errors(config, ctx) ++
         credential_errors(fields[:credential], ctx, allowed.secrets) ++
+        for secret <- fields[:backend_secrets] || [], secret not in allowed.secrets do
+          ~s(#{ctx}: backend secret "#{secret}" is not defined)
+        end ++
         for upstream <- fields[:upstreams] || [], upstream not in upstreams do
           ~s(#{ctx}: upstream "#{upstream}" is not defined)
         end
@@ -413,7 +416,10 @@ defmodule Deepsplay.HostConfig do
       {"description", :description, :description, default: nil},
       {"repo_upstreams", :repo_upstreams, :boolean, default: nil},
       {"repo_upstream_hosts", :repo_upstream_hosts, &cast_host_patterns/1, default: nil},
-      {"state", :state, &cast_state/1, default: :default}
+      {"state", :state, &cast_state/1, default: :default},
+      {"backend", :backend, :boolean, default: false},
+      {"backend_secrets", :backend_secrets, :string_list, default: []},
+      {"backend_memory", :backend_memory, :size, default: nil}
     ]
   end
 

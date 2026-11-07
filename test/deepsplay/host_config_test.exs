@@ -283,6 +283,25 @@ defmodule Deepsplay.HostConfigTest do
              )
     end
 
+    test "backend settings" do
+      assert {:ok, host_config} = parse(minimal())
+      lobby = host_config.configs["lobby"]
+      assert {lobby.backend, lobby.backend_secrets, lobby.backend_memory} == {false, [], nil}
+
+      toml =
+        minimal(~s(backend = true\nbackend_secrets = ["weather_api"]\nbackend_memory = "512MB"))
+
+      assert {:ok, host_config} = parse(toml)
+      lobby = host_config.configs["lobby"]
+
+      assert {lobby.backend, lobby.backend_secrets, lobby.backend_memory} ==
+               {true, ["weather_api"], 512_000_000}
+
+      assert ~s(config "lobby": backend secret "nope" is not defined) in errors(
+               minimal(~s(backend_secrets = ["nope"]))
+             )
+    end
+
     test "shared state settings" do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.state_dir == "/cache/.state"

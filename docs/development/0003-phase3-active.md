@@ -210,7 +210,13 @@ Decided in [ADR 26](../adr/0026-sidecars.md):
 Build steps, each tested on its own:
 
 1. Host settings (`backend`, `backend_secrets`, `backend_memory`) and the
-   `[backend]` manifest block, replacing today's warning.
+   `[backend]` manifest block, replacing today's warning: built (2026-11-07).
+   `Deepsplay.Screen.Backend` parses the block only for configurations with
+   `backend = true` (otherwise the warning "[backend] is ignored: backends
+   are not allowed for this configuration"); `dir` must be a directory
+   outside `pages/` with `pyproject.toml` and `uv.lock`; `secrets` must be in
+   the configuration's `backend_secrets`, which must be defined secrets.
+   Nothing runs yet.
 2. Backend supervisor: environment sync with `uv`, start with a clean
    environment and memory limit, readiness, restarts with backoff, output
    kept for the status page.

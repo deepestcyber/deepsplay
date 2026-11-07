@@ -149,14 +149,15 @@ defmodule Deepsplay.ScreenTest do
                Screen.load(root, manifest: "rotations/kitchen.toml")
     end
 
-    test "ignores a [backend] table with a warning", %{tmp_dir: root} do
+    test "ignores a [backend] table with a warning unless backends are allowed",
+         %{tmp_dir: root} do
       write(root, %{
         "screen.toml" => ~s([backend]\ncommand = "x"\n) <> @one_page,
         "pages/a.html" => "a"
       })
 
-      assert {:ok, %Screen{warnings: ["[backend] is not supported yet and is ignored"]}} =
-               Screen.load(root)
+      assert {:ok, %Screen{backend: nil, warnings: [warning]}} = Screen.load(root)
+      assert warning == "[backend] is ignored: backends are not allowed for this configuration"
     end
   end
 
@@ -370,6 +371,84 @@ defmodule Deepsplay.ScreenTest do
                ~s(override #2: upstream "nope" is not allowed for this configuration),
                ~s(screen.when_empty.path "missing.html" is not a file in pages/)
              ]
+    end
+  end
+
+  describe "load/2 with a backend" do
+    defp backend_config(fields \\ []),
+      do: struct!(%Config{name: "lobby", backend: true, backend_secrets: ["weather_api"]}, fields)
+
+    test "reads it for configurations that allow backends", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          """
+          [backend]
+          dir     = "backend"
+          command = ["uvicorn", "app:app", "--port", "{port}"]
+          health  = "/health"
+          secrets = ["weather_api"]
+          """ <> @one_page,
+        "backend/pyproject.toml" => "[project]",
+        "backend/uv.lock" => "",
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, screen} = Screen.load(root, config: backend_config())
+      assert screen.warnings == []
+
+      assert screen.backend == %Deepsplay.Screen.Backend{
+               dir: "backend",
+               command: ["uvicorn", "app:app", "--port", "{port}"],
+               health: "/health",
+               secrets: ["weather_api"]
+             }
+    end
+
+    test "refuses invalid backends", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          """
+          [backend]
+          dir     = "pages/py"
+          command = "uvicorn app:app"
+          health  = "health"
+          secrets = ["other"]
+          start   = "lazy"
+          """ <> @one_page,
+        "pages/a.html" => "a",
+        "pages/py/pyproject.toml" => ""
+      })
+
+      assert errors(root, config: backend_config()) == [
+               ~s(backend.command must be a list of strings, e.g. ["uvicorn", "app:app"]),
+               ~s(backend.health must be a path starting with "/"),
+               ~s(backend: unknown key "start"),
+               ~s(backend.dir "pages/py" must not be inside pages/),
+               ~s(backend: secret "other" is not allowed for this configuration)
+             ]
+    end
+
+    test "needs pyproject.toml and uv.lock", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          ~s([backend]\ndir = "backend"\ncommand = ["python", "app.py"]\n) <> @one_page,
+        "backend/app.py" => "",
+        "pages/a.html" => "a"
+      })
+
+      assert errors(root, config: backend_config()) == [
+               ~s(backend.dir "backend" has no pyproject.toml),
+               ~s(backend.dir "backend" has no uv.lock)
+             ]
+
+      other = Path.join(root, "other")
+
+      write(other, %{
+        "screen.toml" => ~s([backend]\ndir = "py"\ncommand = ["x"]\n) <> @one_page,
+        "pages/a.html" => "a"
+      })
+
+      assert errors(other, config: backend_config()) == [~s(backend.dir "py" is not a directory)]
     end
   end
 

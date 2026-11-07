@@ -20,6 +20,7 @@ defmodule Deepsplay.Screen do
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.HostConfig.Upstream
   alias Deepsplay.RevisionFile
+  alias Deepsplay.Screen.Backend
   alias Deepsplay.Screen.Override
   alias Deepsplay.Screen.Page
   alias Deepsplay.Screen.Upstreams
@@ -38,6 +39,7 @@ defmodule Deepsplay.Screen do
             upstreams: %{},
             overrides: [],
             when_empty: :black,
+            backend: nil,
             warnings: []
 
   @type t :: %__MODULE__{
@@ -49,6 +51,7 @@ defmodule Deepsplay.Screen do
           upstreams: %{String.t() => Upstream.t()},
           overrides: [Override.t()],
           when_empty: :black | {String.t(), String.t() | nil},
+          backend: Backend.t() | nil,
           warnings: [String.t()]
         }
 
@@ -302,14 +305,14 @@ defmodule Deepsplay.Screen do
         _black_or_invalid -> []
       end
 
-    warnings =
-      if Map.has_key?(data, "backend"),
-        do: ["[backend] is not supported yet and is ignored"],
-        else: []
+    # The pages directory's parent is the root (manifests, backend dir).
+    {backend, backend_errors, warnings} =
+      Backend.parse(Map.get(data, "backend"), Path.dirname(root), config)
 
     case top_errors ++
            param_errors ++
-           upstream_errors ++ page_errors ++ override_errors ++ when_empty_errors do
+           upstream_errors ++
+           page_errors ++ override_errors ++ when_empty_errors ++ backend_errors do
       [] ->
         {:ok,
          %__MODULE__{
@@ -321,6 +324,7 @@ defmodule Deepsplay.Screen do
            upstreams: declared,
            overrides: overrides,
            when_empty: top.when_empty,
+           backend: backend,
            warnings: warnings
          }}
 
