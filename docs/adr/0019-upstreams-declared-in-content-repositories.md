@@ -8,6 +8,9 @@ Accepted
 
 Amends [8](0008-secrets-only-on-host-via-upstream-proxy.md).
 
+Amended by [22](0022-accepted-types-and-cache-size-per-upstream.md):
+`accepted_types` and `cache_size` are allowed in manifests.
+
 ## Context
 
 Pages often use open APIs that need no key, such as weather or rain radar

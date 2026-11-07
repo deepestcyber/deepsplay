@@ -6,6 +6,10 @@ Date: 2026-11-07
 
 Accepted
 
+Amended by [22](0022-accepted-types-and-cache-size-per-upstream.md):
+answers of types not accepted count as failures; optional cache size per
+upstream.
+
 ## Context
 
 The upstream proxy (ADR 8, ADR 19) caches successful `GET` answers for an
