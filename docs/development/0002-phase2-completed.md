@@ -1,5 +1,7 @@
 # Phase 2: page repository design
 
+Status: completed (2026-11-07)
+
 Phase 2 designs how content repositories are built and documented, and what
 deepsplay offers on top: in-page documentation, a catalog of all pages, and
 default parameters per configuration. It starts with planning; each part ends

@@ -26,15 +26,28 @@ Goal: data from expensive or rate-limited providers is fetched as rarely as
 possible and stays available when the provider fails, for all screens at once.
 
 Today: the upstream proxy caches successful `GET` answers in memory for an
-upstream's `cache_ttl`. Caching stays limited to upstreams the host defines
-(an upstream needs no secret, so public APIs work too); caching arbitrary URLs
-would make deepsplay an open proxy.
+upstream's `cache_ttl`, only for upstreams the host defines; caching arbitrary
+URLs would make deepsplay an open proxy.
+
+Decided in
+[ADR 19](../adr/0019-upstreams-declared-in-content-repositories.md): manifests
+can declare upstreams without secrets (`[upstream.<name>]` with `url` and
+`cache_ttl`), so open APIs such as DWD rain radar get a shared cache without
+touching the host configuration. Guards: `https` and `GET` only, target
+addresses checked after DNS resolution at connect time (no loopback, private
+or link-local addresses), no redirects, `cache_ttl` of at least one minute,
+size limit for text and binary bodies. The host allows this by default, per
+configuration or for listed host name patterns, and can switch it off.
+
+Decided in
+[ADR 20](../adr/0020-upstream-cache-with-request-coalescing.md): request
+coalescing. Per cache key at most one upstream request is in flight; concurrent
+requests wait for its result. Only successes are cached, waiting is bound by
+the upstream timeout, and manifest upstreams share entries by target URL.
+The points below extend ADR 20.
 
 To plan:
 
-- **Request coalescing**: when the cache entry is missing or expired, the
-  first request fetches and concurrent ones wait for its result, instead of
-  every screen calling the upstream at once.
 - **Serving stale data**: an option such as `stale_ttl`, so an expired answer
   is still served while the upstream fails or the rate limit is reached,
   instead of a `502`.
@@ -45,6 +58,9 @@ To plan:
 - **Persistence**: keeping cached answers in `cache_dir`, so a restart or
   deploy does not cause a burst of upstream calls.
 - How cache state shows on the status page (hits, age, last upstream error).
+- For manifest upstreams (ADR 19): final field names of the host switch and
+  the host name list; how the address check hooks into Req/Finch; how the
+  catalog shows them.
 
 ## 2. Shared state for pages
 

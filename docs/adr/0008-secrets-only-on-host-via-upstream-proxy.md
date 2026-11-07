@@ -6,6 +6,9 @@ Date: 2026-11-06
 
 Accepted
 
+Amended by [19](0019-upstreams-declared-in-content-repositories.md):
+manifests can declare upstreams without secrets.
+
 ## Context
 
 Pages may call APIs that need credentials, and repositories should be able to
