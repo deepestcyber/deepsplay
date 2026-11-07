@@ -9,6 +9,7 @@ defmodule DeepsplayWeb.ScreenPlan do
   in development, ADR 12).
   """
 
+  alias Deepsplay.PageParams
   alias Deepsplay.Screen
 
   @type t :: %{
@@ -21,16 +22,23 @@ defmodule DeepsplayWeb.ScreenPlan do
   @doc """
   Builds the rotation plan for a configuration's revision.
   """
+  #
+  # Options: `:local` (apply at once), `:added` (parameters to add to each
+  # page, in the manifest's order; ADR 16).
   @spec rotation(String.t(), String.t(), Screen.t(), keyword()) :: t()
   def rotation(name, sha, %Screen{} = screen, opts \\ []) do
+    added = Keyword.get(opts, :added, Enum.map(screen.pages, fn _ -> [] end))
+
     %{
       sha: sha,
       mode: Atom.to_string(screen.rotation),
       apply: apply_mode(opts),
       pages:
-        Enum.map(screen.pages, fn page ->
+        screen.pages
+        |> Enum.zip(added)
+        |> Enum.map(fn {page, page_added} ->
           %{
-            url: page_url(name, sha, page.path, page.query),
+            url: page_url(name, sha, page.path, PageParams.merge_query(page.query, page_added)),
             duration: page.duration,
             weight: page.weight
           }

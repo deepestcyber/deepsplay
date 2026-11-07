@@ -25,12 +25,13 @@ defmodule Deepsplay.Screen do
   @pages_dir "pages"
   @max_size 64 * 1024
 
-  defstruct title: nil, rotation: :sequential, pages: [], warnings: []
+  defstruct title: nil, rotation: :sequential, pages: [], params: %{}, warnings: []
 
   @type t :: %__MODULE__{
           title: String.t() | nil,
           rotation: :sequential | :random,
           pages: [Page.t(), ...],
+          params: %{String.t() => String.t()},
           warnings: [String.t()]
         }
 
@@ -203,7 +204,14 @@ defmodule Deepsplay.Screen do
     # `page` and `backend` are read separately; everything else is checked as
     # top-level fields, including unknown keys.
     {top, top_errors} =
-      TomlSchema.fields(Map.drop(data, ["page", "backend"]), "screen", @top_fields)
+      TomlSchema.fields(Map.drop(data, ["page", "backend", "params"]), "screen", @top_fields)
+
+    # Default parameters for the manifest's pages (ADR 16).
+    {params, param_errors} =
+      case TomlSchema.cast(:params, Map.get(data, "params", %{})) do
+        {:ok, params} -> {params, []}
+        {:error, why} -> {%{}, ["screen.params #{why}"]}
+      end
 
     {pages, page_errors} = pages(Map.get(data, "page"), root, upstreams)
 
@@ -212,13 +220,14 @@ defmodule Deepsplay.Screen do
         do: ["[backend] is not supported yet and is ignored"],
         else: []
 
-    case top_errors ++ page_errors do
+    case top_errors ++ param_errors ++ page_errors do
       [] ->
         {:ok,
          %__MODULE__{
            title: top.title,
            rotation: rotation(top.rotation),
            pages: Enum.map(pages, &%{&1 | duration: &1.duration || top.duration}),
+           params: params,
            warnings: warnings
          }}
 

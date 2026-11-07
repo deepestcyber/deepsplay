@@ -18,6 +18,7 @@ defmodule Deepsplay.Application do
       {DynamicSupervisor, name: Deepsplay.RevisionStore.Supervisor, strategy: :one_for_one},
       Deepsplay.Status,
       Deepsplay.UpstreamProxy.Cache,
+      Deepsplay.Pages,
       {Registry, keys: :unique, name: Deepsplay.LocalWatcher.Registry},
       # One poller per repository and ref (ADR 7), and the cache cleanup.
       Deepsplay.Pollers,

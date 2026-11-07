@@ -129,6 +129,17 @@ defmodule Deepsplay.HostConfigTest do
              }
     end
 
+    test "reads default parameters for pages" do
+      toml = minimal(~s(params = { theme = "neon", cells = 40, gps = 2.5, fast = true }))
+
+      assert {:ok, %{configs: %{"lobby" => %Config{params: params}}}} = parse(toml)
+      assert params == %{"theme" => "neon", "cells" => "40", "gps" => "2.5", "fast" => "true"}
+
+      assert ~s(config "lobby".params value of "x" must be a string, number or boolean) in errors(
+               minimal(~s(params = { x = [1] }))
+             )
+    end
+
     test "applies defaults" do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.poll_interval == 30_000

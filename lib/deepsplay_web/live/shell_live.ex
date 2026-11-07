@@ -20,6 +20,7 @@ defmodule DeepsplayWeb.ShellLive do
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.RepoUrl
   alias Deepsplay.RevisionFile
+  alias Deepsplay.PageParams
   alias Deepsplay.Revisions
   alias Deepsplay.Screen
   alias Deepsplay.Status
@@ -138,14 +139,24 @@ defmodule DeepsplayWeb.ShellLive do
     end
   end
 
-  defp plan(config, current, nil),
-    do: {:ok, ScreenPlan.rotation(config.name, current.sha, current.screen, local: current.local)}
+  defp plan(config, current, nil) do
+    {:ok,
+     ScreenPlan.rotation(config.name, current.sha, current.screen,
+       local: current.local,
+       added: current.added
+     )}
+  end
 
   defp plan(config, current, pinned) do
     {path, query} = Screen.split_query(pinned)
 
     with true <- Screen.valid_query?(query),
          {:ok, _file} <- RevisionFile.resolve(current.pages_dir, path) do
+      # Pinned pages get the same added parameters, without a display time.
+      {added, _warnings, _declared} =
+        PageParams.for_page(Revisions.param_context(config, current), path, query, nil)
+
+      query = PageParams.merge_query(query, added)
       {:ok, ScreenPlan.pinned(config.name, current.sha, path, query, local: current.local)}
     else
       _missing -> {:error, :pinned_missing}

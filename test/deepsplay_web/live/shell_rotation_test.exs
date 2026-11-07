@@ -140,6 +140,42 @@ defmodule DeepsplayWeb.ShellRotationTest do
     assert url == "/c/lobby/r/#{sha}/extra.html?duration=5s"
   end
 
+  test "adds declared default parameters to page URLs, pinned too", %{conn: conn, src: src} do
+    sha =
+      GitFixture.commit(src, %{
+        "screen.toml" => """
+        duration = "20s"
+
+        [params]
+        theme = "neon"
+
+        [[page]]
+        path = "themed.html?extra=1"
+        """,
+        "pages/themed.html" => """
+        <script type="application/toml" id="deepsplay-page">
+        [params.theme]
+        type   = "enum"
+        values = ["default", "neon"]
+        [params.duration]
+        type = "duration"
+        from = "duration"
+        </script>
+        """
+      })
+
+    {:ok, ^sha} = Revisions.refresh(Deepsplay.HostConfig.Store.lookup("lobby") |> elem(1))
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert %{"pages" => [%{"url" => url}]} = plan(view)
+    assert url == "/c/lobby/r/#{sha}/themed.html?extra=1&duration=20s&theme=neon"
+
+    {:ok, pinned, _html} = live(build_conn(), ~p"/?page=themed.html")
+    assert %{"pages" => [%{"url" => pinned_url}]} = plan(pinned)
+    assert pinned_url == "/c/lobby/r/#{sha}/themed.html?theme=neon"
+  end
+
   test "?page= with a missing, hidden or outside file shows the fallback page",
        %{conn: conn, config: config} do
     {:ok, _sha} = Revisions.refresh(config)

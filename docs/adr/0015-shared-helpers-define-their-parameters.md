@@ -36,8 +36,8 @@ default = "default"
   helper's own parameters from the URL, typed and with defaults applied,
   synchronously.
 - deepsplay finds a definition by text search for `Deepsplay.helper("<name>", `
-  followed by a backtick, up to the closing backtick; the TOML must not
-  contain a backtick. Per revision, deepsplay indexes all helper definitions
+  (single or double quotes) followed by a backtick, up to the closing
+  backtick; the TOML must not contain a backtick. Per revision, deepsplay indexes all helper definitions
   in `pages/` by name.
 - A page names the helpers it uses in its block: `uses = ["theme"]`. The
   catalog lists their parameters with the page's own, marked by helper.

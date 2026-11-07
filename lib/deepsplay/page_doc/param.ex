@@ -8,6 +8,7 @@ defmodule Deepsplay.PageDoc.Param do
   """
 
   alias Deepsplay.Duration
+  alias Deepsplay.TomlSchema
 
   @types ~w(string int number bool duration color enum)
 
@@ -199,27 +200,14 @@ defmodule Deepsplay.PageDoc.Param do
   defp default(_param, nil, _ctx), do: {nil, []}
 
   defp default(param, value, ctx) do
-    text =
-      cond do
-        is_boolean(value) -> to_string(value)
-        is_integer(value) -> Integer.to_string(value)
-        is_float(value) -> js_float(value)
-        is_binary(value) -> value
-        true -> nil
-      end
-
-    case text && cast(param, text) do
-      {:ok, value} -> {value, []}
+    # As text, the way JavaScript writes it (10.0 becomes "10"), so both sides
+    # accept the same defaults.
+    with {:ok, text} <- TomlSchema.url_value(value),
+         {:ok, value} <- cast(param, text) do
+      {value, []}
+    else
       _invalid -> {nil, ["#{ctx}: invalid default, ignored"]}
     end
-  end
-
-  # JavaScript writes 10.0 as "10"; keep the same text so an int-like float
-  # default is valid for int parameters in both.
-  defp js_float(value) do
-    if value == Float.round(value) and abs(value) < 1.0e15,
-      do: value |> trunc() |> Integer.to_string(),
-      else: Float.to_string(value)
   end
 
   defp optional_string(nil, _key, _ctx), do: {nil, []}

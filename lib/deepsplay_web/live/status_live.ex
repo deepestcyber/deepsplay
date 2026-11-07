@@ -231,7 +231,7 @@ defmodule DeepsplayWeb.StatusLive do
     """
   end
 
-  defp warnings({:ok, current}), do: current.screen.warnings
+  defp warnings({:ok, current}), do: current.screen.warnings ++ current.param_warnings
   defp warnings({:error, errors}), do: errors
   defp warnings(:none), do: []
 

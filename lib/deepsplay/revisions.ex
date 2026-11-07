@@ -12,6 +12,7 @@ defmodule Deepsplay.Revisions do
   alias Deepsplay.GitCredentials
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.LocalWatcher
+  alias Deepsplay.PageParams
   alias Deepsplay.RevisionStore
   alias Deepsplay.Screen
   alias Deepsplay.Status
@@ -22,7 +23,14 @@ defmodule Deepsplay.Revisions do
   A configuration's current content. `sha` is the commit, or the version token
   of a local directory (ADR 12); `local` tells which.
   """
-  @type current :: %{sha: String.t(), pages_dir: Path.t(), screen: Screen.t(), local: boolean()}
+  @type current :: %{
+          sha: String.t(),
+          pages_dir: Path.t(),
+          screen: Screen.t(),
+          local: boolean(),
+          added: [PageParams.added()],
+          param_warnings: [String.t()]
+        }
 
   @doc """
   Subscribes the caller to the configuration `name`. Messages are
@@ -98,11 +106,22 @@ defmodule Deepsplay.Revisions do
 
     case Screen.load(root, manifest: config.manifest, upstreams: config.upstreams) do
       {:ok, screen} ->
-        {:ok, %{sha: sha, pages_dir: Screen.pages_dir(root), screen: screen, local: local}}
+        current = %{sha: sha, pages_dir: Screen.pages_dir(root), screen: screen, local: local}
+        # Parameters added to each page of the rotation (ADR 16).
+        {added, warnings} = PageParams.for_rotation(param_context(config, current))
+        {:ok, Map.merge(current, %{added: added, param_warnings: warnings})}
 
       {:error, errors} ->
         {:error, errors}
     end
+  end
+
+  @doc """
+  The context for working out added page parameters (`Deepsplay.PageParams`).
+  """
+  @spec param_context(Config.t(), map()) :: PageParams.context()
+  def param_context(config, current) do
+    %{config: config, screen: current.screen, pages_dir: current.pages_dir, key: current.sha}
   end
 
   @doc """

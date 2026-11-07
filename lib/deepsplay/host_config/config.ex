@@ -16,7 +16,8 @@ defmodule Deepsplay.HostConfig.Config do
     :credential,
     subdir: "",
     manifest: "screen.toml",
-    upstreams: []
+    upstreams: [],
+    params: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -27,7 +28,8 @@ defmodule Deepsplay.HostConfig.Config do
           subdir: String.t(),
           manifest: String.t(),
           credential: String.t() | nil,
-          upstreams: [String.t()]
+          upstreams: [String.t()],
+          params: %{String.t() => String.t()}
         }
 
   @doc """

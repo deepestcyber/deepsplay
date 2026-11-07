@@ -11,6 +11,7 @@ keep_revisions = 3
 name = "lobby"
 repo = "https://github.com/example/lobby-screen.git"
 ref  = "main"
+# params = { theme = "dc" }   # default parameters for pages that declare them
 
 # A private repository over SSH; the key comes from the secrets file.
 # [[config]]

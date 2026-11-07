@@ -11,6 +11,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - Page helper `deepsplay.js` at `/lib/v1/deepsplay.js`: pages define their
   parameters in a TOML block and read them typed, with defaults and limits;
   `Deepsplay.api()` builds upstream URLs (ADR 14).
+- Shared helpers register their parameters with `Deepsplay.helper()`
+  (ADR 15).
+- Default parameters per configuration (`params = {…}`) and per manifest
+  (`[params]`), and the display time for parameters with `from = "duration"`,
+  are added to the URLs of pages that declare them (ADR 16).
 
 ## 0.1.0 – 2026-11-07
 

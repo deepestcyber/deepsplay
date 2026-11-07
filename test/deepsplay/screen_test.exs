@@ -98,6 +98,18 @@ defmodule Deepsplay.ScreenTest do
                Screen.load(root)
     end
 
+    test "reads default parameters", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => ~s([params]\ntheme = "neon"\ncells = 40\n\n) <> @one_page,
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, %Screen{params: %{"theme" => "neon", "cells" => "40"}}} = Screen.load(root)
+
+      write(root, %{"screen.toml" => ~s(params = "theme=neon"\n) <> @one_page})
+      assert ["screen.params must be a table of parameter values"] = errors(root)
+    end
+
     test "falls back to 15 seconds without any duration", %{tmp_dir: root} do
       write(root, %{"screen.toml" => ~s([[page]]\npath = "a.html"\n), "pages/a.html" => "a"})
       assert {:ok, %Screen{pages: [%Page{duration: 15_000}]}} = Screen.load(root)

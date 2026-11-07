@@ -68,7 +68,7 @@ Not yet: reading page blocks per revision for the catalog and defaults
 ## 2. Shared parameters (theme and other helpers)
 
 Status: done (2026-11-07), decided in
-[ADR 15](../adr/0015-shared-helpers-define-their-parameters.md); not built yet.
+[ADR 15](../adr/0015-shared-helpers-define-their-parameters.md); built.
 
 Goal: parameters provided by shared helpers (in tinker: `theme`, `font`,
 `font-ui`, `font-mono`, `duration` from `theme/theme.js`) are documented once,
@@ -88,14 +88,24 @@ Decided:
   helpers with the same name, the first found counts.
 - `enum` values are listed in the definition, also where they mirror files.
 
-To build (with part 1): `Deepsplay.helper` and `Deepsplay.params("<name>")`
-in `deepsplay.js`, the helper index on the server, and converting `theme.js`
-in tinker.
+Built (2026-11-07):
+
+- `Deepsplay.helper` and `Deepsplay.params("<name>")` in `deepsplay.js`
+  (with part 1).
+- `Deepsplay.HelperIndex`: `build/1` finds all registrations in `*.js` and
+  `*.mjs` below `pages/` (sorted, hidden files and symlinks skipped; the first
+  registration of a name counts); `params_for/2` combines a page's parameters
+  with its helpers' with origins and collision warnings.
+- tinker: `theme.js` registers its seven parameters (`duration` with
+  `from = "duration"`); the other pages using the theme (`flame`, `wator`,
+  `wireworld`, `font-lab`) load `deepsplay.js` first and declare
+  `uses = ["theme"]`; their own parameters are still documented in comments
+  only.
 
 ## 3. Default parameters per configuration
 
 Status: done (2026-11-07), decided in
-[ADR 16](../adr/0016-default-parameters-per-configuration.md); not built yet.
+[ADR 16](../adr/0016-default-parameters-per-configuration.md); built.
 
 Goal: a configuration can set parameters, e.g. `theme = "neon"`, that are
 added to the URLs of its pages unless a page sets them itself.
@@ -112,10 +122,24 @@ Decided:
 - Values are checked against the definition; invalid values and undeclared
   defaults are warnings on the status page.
 
-To build (after parts 1 and 2): `params` in the host configuration and
-`[params]` in manifests, merging in `ScreenPlan` with the page definitions and
-helper index per revision, warnings on the status page, and removing the
-repeated `?duration=` from tinker's manifest.
+Built (2026-11-07):
+
+- `params = {…}` per configuration and `[params]` in manifests; values are
+  strings, numbers or booleans, kept as their URL text.
+- `Deepsplay.Pages`: page documentation and helper index per revision, cached
+  in memory by `pages/` directory and revision key (commit SHA, or the version
+  token of a local directory).
+- `Deepsplay.PageParams`: per page, the first valid value of configuration,
+  manifest and provided values for each declared parameter the page does not
+  set itself; invalid values are skipped with a warning; defaults no rotation
+  page declares are warned about.
+- `Revisions.current/2` carries the added parameters per rotation page and the
+  warnings; `ScreenPlan` appends them to page URLs; pinned pages get them
+  without a display time; the status page shows the warnings with the
+  manifest's.
+- In tinker, the theme pages now get `duration` automatically (through the
+  theme helper); `?duration=` in paths is only needed for pages without a
+  parameter block.
 
 ## 4. Page catalog
 

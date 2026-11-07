@@ -86,6 +86,7 @@ repo      = "https://github.com/example/lobby-screen.git"
 ref       = "main"          # a branch is polled; a tag or SHA is resolved once
 subdir    = ""              # optional: root (manifests and pages/) is a subdirectory
 manifest  = "screen.toml"   # optional: manifest path below the root
+params    = { theme = "dc" }  # optional: default parameters for its pages (ADR 16)
 upstreams = ["weather"]     # upstreams (see Secrets) this configuration may use
 
 [[config]]
@@ -119,6 +120,9 @@ Only files in `pages/` are delivered; hidden files and directories (names starti
 title    = "Lobby"
 rotation = "random"                # "sequential" (default) or "random"
 duration = "30s"                   # optional default display time; without it 15s
+
+[params]                           # optional default parameters for pages that declare them
+theme = "neon"
 
 [[page]]
 path     = "welcome/index.html"    # file in pages/; may add a query, e.g. "?duration=30s"

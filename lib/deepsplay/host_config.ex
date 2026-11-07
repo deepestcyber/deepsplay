@@ -331,7 +331,8 @@ defmodule Deepsplay.HostConfig do
       {"subdir", :subdir, &cast_subdir/1, default: ""},
       {"manifest", :manifest, &cast_manifest/1, default: Screen.default_manifest()},
       {"credential", :credential, :string, default: nil},
-      {"upstreams", :upstreams, :string_list, default: []}
+      {"upstreams", :upstreams, :string_list, default: []},
+      {"params", :params, :params, default: %{}}
     ]
   end
 

@@ -25,6 +25,7 @@ defmodule Deepsplay.TomlSchema do
           | :string_list
           | :relative_path
           | {:enum, [String.t()]}
+          | :params
           | (term() -> {:ok, term()} | {:error, String.t()})
 
   @doc """
@@ -110,9 +111,38 @@ defmodule Deepsplay.TomlSchema do
 
   def cast(:relative_path, _value), do: {:error, "must be a string"}
 
+  # Default parameters for pages (ADR 16): a table of names to values, kept as
+  # the strings they become in a URL.
+  def cast(:params, table) when is_map(table) do
+    Enum.reduce_while(table, {:ok, %{}}, fn {name, value}, {:ok, acc} ->
+      case url_value(value) do
+        {:ok, text} -> {:cont, {:ok, Map.put(acc, name, text)}}
+        :error -> {:halt, {:error, ~s(value of "#{name}" must be a string, number or boolean)}}
+      end
+    end)
+  end
+
+  def cast(:params, _value), do: {:error, "must be a table of parameter values"}
+
   def cast({:enum, allowed}, value) do
     if value in allowed,
       do: {:ok, value},
       else: {:error, "must be one of: #{Enum.map_join(allowed, ", ", &inspect/1)}"}
   end
+
+  @doc """
+  Turns a TOML value into the text it has in a URL query.
+  """
+  @spec url_value(term()) :: {:ok, String.t()} | :error
+  def url_value(value) when is_binary(value), do: {:ok, value}
+  def url_value(value) when is_boolean(value), do: {:ok, to_string(value)}
+  def url_value(value) when is_integer(value), do: {:ok, Integer.to_string(value)}
+
+  def url_value(value) when is_float(value) do
+    if value == Float.round(value) and abs(value) < 1.0e15,
+      do: {:ok, value |> trunc() |> Integer.to_string()},
+      else: {:ok, Float.to_string(value)}
+  end
+
+  def url_value(_value), do: :error
 end
