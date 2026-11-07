@@ -63,6 +63,18 @@ defmodule Deepsplay.UpstreamProxy.CacheTest do
     assert {:miss, "small"} = fetch(cache, :huge, "small", tiles)
   end
 
+  test "a smaller limit drops the least recently used entries", %{name: name} do
+    size = :erlang.external_size(body(1_000))
+    cache = start_cache(name: name, dir: nil, max_size: 1_000_000)
+
+    for key <- [:a, :b, :c], do: assert({:miss, _} = fetch(cache, key, body(1_000)))
+    assert {:hit, _, _} = fetch(cache, :a, "other")
+
+    :ok = Cache.set_max_size(2 * size + 10, cache)
+    assert Cache.size(cache) == %{size: 2 * size, max_size: 2 * size + 10}
+    assert {:miss, "new"} = fetch(cache, :b, "new")
+  end
+
   test "does not keep values larger than the limit", %{name: name} do
     cache = start_cache(name: name, dir: nil, max_size: 100)
 

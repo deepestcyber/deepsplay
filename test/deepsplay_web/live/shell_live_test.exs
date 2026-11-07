@@ -38,6 +38,52 @@ defmodule DeepsplayWeb.ShellLiveTest do
     end
   end
 
+  describe "when the host configuration changes" do
+    setup do
+      previous = Store.get()
+      on_exit(fn -> Store.put(previous) end)
+      {:ok, host_config} = previous
+      %{host_config: host_config}
+    end
+
+    defp change(fun) do
+      {:ok, host_config} = Store.get()
+      Store.put({:ok, fun.(host_config)})
+
+      Phoenix.PubSub.broadcast(
+        Deepsplay.PubSub,
+        Deepsplay.HostConfig.Watcher.topic(),
+        {:host_config_changed}
+      )
+    end
+
+    test "reloads a screen whose configuration changed", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/c/kitchen?screen=hall")
+
+      change(&update_in(&1.configs["kitchen"], fn config -> %{config | description: "new"} end))
+      assert_redirect(view, "/c/kitchen?screen=hall")
+    end
+
+    test "keeps a screen whose configuration did not change", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/c/kitchen")
+
+      change(&update_in(&1.configs["lobby"], fn config -> %{config | description: "new"} end))
+      assert has_element?(view, "#fallback-config", "kitchen")
+      refute_redirected(view, "/c/kitchen")
+    end
+
+    test "reloads a screen of a configuration that appears", %{
+      conn: conn,
+      host_config: host_config
+    } do
+      {:ok, view, _html} = live(conn, ~p"/c/hall")
+      assert has_element?(view, "#fallback-unknown-config")
+
+      change(&put_in(&1.configs["hall"], %{host_config.configs["kitchen"] | name: "hall"}))
+      assert_redirect(view, "/c/hall")
+    end
+  end
+
   describe "with an unusable host configuration" do
     setup do
       previous = Store.get()

@@ -43,6 +43,16 @@ defmodule DeepsplayWeb.StatusLiveTest do
     assert has_element?(view, "#status-errors .error-entry", "kitchen")
   end
 
+  test "shows when the host configuration was loaded", ctx do
+    {:ok, view, _html} = live(ctx.conn, ~p"/status")
+    refute has_element?(view, "#status-host-config")
+
+    start_supervised!({Deepsplay.HostConfig.Watcher, interval: 60_000, signals: false})
+    {:ok, view, _html} = live(build_conn(), ~p"/status")
+    assert has_element?(view, "#status-host-config", "Host configuration loaded")
+    refute has_element?(view, "#status-host-config-rejected")
+  end
+
   test "updates when a revision is published", ctx do
     {:ok, view, _html} = live(ctx.conn, ~p"/status")
     assert has_element?(view, "#config-lobby", "none yet")

@@ -62,6 +62,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - Page metadata: optional `author`, `credits` and `license` in the parameter
   block of pages and helpers, shown in the catalog; `Deepsplay.page()` gives
   pages and themes their metadata (ADR 24).
+- The host configuration and the secrets file are reloaded when they change
+  (checked every 5 seconds, at once on `SIGHUP`): pollers and local watchers
+  follow, screens of changed configurations reload, an invalid change is
+  rejected and shown on the status page while the last good version keeps
+  running (ADR 23).
 
 ## 0.1.0 – 2026-11-07
 

@@ -14,6 +14,7 @@ defmodule DeepsplayWeb.StatusLive do
   alias Deepsplay.ByteSize
 
   alias Deepsplay.HostConfig.Store
+  alias Deepsplay.HostConfig.Watcher
   alias Deepsplay.PageParams
   alias Deepsplay.RepoUrl
   alias Deepsplay.Revisions
@@ -32,6 +33,7 @@ defmodule DeepsplayWeb.StatusLive do
       Status.subscribe_all()
       Phoenix.PubSub.subscribe(Deepsplay.PubSub, Presence.topic())
       :timer.send_interval(@upstream_interval, :upstreams)
+      Watcher.subscribe()
     end
 
     {:ok, socket |> assign(page_title: "Status") |> load()}
@@ -45,9 +47,12 @@ defmodule DeepsplayWeb.StatusLive do
 
   def handle_info(:upstreams, socket), do: {:noreply, assign_upstreams(socket)}
 
+  def handle_info({:host_config_changed}, socket), do: {:noreply, load(socket)}
+
   defp load(socket) do
     assign(socket,
       host_config: Store.get(),
+      reload: Watcher.info(),
       configs: configs(),
       screens: screens(),
       errors: Status.recent_errors()
@@ -171,6 +176,34 @@ defmodule DeepsplayWeb.StatusLive do
         <ul class="mt-2 space-y-1 font-mono text-sm">
           <li :for={error <- elem(@host_config, 1)}>{error}</li>
         </ul>
+      </section>
+
+      <section :if={@reload} id="status-host-config" class="text-sm">
+        <p class="text-base-content/60">
+          Host configuration loaded {time(@reload.loaded_at)}<span :if={@reload.changes != []}>: {Enum.join(
+            @reload.changes,
+            "; "
+          )}</span>
+        </p>
+        <div
+          :if={@reload.rejected}
+          id="status-host-config-rejected"
+          class="mt-2 border-l-2 border-red-500/60 pl-3"
+        >
+          <p class="font-medium text-red-500">
+            Changed version rejected {time(@reload.rejected.at)}; the last good one keeps running:
+          </p>
+          <ul class="mt-1 space-y-1 font-mono text-xs">
+            <li :for={error <- @reload.rejected.errors}>{error}</li>
+          </ul>
+        </div>
+        <p
+          :if={@reload.restart_needed != []}
+          id="status-host-config-restart"
+          class="mt-2 text-amber-500"
+        >
+          Restart needed to apply: {Enum.join(@reload.restart_needed, ", ")}
+        </p>
       </section>
 
       <section id="status-configs">

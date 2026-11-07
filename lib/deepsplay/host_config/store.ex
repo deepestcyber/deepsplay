@@ -1,6 +1,7 @@
 defmodule Deepsplay.HostConfig.Store do
   @moduledoc """
-  Holds the host configuration loaded at startup.
+  Holds the host configuration, loaded at startup and replaced when a changed
+  version is valid (`Deepsplay.HostConfig.Watcher`, ADR 23).
 
   A missing or invalid host configuration does not stop the application: the
   errors are kept here and every screen shows them on the fallback page.
@@ -23,13 +24,15 @@ defmodule Deepsplay.HostConfig.Store do
   """
   @spec load() :: state()
   def load do
-    # Secrets first: the host configuration refers to them by name (ADR 8).
     result =
-      with {:ok, secrets} <- Secrets.load() do
-        case Application.get_env(:deepsplay, :host_config_path) do
-          nil -> {:error, ["no host configuration: DEEPSPLAY_CONFIG is not set"]}
-          path -> HostConfig.load(path, secrets: secrets)
-        end
+      case read() do
+        {:ok, host_config, secrets} ->
+          Secrets.put(secrets)
+          {:ok, host_config}
+
+        {:error, errors} ->
+          Secrets.put(%{})
+          {:error, errors}
       end
 
     case result do
@@ -41,6 +44,25 @@ defmodule Deepsplay.HostConfig.Store do
     end
 
     put(result)
+  end
+
+  @doc """
+  Reads the secrets and the host configuration without storing anything, so a
+  reload (ADR 23) can check a new version before applying it.
+  """
+  @spec read() :: {:ok, HostConfig.t(), %{String.t() => String.t()}} | {:error, [String.t()]}
+  def read do
+    # Secrets first: the host configuration refers to them by name (ADR 8).
+    with {:ok, secrets} <- Secrets.read() do
+      case Application.get_env(:deepsplay, :host_config_path) do
+        nil ->
+          {:error, ["no host configuration: DEEPSPLAY_CONFIG is not set"]}
+
+        path ->
+          with {:ok, host_config} <- HostConfig.load(path, secrets: Map.keys(secrets)),
+               do: {:ok, host_config, secrets}
+      end
+    end
   end
 
   @doc """

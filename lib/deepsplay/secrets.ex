@@ -3,7 +3,8 @@ defmodule Deepsplay.Secrets do
   Host secrets (ADR 8): values used by the server on a page's behalf, never
   part of a repository and never sent to the browser.
 
-  Secrets come from two places, read at startup:
+  Secrets come from two places, read at startup and again when the host
+  configuration is reloaded (ADR 23):
 
     * a TOML file of `name = "value"` pairs, at the `:secrets_path` setting
       (`DEEPSPLAY_SECRETS`); it should be readable by its owner only
@@ -26,16 +27,25 @@ defmodule Deepsplay.Secrets do
   """
   @spec load() :: {:ok, [String.t()]} | {:error, [String.t()]}
   def load do
-    path = Application.get_env(:deepsplay, :secrets_path)
+    case read() do
+      {:ok, secrets} ->
+        put(secrets)
+        {:ok, names()}
 
-    with {:ok, from_file} <- read_file(path) do
-      secrets = Map.merge(from_file, from_env(System.get_env()))
-      :persistent_term.put(@key, secrets)
-      {:ok, names()}
-    else
       {:error, errors} ->
-        :persistent_term.put(@key, %{})
+        put(%{})
         {:error, errors}
+    end
+  end
+
+  @doc """
+  Reads secrets from the configured file and the environment without storing
+  them, so a reload can check them first.
+  """
+  @spec read() :: {:ok, %{String.t() => String.t()}} | {:error, [String.t()]}
+  def read do
+    with {:ok, from_file} <- read_file(Application.get_env(:deepsplay, :secrets_path)) do
+      {:ok, Map.merge(from_file, from_env(System.get_env()))}
     end
   end
 
@@ -72,7 +82,7 @@ defmodule Deepsplay.Secrets do
   end
 
   @doc """
-  Stores secrets directly; for tests.
+  Stores secrets (after `read/0`, or directly in tests).
   """
   @spec put(%{String.t() => String.t()}) :: :ok
   def put(secrets), do: :persistent_term.put(@key, secrets)

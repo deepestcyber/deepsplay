@@ -11,7 +11,7 @@ Status values: `open`, `in progress`, `done`.
 | --- | --- | --- |
 | 1 | Descriptions for configurations, upstreams, manifests and pages | done |
 | 2 | Byte sizes with SI and binary units | done |
-| 3 | Reload the host configuration on change | open |
+| 3 | Reload the host configuration on change | done |
 | 4 | Page metadata: author, credits, license | done |
 | 5 | Time windows and overrides | open |
 
@@ -86,7 +86,28 @@ Tests: each unit, decimals, spaces, rejected spellings, display.
 
 ## 3. Reload the host configuration on change
 
-Status: open
+Status: done (2026-11-07)
+
+Built in `Deepsplay.HostConfig.Watcher` (with `Watcher.SignalHandler` for
+`SIGHUP`, added next to the default handler of `erl_signal_server`):
+
+- `Store.read/0` and `Secrets.read/0` read without storing, so nothing
+  changes before a new version is known to be valid.
+- `Pollers.reconcile/2` compares child specs of the old and new host
+  configuration: removed or changed ones stop, new or changed ones start.
+  A restarted poller checks at once, which fetches and validates its
+  configurations again with the new settings.
+- `Cache.set_max_size/1` for a new `upstream_cache_size`.
+- Screens subscribe to the watcher's topic; a shell whose
+  `Store.lookup/1` result differs (changed, removed or new configuration)
+  navigates to its own URL and so mounts again.
+- The status page shows when the configuration was loaded, the last
+  changes, a rejected version's errors, and directories needing a restart.
+- Tests run without the watcher (`watch_host_config`); its tests start their
+  own; a test sends `:sighup` to `erl_signal_server` to check the signal
+  path. Checked on a running server: an added configuration became
+  available within the interval, and a broken edit was rejected (logged and
+  on `/status`).
 
 Today: the host configuration and the secrets are read once at start
 (`Deepsplay.HostConfig.Store.load/0`, kept in `:persistent_term`). Most code

@@ -25,6 +25,15 @@ uid 10001.
 A missing or invalid host configuration does not stop the container: every
 screen and `/status` show the errors.
 
+Changes to the host configuration and the secrets file are picked up while
+running, within about 5 seconds (ADR 23); `SIGHUP` (e.g. `docker kill -s HUP
+deepsplay`) checks at once. An invalid change is not applied: the last good
+version keeps running and `/status` shows the errors. Screens of changed
+configurations reload on their own. A changed `cache_dir` or `state_dir`
+needs a restart, and so do `DEEPSPLAY_*` environment variables. Mount the
+directory rather than the single file if your editor or tooling replaces
+files by renaming, so the container sees the new file.
+
 ## Docker Compose (any host, including Raspberry Pi OS)
 
 1. Install Docker (on Raspberry Pi OS 64-bit: `curl -fsSL https://get.docker.com | sh`).

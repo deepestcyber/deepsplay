@@ -10,6 +10,10 @@ defmodule DeepsplayWeb.ShellLive do
   Without a revision to show, the shell is the fallback page. It says which
   configuration the screen asked for and what is missing.
 
+  When the host configuration changes (ADR 23) and this screen's
+  configuration is affected (changed, removed, or available again), the shell
+  reloads itself.
+
   Connected shells are tracked with `DeepsplayWeb.Presence` for the status
   page: configuration, state, revision and current page, plus the optional
   `?screen=<label>` naming a kiosk.
@@ -18,6 +22,7 @@ defmodule DeepsplayWeb.ShellLive do
   use DeepsplayWeb, :live_view
 
   alias Deepsplay.HostConfig.Store
+  alias Deepsplay.HostConfig.Watcher
   alias Deepsplay.RepoUrl
   alias Deepsplay.RevisionFile
   alias Deepsplay.PageParams
@@ -30,6 +35,7 @@ defmodule DeepsplayWeb.ShellLive do
   @impl true
   def mount(params, _session, socket) do
     requested = Map.get(params, "name", :default)
+    if connected?(socket), do: Watcher.subscribe()
 
     socket =
       case Store.lookup(requested) do
@@ -47,7 +53,14 @@ defmodule DeepsplayWeb.ShellLive do
           assign(socket, state: :host_config, errors: errors, page_title: "Error")
       end
 
+    socket = assign(socket, requested: requested, lookup: Store.lookup(requested))
     {:ok, track(socket, requested, params["screen"])}
+  end
+
+  @impl true
+  def handle_params(_params, uri, socket) do
+    %URI{path: path, query: query} = URI.parse(uri)
+    {:noreply, assign(socket, path: if(query, do: path <> "?" <> query, else: path))}
   end
 
   # Tracks the connected screen; updated when its state or page changes.
@@ -110,6 +123,14 @@ defmodule DeepsplayWeb.ShellLive do
   def handle_info({:revision_published, _name, _sha}, socket) do
     socket = load_revision(socket)
     {:noreply, update_presence(socket, presence_state(socket))}
+  end
+
+  # A changed host configuration: reload if what this screen shows depends
+  # on the change (a new revision is announced separately).
+  def handle_info({:host_config_changed}, socket) do
+    if Store.lookup(socket.assigns.requested) == socket.assigns.lookup,
+      do: {:noreply, socket},
+      else: {:noreply, push_navigate(socket, to: socket.assigns.path)}
   end
 
   def handle_info({:status_changed, name}, socket) do

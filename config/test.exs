@@ -44,3 +44,7 @@ config :deepsplay, :proxy_resolver, &Deepsplay.TestResolver.resolve/1
 # The shared state store stays in memory; tests of persistence start their own
 # store with a directory.
 config :deepsplay, :persist_state, false
+
+# Tests set the host configuration directly; tests of reloading start their
+# own watcher.
+config :deepsplay, :watch_host_config, false

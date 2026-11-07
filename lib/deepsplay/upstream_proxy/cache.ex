@@ -131,6 +131,14 @@ defmodule Deepsplay.UpstreamProxy.Cache do
     end)
   end
 
+  @doc """
+  Changes the size limit, dropping least recently used entries if the cache
+  is above the new one (a reloaded host configuration, ADR 23).
+  """
+  @spec set_max_size(pos_integer(), atom()) :: :ok
+  def set_max_size(max_size, cache \\ __MODULE__),
+    do: GenServer.call(cache, {:max_size, max_size})
+
   @doc false
   # Waits until all entries are on disk; for tests.
   def sync(cache \\ __MODULE__), do: GenServer.call(cache, :sync, :infinity)
@@ -309,6 +317,9 @@ defmodule Deepsplay.UpstreamProxy.Cache do
         {:noreply, start_fetch(state, key, ttls, fun, callers, [from])}
     end
   end
+
+  def handle_call({:max_size, max_size}, _from, state),
+    do: {:reply, :ok, evict(%{state | max_size: max_size})}
 
   def handle_call(:size, _from, state),
     do: {:reply, %{size: state.size, max_size: state.max_size}, state}

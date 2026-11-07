@@ -26,6 +26,8 @@ defmodule Deepsplay.Application do
       # One poller per repository and ref (ADR 7), and the cache cleanup.
       Deepsplay.Pollers,
       Deepsplay.Janitor,
+      # Reloads the host configuration when it changes (ADR 23).
+      watcher(),
       # Start a worker by calling: Deepsplay.Worker.start_link(arg)
       # {Deepsplay.Worker, arg},
       # Start to serve requests, typically the last entry
@@ -35,7 +37,12 @@ defmodule Deepsplay.Application do
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Deepsplay.Supervisor]
-    Supervisor.start_link(children, opts)
+    Supervisor.start_link(Enum.reject(children, &is_nil/1), opts)
+  end
+
+  defp watcher do
+    if Application.get_env(:deepsplay, :watch_host_config, true),
+      do: Deepsplay.HostConfig.Watcher
   end
 
   # Tell Phoenix to update the endpoint configuration
