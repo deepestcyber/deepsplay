@@ -6,6 +6,9 @@ Date: 2026-11-07
 
 Accepted
 
+Amended by [24](0024-page-metadata.md): optional `author`, `credits` and
+`license`.
+
 ## Context
 
 Pages take parameters from their URL (e.g. `?cells=90&gps=10`). Their

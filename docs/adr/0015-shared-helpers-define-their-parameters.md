@@ -6,6 +6,9 @@ Date: 2026-11-07
 
 Accepted
 
+Amended by [24](0024-page-metadata.md): optional `author`, `credits` and
+`license`.
+
 ## Context
 
 Content repositories have shared helpers, such as a theme script that reads

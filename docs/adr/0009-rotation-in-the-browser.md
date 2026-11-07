@@ -6,6 +6,9 @@ Date: 2026-11-06
 
 Accepted
 
+Amended by [25](0025-time-windows-and-overrides.md): pages can be limited to time
+windows, the rotation picks among the active ones, and overrides interrupt it.
+
 ## Context
 
 A screen cycles through the pages of a revision. Screens must keep working when

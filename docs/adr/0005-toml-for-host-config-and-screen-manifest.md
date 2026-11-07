@@ -6,6 +6,12 @@ Date: 2026-11-06
 
 Accepted
 
+Amended by [23](0023-reload-host-configuration-on-change.md): the host
+configuration is reloaded when it changes.
+
+Amended by [25](0025-time-windows-and-overrides.md): manifest page entries can
+have time windows (`when`), manifests `when_empty` and `[[override]]`.
+
 ## Context
 
 deepsplay reads two kinds of configuration: the host configuration (server
