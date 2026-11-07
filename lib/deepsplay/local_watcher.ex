@@ -12,12 +12,18 @@ defmodule Deepsplay.LocalWatcher do
   manifest's directory on its own), so the rest of a big repository costs
   nothing. Bursts of changes, as editors produce on save, are handled as one
   after 200 ms.
+
+  With a backend (ADR 26, `backend = true` and a `[backend]` block), its
+  `dir` is watched too. The backend runs from the directory and is replaced
+  when files in `dir` or the `[backend]` block change; changes to pages
+  alone leave it running.
   """
 
   use GenServer
 
   require Logger
 
+  alias Deepsplay.Backends
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.RevisionFile
   alias Deepsplay.Revisions
@@ -58,7 +64,20 @@ defmodule Deepsplay.LocalWatcher do
   @impl true
   def init(%Config{} = config) do
     root = Screen.root(config.path, config)
-    state = %{config: config, root: root, watchers: [], timer: nil}
+
+    state = %{
+      config: config,
+      root: root,
+      watchers: [],
+      timer: nil,
+      # The backend (ADR 26): its spec, the watcher of its dir, and a token
+      # that changes when it has to be replaced.
+      backend: nil,
+      backend_watcher: nil,
+      backend_token: 0,
+      backend_changed: false
+    }
+
     {:ok, state, {:continue, :watch}}
   end
 
@@ -67,7 +86,11 @@ defmodule Deepsplay.LocalWatcher do
 
   @impl true
   def handle_info({:file_event, _watcher, {path, _events}}, state) do
-    if relevant?(path, state), do: {:noreply, debounce(state)}, else: {:noreply, state}
+    cond do
+      backend_file?(path, state) -> {:noreply, debounce(%{state | backend_changed: true})}
+      relevant?(path, state) -> {:noreply, debounce(state)}
+      true -> {:noreply, state}
+    end
   end
 
   def handle_info({:file_event, _watcher, :stop}, state) do
@@ -129,16 +152,76 @@ defmodule Deepsplay.LocalWatcher do
     token = :crypto.strong_rand_bytes(20) |> Base.encode16(case: :lower)
     Registry.update_value(@registry, state.config.name, fn _old -> token end)
 
-    case Screen.load(state.root, Screen.options(state.config)) do
-      {:ok, _screen} ->
-        Status.update(state.config.name, %{checked_at: now(), error: nil, error_at: nil})
+    state =
+      case Screen.load(state.root, Screen.options(state.config)) do
+        {:ok, screen} ->
+          Status.update(state.config.name, %{checked_at: now(), error: nil, error_at: nil})
+          sync_backend(state, screen.backend)
 
-      {:error, errors} ->
-        record_error(state, Enum.join(errors, "; "))
-    end
+        {:error, errors} ->
+          record_error(state, Enum.join(errors, "; "))
+          state
+      end
 
     Revisions.announce(state.config.name, token)
-    state
+    %{state | backend_changed: false}
+  end
+
+  # Files in the backend's dir, except hidden ones.
+  defp backend_file?(_path, %{backend: nil}), do: false
+
+  defp backend_file?(path, state) do
+    case Path.split(Path.relative_to(path, Path.join(state.root, state.backend.dir))) do
+      ["/" | _absolute] -> false
+      [".." | _outside] -> false
+      parts -> not RevisionFile.hidden?(parts)
+    end
+  end
+
+  defp sync_backend(state, nil) do
+    if state.backend, do: Backends.stop(state.config.name)
+    stop_backend_watcher(state)
+    %{state | backend: nil, backend_watcher: nil}
+  end
+
+  defp sync_backend(state, spec) do
+    state =
+      if state.backend && state.backend.dir == spec.dir,
+        do: state,
+        else: %{stop_backend_watcher(state) | backend_watcher: watch_backend(state, spec)}
+
+    token =
+      if state.backend_changed or state.backend != spec,
+        do: state.backend_token + 1,
+        else: state.backend_token
+
+    start_backend(state, spec, token)
+    %{state | backend: spec, backend_token: token}
+  end
+
+  defp watch_backend(state, spec) do
+    dir = Path.join(state.root, spec.dir)
+    if File.dir?(dir), do: start_watcher(dirs: [dir])
+  end
+
+  defp stop_backend_watcher(%{backend_watcher: nil} = state), do: state
+
+  defp stop_backend_watcher(state) do
+    GenServer.stop(state.backend_watcher, :normal)
+    %{state | backend_watcher: nil}
+  end
+
+  # Starting can take a while (uv sync), so it runs beside the watcher;
+  # Backends keeps a running backend with the same token.
+  defp start_backend(state, spec, token) do
+    %{config: config, root: root} = state
+
+    Task.start(fn ->
+      case Backends.ensure(config, "local-#{token}", root, spec) do
+        :ok -> :ok
+        {:error, message} -> record_error(state, "backend: " <> message)
+      end
+    end)
   end
 
   defp record_error(state, message) do

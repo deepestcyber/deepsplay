@@ -255,5 +255,12 @@ Build steps, each tested on its own:
    as upstreams, no secrets. Bodies arrive unparsed (the backend path skips
    `Plug.Parsers`). `404` without a running backend, `503` while it
    restarts. The test stub for upstream calls does not apply to backends.
-5. Development mode (`uv run`, restart on changes).
+5. Development mode (`uv run`, restart on changes): built (2026-11-08). The
+   backend of a configuration with `path =` runs from the directory like any
+   other (`uv sync`, then the command; no separate `uv run`), started by
+   `Deepsplay.LocalWatcher`, which also watches the backend's `dir`. A
+   change in `dir` or in the `[backend]` block replaces it; page changes
+   alone leave it running; a manifest without `[backend]` stops it. Starting
+   runs in a task beside the watcher. A backend change also announces a new
+   page token, so screens reload their page (harmless in development).
 6. Status page and catalog; `uv` in the container image; guide.
