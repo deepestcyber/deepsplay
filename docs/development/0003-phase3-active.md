@@ -14,13 +14,13 @@ Status values: `open`, `in progress`, `done`.
 
 | # | Part | Status |
 | --- | --- | --- |
-| 1 | Upstream cache for expensive and rate-limited providers | open |
+| 1 | Upstream cache for expensive and rate-limited providers | in progress |
 | 2 | Shared state for pages | open |
 | 3 | Sidecars | open |
 
 ## 1. Upstream cache for expensive and rate-limited providers
 
-Status: open
+Status: in progress (decided, not built)
 
 Goal: data from expensive or rate-limited providers is fetched as rarely as
 possible and stays available when the provider fails, for all screens at once.
@@ -39,28 +39,30 @@ or link-local addresses), no redirects, `cache_ttl` of at least one minute,
 size limit for text and binary bodies. The host allows this by default, per
 configuration or for listed host name patterns, and can switch it off.
 
-Decided in
-[ADR 20](../adr/0020-upstream-cache-with-request-coalescing.md): request
-coalescing. Per cache key at most one upstream request is in flight; concurrent
-requests wait for its result. Only successes are cached, waiting is bound by
-the upstream timeout, and manifest upstreams share entries by target URL.
-The points below extend ADR 20.
+Decided in [ADR 20](../adr/0020-upstream-cache.md), for host and manifest
+upstreams:
 
-To plan:
+- **Coalescing**: per cache key at most one upstream request in flight;
+  concurrent requests wait for its result. Only successes are cached; waiting
+  is bound by the upstream timeout; manifest upstreams share entries by
+  target URL.
+- **Stale answers**: `stale_ttl` (off by default); served when a fetch fails
+  with a timeout, connection error, `429` or `5xx`. Headers
+  `X-Deepsplay-Cache` and `Age`.
+- **Scheduled refresh**: `refresh = true` refetches keys requested within the
+  last three times `cache_ttl`, shortly before they expire.
+- **Persistence and limits**: `upstream_cache_size` for memory and disk
+  together, least recently used dropped first; every entry also in
+  `cache_dir/upstream/`, loaded again on start (wall-clock expiry).
+- **Status page**: per upstream origin, entries, hits, misses, stale answers,
+  last fetch and error; total size against the limit.
 
-- **Serving stale data**: an option such as `stale_ttl`, so an expired answer
-  is still served while the upstream fails or the rate limit is reached,
-  instead of a `502`.
-- **Scheduled refresh**: an option such as `refresh = "5m"` for chosen URLs,
-  fetched by deepsplay on its own schedule; the upstream sees a fixed call rate
-  however many screens are watching. Which URLs (configured paths, or every
-  URL requested recently) is to decide.
-- **Persistence**: keeping cached answers in `cache_dir`, so a restart or
-  deploy does not cause a burst of upstream calls.
-- How cache state shows on the status page (hits, age, last upstream error).
-- For manifest upstreams (ADR 19): final field names of the host switch and
-  the host name list; how the address check hooks into Req/Finch; how the
-  catalog shows them.
+ADR 19 details: server settings `repo_upstreams` (default `true`) and
+`repo_upstream_hosts` (patterns `dwd.de`, `*.dwd.de`), overridable per
+configuration; resolved addresses all checked, connection to a checked
+address with the host name for TLS and `Host`.
+
+Planning is complete; next is building.
 
 ## 2. Shared state for pages
 

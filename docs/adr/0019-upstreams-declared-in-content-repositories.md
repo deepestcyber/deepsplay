@@ -41,19 +41,27 @@ cache as host upstreams.
 - Guards, beyond those of ADR 8:
   - `https` only.
   - The target address is checked when connecting, after DNS resolution:
-    loopback, private, link-local, unique-local and other non-public
-    addresses are refused, so neither the URL nor DNS can reach the internal
-    network. Redirects are not followed.
+    the host name is resolved to all its IPv4 and IPv6 addresses, and the
+    request is refused if any of them is loopback, private, link-local,
+    unique-local or otherwise non-public. deepsplay then connects to a
+    checked address, passing the host name for TLS verification, SNI and the
+    `Host` header, so neither the URL nor DNS can reach the internal network.
+    Any port is allowed. Redirects are not followed.
   - `cache_ttl` is required, with a minimum of one minute, so the proxy never
     passes every screen request through.
   - Response size limit as in ADR 8 (5 MB), applied to text and binary
     bodies (images) alike.
-- The host decides whether repositories may declare upstreams: a server
-  setting with a per-configuration override, allowed by default, optionally
-  restricted to a list of host name patterns (e.g. `*.dwd.de`). A revision
-  declaring upstreams where this is not allowed is rejected. Final field
-  names are chosen when building.
-- The status page and the catalog show manifest upstreams with their origin.
+- The host decides whether repositories may declare upstreams, with server
+  settings that a configuration can override by fields of the same name:
+  - `repo_upstreams = true | false`, default `true`;
+  - `repo_upstream_hosts = ["*.dwd.de"]`, default empty (any public host).
+    `dwd.de` matches that name only, `*.dwd.de` its subdomains but not
+    `dwd.de` itself.
+
+  A revision declaring upstreams where this is not allowed, or with a URL
+  outside the allowed hosts, is rejected.
+- The status page shows manifest upstreams with their origin (ADR 20); the
+  catalog shows them with URL, `cache_ttl` and the pages using them.
 
 ## Consequences
 
@@ -62,10 +70,11 @@ cache as host upstreams.
 - Whoever can push to a content repository can make deepsplay send `GET`
   requests to public hosts of their choice, at most once per minute per URL
   and with no secrets attached (with request coalescing,
-  [ADR 20](0020-upstream-cache-with-request-coalescing.md)). Hosts that do
-  not want this switch it off or restrict it to known domains.
-- Checking addresses at connect time needs a connection setup of our own
-  instead of the HTTP client's default resolution.
+  [ADR 20](0020-upstream-cache.md)). Hosts that do not want this switch it
+  off or restrict it to known domains.
+- Checking addresses means resolving names in deepsplay and connecting to an
+  address with an explicit host name (Mint's `hostname` option through Req),
+  with one connection pool per declared host.
 - The proxy forwards path and query unchanged and caches by them; it never
   rewrites a request. Screens share a cache entry only for the same URL, so
   pages build stable URLs themselves (e.g. round time parameters to the
