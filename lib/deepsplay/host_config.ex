@@ -24,7 +24,9 @@ defmodule Deepsplay.HostConfig do
     keep_revisions: 3,
     upstream_cache_size: 200 * 1024 * 1024,
     repo_upstreams: true,
-    repo_upstream_hosts: []
+    repo_upstream_hosts: [],
+    state_dir: nil,
+    shared_state: true
   ]
 
   @type t :: %__MODULE__{
@@ -35,6 +37,8 @@ defmodule Deepsplay.HostConfig do
           upstream_cache_size: pos_integer(),
           repo_upstreams: boolean(),
           repo_upstream_hosts: [String.t()],
+          state_dir: String.t(),
+          shared_state: boolean(),
           configs: %{String.t() => Config.t()},
           upstreams: %{String.t() => Upstream.t()}
         }
@@ -50,7 +54,9 @@ defmodule Deepsplay.HostConfig do
     {"keep_revisions", :keep_revisions, :non_neg_integer, default: 3},
     {"upstream_cache_size", :upstream_cache_size, :size, default: 200 * 1024 * 1024},
     {"repo_upstreams", :repo_upstreams, :boolean, default: true},
-    {"repo_upstream_hosts", :repo_upstream_hosts, &__MODULE__.cast_host_patterns/1, default: []}
+    {"repo_upstream_hosts", :repo_upstream_hosts, &__MODULE__.cast_host_patterns/1, default: []},
+    {"state_dir", :state_dir, :string, default: nil},
+    {"shared_state", :shared_state, :boolean, default: true}
   ]
 
   @doc """
@@ -130,6 +136,10 @@ defmodule Deepsplay.HostConfig do
            upstream_cache_size: server.upstream_cache_size,
            repo_upstreams: server.repo_upstreams,
            repo_upstream_hosts: server.repo_upstream_hosts,
+           # Shared state is data, not cache (ADR 21); hidden, so the cache
+           # cleanup leaves it alone.
+           state_dir: Path.expand(server.state_dir || Path.join(server.cache_dir, ".state")),
+           shared_state: server.shared_state,
            configs: Map.new(configs, &{&1.name, with_server_defaults(&1, server)}),
            upstreams: upstreams
          }}
@@ -386,7 +396,8 @@ defmodule Deepsplay.HostConfig do
       {"upstreams", :upstreams, :string_list, default: []},
       {"params", :params, :params, default: %{}},
       {"repo_upstreams", :repo_upstreams, :boolean, default: nil},
-      {"repo_upstream_hosts", :repo_upstream_hosts, &cast_host_patterns/1, default: nil}
+      {"repo_upstream_hosts", :repo_upstream_hosts, &cast_host_patterns/1, default: nil},
+      {"state", :state, &cast_state/1, default: :default}
     ]
   end
 
@@ -401,6 +412,18 @@ defmodule Deepsplay.HostConfig do
   end
 
   defp cast_name(_value), do: {:error, "must be a string"}
+
+  # The namespace for shared state (ADR 21): a name, or false for none.
+  defp cast_state(false), do: {:ok, false}
+
+  defp cast_state(value) when is_binary(value) do
+    case cast_name(value) do
+      {:ok, name} -> {:ok, name}
+      {:error, _why} -> {:error, "must be false or a name like a configuration name"}
+    end
+  end
+
+  defp cast_state(_value), do: {:error, "must be false or a name"}
 
   defp cast_repo(value, transports) when is_binary(value) do
     case RepoUrl.transport(value) do

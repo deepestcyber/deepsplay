@@ -200,6 +200,35 @@ defmodule Deepsplay.HostConfigTest do
       assert Enum.any?(errors, &(&1 =~ "server.repo_upstream_hosts must be a list of host names"))
     end
 
+    test "shared state settings" do
+      assert {:ok, host_config} = parse(minimal())
+      assert host_config.state_dir == "/cache/.state"
+      assert host_config.shared_state
+      assert host_config.configs["lobby"].state == :default
+
+      toml =
+        String.replace(
+          minimal(~s(state = "hall")),
+          ~s(default_config = "lobby"),
+          ~s(default_config = "lobby"\nstate_dir = "/data/state"\nshared_state = false)
+        )
+
+      assert {:ok, host_config} = parse(toml)
+      assert host_config.state_dir == "/data/state"
+      refute host_config.shared_state
+      assert host_config.configs["lobby"].state == "hall"
+
+      assert {:ok, host_config} = parse(minimal("state = false"))
+      assert host_config.configs["lobby"].state == false
+
+      assert Enum.any?(
+               errors(minimal(~s(state = "Not Valid"))),
+               &(&1 =~ ".state must be false or a name")
+             )
+
+      assert Enum.any?(errors(minimal("state = true")), &(&1 =~ ".state must be false or a name"))
+    end
+
     test "reads default parameters for pages" do
       toml = minimal(~s(params = { theme = "neon", cells = 40, gps = 2.5, fast = true }))
 

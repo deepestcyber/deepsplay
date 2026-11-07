@@ -20,6 +20,7 @@ defmodule Deepsplay.Application do
       {Task.Supervisor, name: Deepsplay.UpstreamProxy.Tasks},
       Deepsplay.UpstreamProxy.Stats,
       Deepsplay.UpstreamProxy.Cache,
+      Deepsplay.State,
       Deepsplay.Pages,
       {Registry, keys: :unique, name: Deepsplay.LocalWatcher.Registry},
       # One poller per repository and ref (ADR 7), and the cache cleanup.

@@ -40,3 +40,7 @@ config :deepsplay, :persist_upstream_cache, false
 
 # Name resolution for upstreams declared in manifests (ADR 19), without DNS.
 config :deepsplay, :proxy_resolver, &Deepsplay.TestResolver.resolve/1
+
+# The shared state store stays in memory; tests of persistence start their own
+# store with a directory.
+config :deepsplay, :persist_state, false

@@ -19,7 +19,8 @@ defmodule Deepsplay.HostConfig.Config do
     upstreams: [],
     params: %{},
     repo_upstreams: true,
-    repo_upstream_hosts: []
+    repo_upstream_hosts: [],
+    state: :default
   ]
 
   @type t :: %__MODULE__{
@@ -33,7 +34,8 @@ defmodule Deepsplay.HostConfig.Config do
           upstreams: [String.t()],
           params: %{String.t() => String.t()},
           repo_upstreams: boolean(),
-          repo_upstream_hosts: [String.t()]
+          repo_upstream_hosts: [String.t()],
+          state: :default | false | String.t()
         }
 
   @doc """

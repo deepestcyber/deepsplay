@@ -82,6 +82,8 @@ keep_revisions = 3          # previous revisions kept per repository
 upstream_cache_size = "200MB"   # upstream answers, in memory and on disk
 repo_upstreams      = true      # manifests may declare upstreams without secrets
 repo_upstream_hosts = []        # ... for these hosts only, e.g. ["*.dwd.de"]; empty: any
+shared_state        = true      # shared state for pages (ADR 21)
+state_dir           = "/var/lib/display/state"   # default: <cache_dir>/.state
 
 [[config]]
 name      = "lobby"

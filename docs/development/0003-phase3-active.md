@@ -146,6 +146,21 @@ Decided in [ADR 21](../adr/0021-shared-state-for-pages.md):
 - **Visibility**: namespaces on the status page; keys and shortened values in
   the catalog.
 
+Build steps, each tested on its own:
+
+1. Store and host settings: built (2026-11-07). `Deepsplay.State` keeps
+   values as encoded JSON in a table (reads) and writes through its process
+   (conditions, limits, increments). Versions come from a counter per
+   namespace, so a deleted and recreated key never repeats one. Namespaces:
+   `repo:<repo key>@<ref>/<subdir>`, `path:<dir>`, `name:<name>`. Files in
+   `state_dir` are named by a hash of the namespace and hold it, with `seq`,
+   `written_at` and the keys; they are written a second after the first
+   change and on shutdown. Tests keep the shared store in memory
+   (`persist_state`) and start their own stores for persistence.
+2. HTTP API at `/c/<config>/state/`.
+3. `Deepsplay.state` in `deepsplay.js`, and the guide.
+4. Namespaces on the status page, keys in the catalog.
+
 ## 3. Sidecars
 
 Status: open
