@@ -16,7 +16,7 @@ Status values: `open`, `in progress`, `done`.
 | --- | --- | --- |
 | 1 | Upstream cache for expensive and rate-limited providers | done |
 | 2 | Shared state for pages | done |
-| 3 | Sidecars | open |
+| 3 | Sidecars | in progress |
 
 ## 1. Upstream cache for expensive and rate-limited providers
 
@@ -176,76 +176,46 @@ Build steps, each tested on its own:
 
 ## 3. Sidecars
 
-Status: open
+Status: in progress (decided, not built)
 
 Goal: a content repository can bring a server-side component of its own for
 logic that parts 1 and 2 do not cover. deepsplay starts it, supervises it and
 makes it reachable for the repository's pages through a proxy. Pages stay plain
 HTML; a backend is optional.
 
-Starting point (from an earlier concept note, "Python sidecars with uv"):
+Decided in [ADR 26](../adr/0026-sidecars.md):
 
-- A sidecar is a separate process; deepsplay knows only its start command and
-  its port. Python is attached through a normal HTTP server (WSGI apps behind
-  gunicorn or waitress, ASGI apps such as FastAPI behind uvicorn).
-- `uv` manages it: `uv.lock` pins every dependency, `uv` fetches the matching
-  Python itself, `uv sync --frozen` creates the environment reproducibly, and a
-  global cache speeds up repeated installs.
-- The manifest gets a `[backend]` block with the start command, optionally the
-  Python version, and the names of the secrets it needs (never values). Pages
-  call the backend relative to the reserved path `/c/<config>/backend/`.
-- The repository holds `pyproject.toml` and `uv.lock`; `.venv` and
-  credentials stay out.
-- The app reads its port from `PORT`, listens on `127.0.0.1` only, and reads
-  only the secrets deepsplay passes in its environment.
-- On a new revision: export and validate as before, then `uv sync --frozen`
-  with the environment in the cache next to the revision (a venv is bound to
-  path and platform; optionally shared per hash of `uv.lock`), start with a
-  free `PORT` and the allowed secrets, supervise and restart on crash. The
-  revision is published to screens only once the process is ready; if sync or
-  start fails, the last working revision stays and the error shows on the
-  status page. A newer revision replaces the process.
-- The process lives as long as its configuration's revision is current, also
-  when the page is not shown or no screen is connected (no start delay,
-  background fetching possible; costs memory). A later option: lazy start with
-  an idle timeout.
+- **Trust**: only configurations with `backend = true` in the host
+  configuration run a backend; otherwise `[backend]` is ignored with a
+  warning and calls answer `404`. Isolation at process level only.
+- **Scope**: Python with `uv` only for now. `[backend]` has `dir`,
+  `command` (with `{port}`), optional `health` and `secrets`.
+- **Lifecycle**: one process per configuration, always on while its revision
+  is current. A revision is published only once its backend is ready
+  (`uv sync --frozen`, start, health check or open port); failures keep the
+  last working revision. Restarts with backoff; old process stops when the
+  new one is ready.
+- **Environment**: `PORT`, `HOME`, `UV_CACHE_DIR`, `DEEPSPLAY_CONFIG`,
+  `DEEPSPLAY_URL`, `DEEPSPLAY_DATA_DIR`, and the secrets allowed by
+  `backend_secrets`; nothing else inherited.
+- **Limits**: `backend_memory` via `ulimit -v`; proxy timeouts and size
+  limits.
+- **Proxy**: `/c/<name>/backend/*` to `127.0.0.1:<port>`, any method, no
+  secrets added, no WebSockets or server-sent events yet.
+- **Visibility**: process state, uptime, restarts and recent output on the
+  status page; the backend in the catalog.
+- **Development**: `uv run` from the directory, restart on changes in `dir`.
+- **Operations**: `uv` in the container image; internet access needed.
 
-What has changed since that note, and has to be part of the plan:
+Build steps, each tested on its own:
 
-- **Trust and isolation come first.** Running repository code is a different
-  trust level than serving files, and deepsplay now runs in a container as an
-  unprivileged user (ADR 13): it cannot switch users, and starting a container
-  per sidecar would need the Docker socket (root on the host). Isolation is
-  therefore at process level. Likely consequence: backends must be allowed
-  explicitly per configuration in the host configuration, so only trusted
-  repositories run code. This is the first decision of this part.
-- **Container image**: needs `uv` (Python and packages are downloaded at
-  runtime, so the container needs internet access); the `uv` cache belongs on
-  the volume. Offline operation would need pre-built wheels.
-- **Repository layout** (ADR 5, ADR 10): only `pages/` is delivered, so the
-  backend code can live in a directory such as `backend/` next to the
-  manifests and is never delivered. The `[backend]` block names that directory
-  (the working directory with `pyproject.toml` and `uv.lock`).
-- **Several manifests per repository**: likely one process per configuration,
-  since secrets are per configuration; the code can still be shared.
-- **Secrets** (ADR 8): the manifest names the secrets it wants; the host
-  configuration allows them per configuration, like `upstreams`; the sidecar
-  receives only those, as environment variables.
-- **Publishing in two steps**: today `RevisionStore.publish` validates,
-  renames and remembers in one go. With a backend: export, sync, start, wait
-  until ready, then remember and announce.
-- **Proxy reuse**: `/c/<name>/backend/*` forwards to `127.0.0.1:<port>` with
-  the path checks, timeouts and size limits of the upstream proxy, without
-  adding secrets.
-- **Dev mode** (ADR 12): with `path =`, the sidecar runs from the directory
-  with `uv run` and restarts when files in the backend directory change.
-- **Existing hook**: a `[backend]` table in a manifest is already accepted and
-  ignored with a warning on the status page.
-
-Still open:
-
-- How readiness is detected (port open, or a health path).
-- Memory and CPU limits; in an unprivileged container at most `ulimit`, not
-  cgroups.
-- Final field names of the `[backend]` block (command, directory, Python
-  version, secrets, lazy start).
+1. Host settings (`backend`, `backend_secrets`, `backend_memory`) and the
+   `[backend]` manifest block, replacing today's warning.
+2. Backend supervisor: environment sync with `uv`, start with a clean
+   environment and memory limit, readiness, restarts with backoff, output
+   kept for the status page.
+3. Two-step publishing: a revision with a backend is remembered and
+   announced only once its process is ready.
+4. Proxy at `/c/<name>/backend/*`.
+5. Development mode (`uv run`, restart on changes).
+6. Status page and catalog; `uv` in the container image; guide.
