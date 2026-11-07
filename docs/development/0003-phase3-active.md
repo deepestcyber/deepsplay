@@ -157,7 +157,11 @@ Build steps, each tested on its own:
    `written_at` and the keys; they are written a second after the first
    change and on shutdown. Tests keep the shared store in memory
    (`persist_state`) and start their own stores for persistence.
-2. HTTP API at `/c/<config>/state/`.
+2. HTTP API at `/c/<config>/state/`: built (2026-11-07). Bodies are read
+   unparsed for any content type (the state routes skip `Plug.Parsers`, like
+   the proxy), so the 64 KB limit applies before parsing. Errors answer JSON
+   `{"error": ...}`; a non-number for an increment answers `409`, a malformed
+   `If-Match` `400`. Answers carry `Cache-Control: no-store`.
 3. `Deepsplay.state` in `deepsplay.js`, and the guide.
 4. Namespaces on the status page, keys in the catalog.
 

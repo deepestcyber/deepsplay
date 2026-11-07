@@ -25,6 +25,15 @@ defmodule DeepsplayWeb.Router do
     match :*, "/*path", ProxyController, :forward
   end
 
+  # Shared state for pages: no session, no CSRF (ADR 21).
+  scope "/c/:name/state", DeepsplayWeb do
+    get "/", StateController, :list
+    get "/*key", StateController, :show
+    put "/*key", StateController, :put
+    delete "/*key", StateController, :delete
+    post "/*key", StateController, :increment
+  end
+
   # Files of a revision: no session, no CSRF, any content type (ADR 10).
   scope "/c/:name/r/:sha", DeepsplayWeb do
     get "/*path", RevisionController, :show

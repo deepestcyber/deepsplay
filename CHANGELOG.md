@@ -41,6 +41,10 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - The status page lists upstreams with where they are defined, their cache
   entries and size, hits, misses, stale answers, last call and last error,
   and the total cache size (ADR 20).
+- Shared state for pages at `/c/<config>/state/<key>`: JSON values with
+  versions, conditional writes (`If-Match`, `If-None-Match: *`), atomic
+  increments and listing by prefix, shared by the configurations of one
+  repository and ref, kept in `state_dir` (ADR 21).
 
 ## 0.1.0 – 2026-11-07
 

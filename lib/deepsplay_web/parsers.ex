@@ -1,7 +1,9 @@
 defmodule DeepsplayWeb.Parsers do
   @moduledoc """
   `Plug.Parsers`, except for the upstream proxy (`/c/<name>/api/...`), whose
-  request bodies must reach the upstream unparsed (ADR 8).
+  request bodies must reach the upstream unparsed (ADR 8), and shared state
+  (`/c/<name>/state/...`), which reads bodies itself within its size limit
+  (ADR 21).
   """
 
   @behaviour Plug
@@ -11,5 +13,6 @@ defmodule DeepsplayWeb.Parsers do
 
   @impl true
   def call(%Plug.Conn{path_info: ["c", _name, "api" | _rest]} = conn, _opts), do: conn
+  def call(%Plug.Conn{path_info: ["c", _name, "state" | _rest]} = conn, _opts), do: conn
   def call(conn, opts), do: Plug.Parsers.call(conn, opts)
 end
