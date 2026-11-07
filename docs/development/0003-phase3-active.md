@@ -162,7 +162,12 @@ Build steps, each tested on its own:
    the proxy), so the 64 KB limit applies before parsing. Errors answer JSON
    `{"error": ...}`; a non-number for an increment answers `409`, a malformed
    `If-Match` `400`. Answers carry `Cache-Control: no-store`.
-3. `Deepsplay.state` in `deepsplay.js`, and the guide.
+3. `Deepsplay.state` in `deepsplay.js`, and the guide: built (2026-11-07).
+   Functions return promises; `get` gives `undefined` for a missing key,
+   `entry` gives value and version. `set` takes `{ ifVersion }` or
+   `{ onlyNew: true }`; `update(key, fn)` retries up to 10 times on `412`.
+   Errors carry `status`. Tested in Node against a stand-in server, and once
+   end to end against a running deepsplay.
 4. Namespaces on the status page, keys in the catalog.
 
 ## 3. Sidecars

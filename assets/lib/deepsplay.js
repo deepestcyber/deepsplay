@@ -16,6 +16,20 @@
 //                                 and returns its parameters
 //   Deepsplay.api(upstream, path) URL of an upstream of the page's
 //                                 configuration (ADR 8)
+//   Deepsplay.state               shared state of the page's configuration
+//                                 (ADR 21); all functions return promises:
+//     .get(key)                   the value, or undefined
+//     .entry(key)                 { value, version }, or null
+//     .set(key, value, opts)      stores; opts.ifVersion / opts.onlyNew make
+//                                 it conditional; resolves to the version
+//     .delete(key, opts)          deletes; opts.ifVersion as for set
+//     .increment(key, by = 1)     adds to a number; resolves to the new value
+//     .list(prefix = "")          [{ key, version }]
+//     .update(key, fn)            new value = fn(old value or undefined),
+//                                 written only if nobody wrote in between,
+//                                 retried otherwise; resolves to it
+//   Failed requests reject with an Error carrying `status` (412: someone
+//   else wrote first).
 //   Deepsplay.version             version of this helper
 //
 // The value rules here and in Deepsplay.PageDoc (Elixir) are the same; both
@@ -188,11 +202,95 @@ function helper(name, toml) {
   return helpers[name]
 }
 
-function api(upstream, path = "") {
+function configBase(what) {
   const match = /^\/c\/([^/]+)\//.exec(location.pathname)
-  if (!match) throw new Error("Deepsplay.api: the page is not served by deepsplay")
-  const rest = path === "" || path.startsWith("/") ? path : "/" + path
-  return `/c/${match[1]}/api/${encodeURIComponent(upstream)}${rest}`
+  if (!match) throw new Error(`Deepsplay.${what}: the page is not served by deepsplay`)
+  return `/c/${match[1]}`
 }
 
-window.Deepsplay = Object.freeze({ version: VERSION, params, helper, api })
+function api(upstream, path = "") {
+  const rest = path === "" || path.startsWith("/") ? path : "/" + path
+  return `${configBase("api")}/api/${encodeURIComponent(upstream)}${rest}`
+}
+
+// ---------- shared state (ADR 21) ----------
+
+const UPDATE_ATTEMPTS = 10
+
+function stateUrl(key = "") {
+  return `${configBase("state")}/state/${key.split("/").map(encodeURIComponent).join("/")}`
+}
+
+async function stateRequest(method, key, { body, headers = {}, query = "" } = {}) {
+  const init = { method, headers: { Accept: "application/json", ...headers }, cache: "no-store" }
+  if (body !== undefined) {
+    init.body = JSON.stringify(body)
+    init.headers["Content-Type"] = "application/json"
+  }
+  const response = await fetch(stateUrl(key) + query, init)
+  if (response.ok || (method === "GET" && response.status === 404)) return response
+
+  let message = `${method} ${key}: ${response.status}`
+  try {
+    message += ` ${(await response.json()).error}`
+  } catch {}
+  const error = new Error(`Deepsplay.state: ${message}`)
+  error.status = response.status
+  throw error
+}
+
+function conditions({ ifVersion, onlyNew } = {}) {
+  if (ifVersion !== undefined) return { "If-Match": `"${ifVersion}"` }
+  if (onlyNew) return { "If-None-Match": "*" }
+  return {}
+}
+
+const versionOf = response => Number((response.headers.get("ETag") || "").replace(/"/g, ""))
+
+const state = Object.freeze({
+  async entry(key) {
+    const response = await stateRequest("GET", key)
+    if (response.status === 404) return null
+    return { value: await response.json(), version: versionOf(response) }
+  },
+
+  async get(key) {
+    const entry = await state.entry(key)
+    return entry === null ? undefined : entry.value
+  },
+
+  async set(key, value, opts = {}) {
+    const response = await stateRequest("PUT", key, { body: value, headers: conditions(opts) })
+    return (await response.json()).version
+  },
+
+  async delete(key, opts = {}) {
+    await stateRequest("DELETE", key, { headers: conditions(opts) })
+  },
+
+  async increment(key, by = 1) {
+    const response = await stateRequest("POST", key, { body: { increment: by } })
+    return (await response.json()).value
+  },
+
+  async list(prefix = "") {
+    const response = await stateRequest("GET", "", { query: `?prefix=${encodeURIComponent(prefix)}` })
+    return (await response.json()).keys
+  },
+
+  async update(key, fn) {
+    for (let attempt = 1; ; attempt++) {
+      const entry = await state.entry(key)
+      const value = fn(entry === null ? undefined : entry.value)
+      const opts = entry === null ? { onlyNew: true } : { ifVersion: entry.version }
+      try {
+        await state.set(key, value, opts)
+        return value
+      } catch (error) {
+        if (error.status !== 412 || attempt >= UPDATE_ATTEMPTS) throw error
+      }
+    }
+  },
+})
+
+window.Deepsplay = Object.freeze({ version: VERSION, params, helper, api, state })

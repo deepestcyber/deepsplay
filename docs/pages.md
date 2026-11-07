@@ -216,6 +216,40 @@ unchanged, so screens share an answer only for the same URL: a page asking
 for time-dependent data rounds the time to what the provider offers, e.g. to
 5 minutes.
 
+### Shared state
+
+Pages can keep small values on the server, the same on every screen: a
+counter, a message one page sets and another shows, the last item seen.
+
+```js
+const S = Deepsplay.state
+await S.set("shared/message", { text: "Welcome!" })
+const message = await S.get("shared/message")        // undefined if not set
+const visits = await S.increment("life/visits")      // atomic, from 0
+await S.update("shared/names", names => [...(names || []), "Ada"])
+```
+
+- State is shared by all pages of the repository and ref, also across
+  configurations with different manifests. Name keys by page (`life/...`)
+  or as shared (`shared/...`) so pages do not overwrite each other by
+  accident. Keys are segments of letters, digits, `.`, `_` and `-`,
+  separated by `/`.
+- Values are any JSON, at most 64 KB; a repository has room for 1000 keys
+  and 5 MB.
+- Every write gets a new version. `update` reads, changes and writes only if
+  nobody wrote in between, retrying otherwise; `set` takes
+  `{ ifVersion }` or `{ onlyNew: true }` for the same check by hand.
+  `entry(key)` gives value and version, `list(prefix)` the keys.
+- There are no live updates: a page that shows changing state polls, e.g.
+  `setInterval(async () => show(await S.get("shared/message")), 10000)`.
+- State is neither secret nor protected: anyone on the network can read and
+  change it. Pages must cope with any value, and with none.
+- Failed requests reject with an error carrying `status` (`412` when someone
+  else wrote first, `413` for a value too large, `507` when full).
+
+The same works without the helper over HTTP at `/c/<config>/state/<key>`
+(`GET`, `PUT`, `DELETE`, `POST {"increment": n}`, `GET ?prefix=` to list).
+
 ## Trying pages
 
 - **Catalog**: `/catalog/<config>` shows the rotation, every page with its
@@ -254,8 +288,9 @@ These are recommendations; build what your screens need.
   repository instead of loading them from a CDN, so screens keep working
   offline.
 - **External data** only through upstreams, never with keys in the page.
-- **State per display**: `localStorage` works across a screen's pages and
-  reloads; use a key prefix per page.
+- **State**: `localStorage` for state of one display (shared by its pages,
+  kept across reloads; use a key prefix per page), `Deepsplay.state` for
+  state shared by all screens.
 - **Licences**: only fonts and assets that may be redistributed (e.g. SIL
   OFL), with the licence file next to them.
 - **Videos**: `muted`, `autoplay` and `playsinline`.

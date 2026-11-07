@@ -44,7 +44,9 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - Shared state for pages at `/c/<config>/state/<key>`: JSON values with
   versions, conditional writes (`If-Match`, `If-None-Match: *`), atomic
   increments and listing by prefix, shared by the configurations of one
-  repository and ref, kept in `state_dir` (ADR 21).
+  repository and ref, kept in `state_dir` (ADR 21). Pages use it with
+  `Deepsplay.state` (`get`, `set`, `delete`, `increment`, `list`, `update`)
+  in `deepsplay.js`.
 
 ## 0.1.0 – 2026-11-07
 
