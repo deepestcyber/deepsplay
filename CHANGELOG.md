@@ -5,6 +5,10 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- Catalog page of a configuration: an overview of all pages (name, file,
+  first line of the description, preview, playground and pin links) at the
+  top; the parameter list of each page is collapsed.
+
 ## 0.2.0 – 2026-11-08
 
 Phases 2 and 3 and two smaller units (see [docs/development](docs/development/)):

@@ -117,6 +117,25 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     assert has_element?(view, "#page-fragment-html", "not a page")
     refute has_element?(view, "#page-fragment-html .page-preview")
 
+    # Overview: name, file and first line of the description, with links.
+    assert has_element?(
+             view,
+             ~s(#overview-page-life-html a[href="#page-life-html"]),
+             "Game of Life"
+           )
+
+    assert has_element?(view, "#overview-page-life-html .overview-description", "Cells.")
+    assert has_element?(view, "#overview-page-life-html .overview-playground")
+    assert has_element?(view, "#overview-page-plain-html", "undocumented")
+    refute has_element?(view, "#overview-page-fragment-html .overview-preview")
+
+    # Parameters are collapsed.
+    assert has_element?(
+             view,
+             "#page-life-html details.page-params:not([open]) summary",
+             "parameters"
+           )
+
     assert has_element?(view, "#helper-theme", "Used by: life.html")
     assert has_element?(view, "#helper-theme .page-authors", "by Grace")
 
@@ -199,6 +218,10 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     view |> element("#page-plain-html .page-preview") |> render_click()
     refute has_element?(view, "#page-life-html #catalog-preview")
     assert has_element?(view, "#page-plain-html #catalog-preview")
+
+    # From the overview.
+    view |> element("#overview-page-life-html .overview-preview") |> render_click()
+    assert has_element?(view, "#page-life-html #catalog-preview")
   end
 
   test "the size selector shows custom fields only when chosen", %{conn: conn} do

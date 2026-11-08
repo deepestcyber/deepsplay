@@ -1,8 +1,9 @@
 defmodule DeepsplayWeb.CatalogConfigLive do
   @moduledoc """
-  The catalog page of one configuration at `/catalog/<name>` (ADR 17): the
-  rotation with the parameters each page gets, all pages with their
-  documentation, parameters and variants, the helpers and all warnings.
+  The catalog page of one configuration at `/catalog/<name>` (ADR 17): a
+  short list of all pages, the rotation with the parameters each page gets,
+  all pages with their documentation, parameters (collapsed) and variants,
+  the helpers and all warnings.
 
   One page at a time can be previewed (rendered at a real screen size and
   scaled down) or tried in the playground, a form built from its parameter
@@ -293,6 +294,65 @@ defmodule DeepsplayWeb.CatalogConfigLive do
       </ul>
     </section>
 
+    <section id="catalog-overview">
+      <h2 class="text-lg font-semibold">Overview</h2>
+      <div class="mt-3 overflow-x-auto rounded-lg border border-base-300">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-base-200 text-xs uppercase tracking-wide text-base-content/60">
+            <tr>
+              <th class="px-3 py-2">Name</th>
+              <th class="px-3 py-2">File</th>
+              <th class="px-3 py-2">Description</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={page <- @catalog.pages}
+              id={"overview-" <> page_id(page.path)}
+              class="border-t border-base-300 align-top"
+            >
+              <td class="px-3 py-2">
+                <a href={"#" <> page_id(page.path)} class="font-medium hover:underline">
+                  {page_title(page)}
+                </a>
+              </td>
+              <td class="px-3 py-2 font-mono text-xs">{page.path}</td>
+              <td class="overview-description px-3 py-2 text-xs text-base-content/70">
+                {short_description(page)}
+                <span :if={page.kind == :fragment} class="text-base-content/50">not a page</span>
+                <span :if={page.kind == :undocumented} class="text-base-content/50">
+                  undocumented
+                </span>
+              </td>
+              <td class="whitespace-nowrap px-3 py-2 text-right text-xs">
+                <span :if={page.kind != :fragment} class="inline-flex gap-3">
+                  <a
+                    href={"#" <> page_id(page.path)}
+                    phx-click="preview"
+                    phx-value-path={page.path}
+                    class="overview-preview hover:underline"
+                  >preview</a>
+                  <a
+                    :if={page.params != []}
+                    href={"#" <> page_id(page.path)}
+                    phx-click="playground"
+                    phx-value-path={page.path}
+                    class="overview-playground hover:underline"
+                  >playground</a>
+                  <a
+                    href={pin_url(@catalog.config.name, page.path, "")}
+                    target="_blank"
+                    class="hover:underline"
+                  >pin ↗</a>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="catalog-rotation">
       <h2 class="text-lg font-semibold">Rotation</h2>
       <div class="mt-3 overflow-x-auto rounded-lg border border-base-300">
@@ -530,7 +590,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
     assigns =
       assign(assigns,
         active: assigns.selected && assigns.selected.path == assigns.page.path,
-        id: "page-" <> String.replace(assigns.page.path, ~r/[^A-Za-z0-9]+/, "-")
+        id: page_id(assigns.page.path)
       )
 
     ~H"""
@@ -589,36 +649,43 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         <li :for={w <- @page.warnings} class="text-amber-500">{w}</li>
       </ul>
 
-      <div :if={@page.params != []} class="mt-3 overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="text-base-content/50">
-            <tr>
-              <th class="py-1 pr-3">Parameter</th>
-              <th class="py-1 pr-3">Type</th>
-              <th class="py-1 pr-3">Default</th>
-              <th class="py-1 pr-3">Here</th>
-              <th class="py-1">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr :for={row <- @page.params} class="border-t border-base-300 align-top">
-              <td class="py-1 pr-3 font-mono">
-                {row.param.name}
-                <span :if={row.origin != :page} class="text-base-content/50">
-                  ({elem(row.origin, 1)})
-                </span>
-              </td>
-              <td class="py-1 pr-3">{type_text(row.param)}</td>
-              <td class="py-1 pr-3 font-mono">{format_value(row.param, row.param.default)}</td>
-              <td class="py-1 pr-3 font-mono">
-                <span :if={row.value}>{row.value}
-                <span class="text-base-content/50">({row.value_origin})</span></span>
-              </td>
-              <td class="py-1">{row.param.description}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <details :if={@page.params != []} class="page-params mt-3">
+        <summary class="cursor-pointer select-none text-xs text-base-content/60 hover:text-base-content">
+          {length(@page.params)} {if length(@page.params) == 1,
+            do: "parameter",
+            else: "parameters"}
+        </summary>
+        <div class="mt-2 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-base-content/50">
+              <tr>
+                <th class="py-1 pr-3">Parameter</th>
+                <th class="py-1 pr-3">Type</th>
+                <th class="py-1 pr-3">Default</th>
+                <th class="py-1 pr-3">Here</th>
+                <th class="py-1">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={row <- @page.params} class="border-t border-base-300 align-top">
+                <td class="py-1 pr-3 font-mono">
+                  {row.param.name}
+                  <span :if={row.origin != :page} class="text-base-content/50">
+                    ({elem(row.origin, 1)})
+                  </span>
+                </td>
+                <td class="py-1 pr-3">{type_text(row.param)}</td>
+                <td class="py-1 pr-3 font-mono">{format_value(row.param, row.param.default)}</td>
+                <td class="py-1 pr-3 font-mono">
+                  <span :if={row.value}>{row.value}
+                  <span class="text-base-content/50">({row.value_origin})</span></span>
+                </td>
+                <td class="py-1">{row.param.description}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
 
       <div :if={@page.doc && @page.doc.variants != []} class="mt-3 flex flex-wrap gap-2 text-xs">
         <span class="text-base-content/50">Variants:</span>
@@ -796,6 +863,15 @@ defmodule DeepsplayWeb.CatalogConfigLive do
     <% end %>
     """
   end
+
+  defp page_id(path), do: "page-" <> String.replace(path, ~r/[^A-Za-z0-9]+/, "-")
+
+  # The first line of a page's description, for the overview.
+  defp short_description(%{doc: %{description: description}}) when is_binary(description) do
+    description |> String.trim() |> String.split("\n", parts: 2) |> hd()
+  end
+
+  defp short_description(_page), do: nil
 
   defp page_title(%{doc: %{title: title}}) when is_binary(title), do: title
   defp page_title(%{path: path}), do: path
