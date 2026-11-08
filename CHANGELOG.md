@@ -5,6 +5,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+## 0.3.0 – 2026-11-08
+
+A clearer catalog and longer page documentation. No changes are needed for
+existing setups.
+
 - Catalog page of a configuration: an overview of all pages (name, file,
   first line of the description, preview, playground and pin links) at the
   top; the parameter list of each page is collapsed.
