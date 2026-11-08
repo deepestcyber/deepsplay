@@ -5,6 +5,19 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+## 0.3.1 – 2026-11-08
+
+Fixes the image build of 0.3.0, which has no published image. No changes are
+needed for existing setups.
+
+- Image build: downloading Tailwind from
+  `github.com/tailwindlabs/tailwindcss/releases/download/...` failed with
+  `504 Gateway Time-out` while the GitHub API kept working. If `mix
+  assets.setup` fails, the Dockerfile now fetches the same executable through
+  the API (`docker/fetch_tailwind.exs`); CI passes its `GITHUB_TOKEN` as the
+  build secret `github_token` for the API's rate limit. See "Releasing" in
+  [docs/deployment.md](docs/deployment.md).
+
 ## 0.3.0 – 2026-11-08
 
 A clearer catalog and longer page documentation. No changes are needed for

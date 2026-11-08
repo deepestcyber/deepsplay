@@ -53,7 +53,7 @@ files by renaming, so the container sees the new file.
 3. `docker compose up -d`; open `http://<host>:4000/status`.
 
 Update: `docker compose pull && docker compose up -d`. To pin a version, use
-`image: ghcr.io/deepestcyber/deepsplay:0.3.0` instead of `latest`.
+`image: ghcr.io/deepestcyber/deepsplay:0.3.1` instead of `latest`.
 
 ## NixOS
 
@@ -64,7 +64,7 @@ Declared in the system configuration with `virtualisation.oci-containers`:
   virtualisation.oci-containers = {
     backend = "docker"; # or "podman"
     containers.deepsplay = {
-      image = "ghcr.io/deepestcyber/deepsplay:0.3.0";
+      image = "ghcr.io/deepestcyber/deepsplay:0.3.1";
       ports = [ "4000:4000" ];
       environmentFiles = [ "/etc/deepsplay/env" ]; # SECRET_KEY_BASE=..., mode 0600
       environment = {
@@ -112,6 +112,15 @@ page.
    it.
 3. Tag the commit `vX.Y.Z` and push the tag.
 4. The CI workflow tests, builds both architectures and publishes the image.
+
+If the image build fails in `mix assets.setup` with `Couldn't fetch
+https://github.com/tailwindlabs/tailwindcss/releases/download/...` (seen as
+`504 Gateway Time-out` while GitHub's API still worked), the Dockerfile falls
+back to `docker/fetch_tailwind.exs`, which downloads the same Tailwind
+executable through the GitHub API. CI passes its `GITHUB_TOKEN` as the build
+secret `github_token` for the API's rate limit; local builds work without it
+(60 anonymous requests per hour). The fallback can be removed once the
+download is reliable again.
 
 The first published image is private by default on some accounts: make the
 package public once under the repository's or organisation's package settings.
