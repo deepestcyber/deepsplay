@@ -9,6 +9,9 @@ Accepted
 Amends [5](0005-toml-for-host-config-and-screen-manifest.md) and
 [9](0009-rotation-in-the-browser.md).
 
+Amended by [29](0029-disabled-manifest-entries.md): overrides can be switched
+off with `enabled = false`.
+
 ## Context
 
 Some pages belong to certain times only: a night page from 22:00 to 06:00,

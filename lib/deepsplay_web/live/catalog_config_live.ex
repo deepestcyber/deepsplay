@@ -375,6 +375,9 @@ defmodule DeepsplayWeb.CatalogConfigLive do
             >
               <td class="px-3 py-2">
                 <div class="font-mono text-xs">{entry.path}</div>
+                <div :if={entry.glob} class="rotation-glob text-xs text-base-content/50">
+                  from <span class="font-mono">{entry.glob}</span>
+                </div>
                 <div :if={entry.description} class="rotation-description text-xs text-base-content/60">
                   {entry.description}
                 </div>
@@ -492,6 +495,24 @@ defmodule DeepsplayWeb.CatalogConfigLive do
           {override.windows} · priority {override.priority}
         </p>
       </div>
+    </section>
+
+    <section :if={@catalog.disabled != []} id="catalog-disabled">
+      <h2 class="text-lg font-semibold">Disabled entries</h2>
+      <p class="mt-1 text-xs text-base-content/50">
+        Switched off with <span class="font-mono">enabled = false</span>; never shown.
+      </p>
+      <ul class="mt-2 space-y-1 text-sm">
+        <li
+          :for={{entry, i} <- Enum.with_index(@catalog.disabled)}
+          id={"disabled-#{i}"}
+          class="text-base-content/60"
+        >
+          <span class="font-mono text-xs">{entry.what}</span>
+          <span class="text-xs text-base-content/40">({entry.kind})</span>
+          <span :if={entry.description} class="text-xs">· {entry.description}</span>
+        </li>
+      </ul>
     </section>
 
     <section :if={@catalog.state} id="catalog-state">

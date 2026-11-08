@@ -68,6 +68,39 @@ description = "Large cells, readable from the door"   # optional: why this entry
 - `description` (optional, at most 500 characters) says what a rotation or
   an entry is for; the catalog shows it. The page's own description belongs
   in its parameter block (below).
+- `enabled = false` switches an entry off (also overrides and `glob`
+  entries) without deleting it. It is still checked, never shown, and listed
+  under "Disabled entries" in the catalog.
+
+### Many pages with one entry
+
+An entry can name its pages with `glob` instead of `path`; each page found
+becomes an entry of its own, with the entry's other fields:
+
+```toml
+[[page]]
+glob     = "small/*.html"
+exclude  = ["small/draft-*.html", "small/old.html"]   # optional
+query    = "theme=neon"                               # optional, for each page
+duration = "20s"
+when     = { from = "08:00", until = "20:00" }
+```
+
+- Patterns are relative to `pages/`: `*` and `?` match within a directory,
+  `**` across directories (`small/**`), `{a,b}` alternatives. Only `.html`
+  files count.
+- `exclude` (a pattern or a list) leaves pages out; `exclude` and `query` are
+  only allowed with `glob`.
+- Fragments (`page = false`) are left out, and so are files that have an
+  entry with `path`: give a single page its own settings that way, or take
+  it out with `enabled = false`.
+- The pages are inserted where the entry stands, in alphabetical order. In a
+  random rotation each has the full `weight`; a smaller one keeps a large
+  directory from taking over.
+- A new file that matches is in the rotation with the next revision, without
+  changing the manifest. The catalog shows the pages found, marked with
+  their pattern; a pattern that finds nothing is a warning.
+- Overrides always name one page with `path`.
 
 ### Time windows and overrides
 

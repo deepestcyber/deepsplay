@@ -10,7 +10,9 @@ defmodule Deepsplay.Screen do
 
   Page paths in a manifest are relative to `pages/` and may carry a query
   string that is passed on to the page, e.g. `"welcome.html?duration=5s"`.
-  Several manifests can list the same pages.
+  A page entry can name its pages with `glob` instead (ADR 28); each page
+  found becomes an entry of its own. Several manifests can list the same
+  pages.
 
   The manifest is data only. It is validated before a revision is published,
   and a revision that fails is never published.
@@ -19,8 +21,10 @@ defmodule Deepsplay.Screen do
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.HostConfig.Store
   alias Deepsplay.HostConfig.Upstream
+  alias Deepsplay.PageDoc
   alias Deepsplay.RevisionFile
   alias Deepsplay.Screen.Backend
+  alias Deepsplay.Screen.Glob
   alias Deepsplay.Screen.Override
   alias Deepsplay.Screen.Page
   alias Deepsplay.Screen.Upstreams
@@ -40,18 +44,20 @@ defmodule Deepsplay.Screen do
             overrides: [],
             when_empty: :black,
             backend: nil,
+            disabled: [],
             warnings: []
 
   @type t :: %__MODULE__{
           title: String.t() | nil,
           description: String.t() | nil,
           rotation: :sequential | :random,
-          pages: [Page.t(), ...],
+          pages: [Page.t()],
           params: %{String.t() => String.t()},
           upstreams: %{String.t() => Upstream.t()},
           overrides: [Override.t()],
           when_empty: :black | {String.t(), String.t() | nil},
           backend: Backend.t() | nil,
+          disabled: [Page.t() | Override.t()],
           warnings: [String.t()]
         }
 
@@ -72,7 +78,16 @@ defmodule Deepsplay.Screen do
     {"weight", :weight, :positive_number, default: 1.0},
     {"uses", :uses, :string_list, default: []},
     {"description", :description, :description, default: nil},
-    {"when", :when, &__MODULE__.cast_when/1, default: nil}
+    {"when", :when, &__MODULE__.cast_when/1, default: nil},
+    {"enabled", :enabled, :boolean, default: true}
+  ]
+
+  # An entry naming its pages by pattern (ADR 28).
+  @glob_fields [
+    {"glob", :glob, :string, []},
+    {"exclude", :exclude, &__MODULE__.cast_patterns/1, default: []},
+    {"query", :query, &__MODULE__.cast_query/1, default: nil}
+    | tl(@page_fields)
   ]
 
   @override_fields [
@@ -80,7 +95,8 @@ defmodule Deepsplay.Screen do
     {"when", :when, &__MODULE__.cast_when/1, []},
     {"priority", :priority, &__MODULE__.cast_priority/1, default: 0},
     {"description", :description, :description, default: nil},
-    {"uses", :uses, :string_list, default: []}
+    {"uses", :uses, :string_list, default: []},
+    {"enabled", :enabled, :boolean, default: true}
   ]
 
   @doc false
@@ -95,6 +111,28 @@ defmodule Deepsplay.Screen do
   def cast_when_empty("black"), do: {:ok, :black}
   def cast_when_empty(value) when is_binary(value), do: cast_page_ref(value)
   def cast_when_empty(_value), do: {:error, ~s(must be "black" or a page path)}
+
+  @doc false
+  def cast_patterns(value) when is_binary(value), do: {:ok, [value]}
+
+  def cast_patterns(value) when is_list(value) do
+    if Enum.all?(value, &is_binary/1),
+      do: {:ok, value},
+      else: {:error, "must be a string or a list of strings"}
+  end
+
+  def cast_patterns(_value), do: {:error, "must be a string or a list of strings"}
+
+  @doc false
+  def cast_query(value) when is_binary(value) do
+    cond do
+      value == "" -> {:ok, nil}
+      valid_query?(value) -> {:ok, value}
+      true -> {:error, "has characters not allowed in a URL"}
+    end
+  end
+
+  def cast_query(_value), do: {:error, "must be a string"}
 
   @doc false
   def cast_priority(value) when is_integer(value), do: {:ok, value}
@@ -296,7 +334,7 @@ defmodule Deepsplay.Screen do
     # Invalid upstreams still count as declared, so their pages do not report
     # them again.
     names = if is_map(data["upstream"]), do: Map.keys(data["upstream"]), else: []
-    {pages, page_errors} = pages(Map.get(data, "page"), root, upstreams ++ names)
+    {pages, page_errors, page_warnings} = pages(Map.get(data, "page"), root, upstreams ++ names)
     {overrides, override_errors} = overrides(Map.get(data, "override"), root, upstreams ++ names)
 
     when_empty_errors =
@@ -314,18 +352,23 @@ defmodule Deepsplay.Screen do
            upstream_errors ++
            page_errors ++ override_errors ++ when_empty_errors ++ backend_errors do
       [] ->
+        with_duration = &%{&1 | duration: &1.duration || top.duration}
+        {pages, disabled_pages} = Enum.split_with(pages, & &1.enabled)
+        {overrides, disabled_overrides} = Enum.split_with(overrides, & &1.enabled)
+
         {:ok,
          %__MODULE__{
            title: top.title,
            description: top.description,
            rotation: rotation(top.rotation),
-           pages: Enum.map(pages, &%{&1 | duration: &1.duration || top.duration}),
+           pages: Enum.map(pages, with_duration),
            params: params,
            upstreams: declared,
            overrides: overrides,
            when_empty: top.when_empty,
            backend: backend,
-           warnings: warnings
+           disabled: Enum.map(disabled_pages, with_duration) ++ disabled_overrides,
+           warnings: page_warnings ++ warnings
          }}
 
       errors ->
@@ -336,44 +379,170 @@ defmodule Deepsplay.Screen do
   defp rotation("sequential"), do: :sequential
   defp rotation("random"), do: :random
 
-  defp pages(nil, _root, _upstreams), do: {[], ["at least one [[page]] is required"]}
-  defp pages([], _root, _upstreams), do: {[], ["at least one [[page]] is required"]}
+  defp pages(nil, _root, _upstreams), do: {[], ["at least one [[page]] is required"], []}
+  defp pages([], _root, _upstreams), do: {[], ["at least one [[page]] is required"], []}
 
-  defp pages(pages, root, upstreams) when is_list(pages) do
-    {parsed, errors} =
-      pages
+  defp pages(entries, root, upstreams) when is_list(entries) do
+    {parsed, {errors, warnings}} =
+      entries
       |> Enum.with_index(1)
-      |> Enum.map_reduce([], fn {page, index}, acc ->
-        {page, errors} = page(page, index, root, upstreams)
-        {page, acc ++ errors}
+      |> Enum.map_reduce({[], []}, fn {entry, index}, {errors, warnings} ->
+        {parsed, e, w} = page(entry, index, root, upstreams)
+        {parsed, {errors ++ e, warnings ++ w}}
       end)
 
-    {Enum.reject(parsed, &is_nil/1), errors}
+    parsed = Enum.reject(parsed, &is_nil/1)
+
+    # Files with an entry of their own are left out of patterns (ADR 28),
+    # also when that entry is disabled (ADR 29).
+    explicit = for %Page{} = page <- parsed, into: MapSet.new(), do: page.path
+
+    files =
+      if Enum.any?(parsed, &match?({:glob, %Page{enabled: true}, _, _}, &1)),
+        do: html_files(root),
+        else: []
+
+    {pages, glob_warnings} =
+      Enum.flat_map_reduce(parsed, [], fn
+        %Page{} = page, acc ->
+          {[page], acc}
+
+        # A disabled glob entry finds nothing; it is kept to be listed (ADR 29).
+        {:glob, %Page{enabled: false} = page, _excludes, _ctx}, acc ->
+          {[page], acc}
+
+        {:glob, page, excludes, ctx}, acc ->
+          {found, w} = expand(page, excludes, ctx, files, explicit, root)
+          {found, acc ++ w}
+      end)
+
+    {pages, errors, warnings ++ glob_warnings}
   end
 
   defp pages(_pages, _root, _upstreams),
-    do: {[], ["page must be an array of tables ([[page]])"]}
+    do: {[], ["page must be an array of tables ([[page]])"], []}
 
   defp page(page, index, root, upstreams) when is_map(page) do
     ctx = "page ##{index}"
-    {fields, errors} = TomlSchema.fields(page, ctx, @page_fields)
 
-    {path, query} = fields.path || {nil, nil}
+    case {Map.has_key?(page, "path"), Map.has_key?(page, "glob")} do
+      {true, true} ->
+        warning = "#{ctx} has both path and glob; glob, exclude and query are ignored"
+        {parsed, errors, warnings} = path_page(page, ctx, root, upstreams)
+        {parsed, errors, [warning | warnings]}
 
-    errors =
-      errors ++
-        file_errors(path, root, ctx) ++
-        for upstream <- fields.uses || [], upstream not in upstreams do
-          ~s(#{ctx}: upstream "#{upstream}" is not allowed for this configuration)
-        end
+      {false, true} ->
+        glob_page(page, ctx, upstreams)
 
-    case errors do
-      [] -> {struct!(Page, %{fields | path: path} |> Map.put(:query, query)), []}
-      errors -> {nil, errors}
+      _path_or_none ->
+        path_page(page, ctx, root, upstreams)
     end
   end
 
-  defp page(_page, index, _root, _upstreams), do: {nil, ["page ##{index} must be a table"]}
+  defp page(_page, index, _root, _upstreams), do: {nil, ["page ##{index} must be a table"], []}
+
+  defp path_page(page, ctx, root, upstreams) do
+    ignored = Enum.filter(["exclude", "query"], &Map.has_key?(page, &1))
+
+    warnings =
+      for key <- ignored,
+          not Map.has_key?(page, "glob"),
+          do: "#{ctx}: #{key} is only used with glob and is ignored"
+
+    page = Map.drop(page, ["glob" | ignored])
+    {fields, errors} = TomlSchema.fields(page, ctx, @page_fields)
+    {path, query} = fields.path || {nil, nil}
+    errors = errors ++ file_errors(path, root, ctx) ++ uses_errors(fields.uses, upstreams, ctx)
+
+    case errors do
+      [] -> {struct!(Page, %{fields | path: path} |> Map.put(:query, query)), [], warnings}
+      errors -> {nil, errors, warnings}
+    end
+  end
+
+  defp glob_page(page, ctx, upstreams) do
+    {fields, errors} = TomlSchema.fields(page, ctx, @glob_fields)
+    errors = errors ++ uses_errors(fields.uses, upstreams, ctx)
+
+    case errors do
+      [] ->
+        {excludes, fields} = Map.pop(fields, :exclude)
+        # `path` is set per page found.
+        page = struct!(Page, fields |> Map.put(:path, nil))
+        {{:glob, page, excludes, ctx}, [], []}
+
+      errors ->
+        {nil, errors, []}
+    end
+  end
+
+  defp uses_errors(uses, upstreams, ctx) do
+    for upstream <- uses || [], upstream not in upstreams do
+      ~s(#{ctx}: upstream "#{upstream}" is not allowed for this configuration)
+    end
+  end
+
+  # The pages a glob entry finds, in alphabetical order, and warnings.
+  defp expand(page, excludes, ctx, files, explicit, root) do
+    with {:ok, glob} <- compile(page.glob, "#{ctx}.glob"),
+         {:ok, excludes} <- compile_all(excludes, "#{ctx}.exclude") do
+      matched = Enum.filter(files, &Glob.match?(glob, &1))
+
+      unused =
+        for {pattern, exclude} <- excludes,
+            not Enum.any?(matched, &Glob.match?(exclude, &1)),
+            do: ~s(#{ctx}.exclude "#{pattern}" matches no page of the glob)
+
+      found =
+        matched
+        |> Enum.reject(fn path ->
+          Enum.any?(excludes, fn {_, ex} -> Glob.match?(ex, path) end)
+        end)
+        |> Enum.reject(&MapSet.member?(explicit, &1))
+        |> Enum.reject(&fragment?(root, &1))
+
+      empty = if found == [], do: [~s(#{ctx}.glob "#{page.glob}" matches no page)], else: []
+      {Enum.map(found, &%{page | path: &1}), empty ++ unused}
+    else
+      {:error, warning} -> {[], [warning]}
+    end
+  end
+
+  defp compile(pattern, ctx) do
+    case Glob.compile(pattern) do
+      {:ok, glob} -> {:ok, glob}
+      {:error, why} -> {:error, ~s(#{ctx} "#{pattern}" #{why}; the entry is ignored)}
+    end
+  end
+
+  defp compile_all(patterns, ctx) do
+    Enum.reduce_while(patterns, {:ok, []}, fn pattern, {:ok, acc} ->
+      case compile(pattern, ctx) do
+        {:ok, glob} -> {:cont, {:ok, acc ++ [{pattern, glob}]}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  # Deliverable `.html` files below `pages/`, relative to it and sorted.
+  defp html_files(pages_dir) do
+    pages_dir
+    |> Path.join("**/*.html")
+    |> Path.wildcard()
+    |> Enum.map(&Path.relative_to(&1, pages_dir))
+    |> Enum.filter(&match?({:ok, _}, RevisionFile.resolve(pages_dir, &1)))
+    |> Enum.sort()
+  end
+
+  # Files marked `page = false` (ADR 14) are not pages of their own.
+  defp fragment?(pages_dir, path) do
+    with {:ok, file} <- RevisionFile.resolve(pages_dir, path),
+         {:ok, %PageDoc{page: false}} <- PageDoc.read(file) do
+      true
+    else
+      _page -> false
+    end
+  end
 
   defp overrides(nil, _root, _upstreams), do: {[], []}
 

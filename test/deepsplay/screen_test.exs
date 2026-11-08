@@ -5,6 +5,7 @@ defmodule Deepsplay.ScreenTest do
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.RevisionStore
   alias Deepsplay.Screen
+  alias Deepsplay.Screen.Override
   alias Deepsplay.Screen.Page
 
   @moduletag :tmp_dir
@@ -295,6 +296,228 @@ defmodule Deepsplay.ScreenTest do
 
       assert errors(root, upstreams: ["weather"]) == [
                ~s(page #1: upstream "news" is not allowed for this configuration)
+             ]
+    end
+  end
+
+  describe "load/2 with glob entries" do
+    @small %{
+      "pages/small/a.html" => "a",
+      "pages/small/b.html" => "b",
+      "pages/small/draft-c.html" => "c",
+      "pages/small/old.html" => "old",
+      "pages/small/deep/d.html" => "d",
+      "pages/small/style.css" => "css",
+      "pages/small/.hidden.html" => "hidden",
+      "pages/small/part.html" => """
+      <script type="application/toml" id="deepsplay-page">
+      page = false
+      </script>
+      """,
+      "pages/main.html" => "main"
+    }
+
+    test "each page found becomes an entry, in place and in order", %{tmp_dir: root} do
+      write(
+        root,
+        Map.put(@small, "screen.toml", """
+        [[page]]
+        path = "main.html"
+
+        [[page]]
+        glob     = "small/*.html"
+        exclude  = ["small/draft-*.html", "small/old.html"]
+        query    = "theme=neon"
+        duration = "20s"
+        weight   = 0.5
+        when     = { from = "08:00" }
+
+        [[page]]
+        path = "small/b.html?big=1"
+        """)
+      )
+
+      assert {:ok, screen} = Screen.load(root)
+      assert screen.warnings == []
+
+      # b.html has an entry of its own; part.html is a fragment; deep/ needs **.
+      assert [
+               %Page{path: "main.html", glob: nil},
+               %Page{path: "small/a.html", glob: "small/*.html"} = a,
+               %Page{path: "small/b.html", query: "big=1", glob: nil}
+             ] = screen.pages
+
+      assert %{query: "theme=neon", duration: 20_000, weight: 0.5} = a
+      assert [%{}] = a.when
+    end
+
+    test "** matches across directories, {a,b} alternatives", %{tmp_dir: root} do
+      write(
+        root,
+        Map.put(@small, "screen.toml", """
+        [[page]]
+        glob    = "small/**"
+        exclude = "small/{draft-*,old}.html"
+        """)
+      )
+
+      assert {:ok, screen} = Screen.load(root)
+
+      assert Enum.map(screen.pages, & &1.path) ==
+               ["small/a.html", "small/b.html", "small/deep/d.html"]
+
+      # The manifest's default duration applies.
+      assert Enum.all?(screen.pages, &(&1.duration == 15_000))
+    end
+
+    test "a page matched by two globs appears twice", %{tmp_dir: root} do
+      write(
+        root,
+        Map.put(@small, "screen.toml", """
+        [[page]]
+        glob = "small/a.html"
+
+        [[page]]
+        glob = "small/{a,b}.html"
+        """)
+      )
+
+      assert {:ok, screen} = Screen.load(root)
+      assert Enum.map(screen.pages, & &1.path) == ["small/a.html", "small/a.html", "small/b.html"]
+    end
+
+    test "problems are warnings and never stop the revision", %{tmp_dir: root} do
+      write(
+        root,
+        Map.put(@small, "screen.toml", """
+        [[page]]
+        path = "main.html"
+        glob = "small/*.html"
+
+        [[page]]
+        path    = "main.html"
+        exclude = "x.html"
+        query   = "a=1"
+
+        [[page]]
+        glob = "../secret/*.html"
+
+        [[page]]
+        glob = "nothing/*.html"
+
+        [[page]]
+        glob    = "small/a.html"
+        exclude = "small/zzz.html"
+        """)
+      )
+
+      assert {:ok, screen} = Screen.load(root)
+      assert Enum.map(screen.pages, & &1.path) == ["main.html", "main.html", "small/a.html"]
+
+      assert screen.warnings == [
+               "page #1 has both path and glob; glob, exclude and query are ignored",
+               "page #2: exclude is only used with glob and is ignored",
+               "page #2: query is only used with glob and is ignored",
+               ~s(page #3.glob "../secret/*.html" must not leave pages/ (..\); the entry is ignored),
+               ~s(page #4.glob "nothing/*.html" matches no page),
+               ~s(page #5.exclude "small/zzz.html" matches no page of the glob)
+             ]
+    end
+
+    test "a glob that finds nothing leaves an empty rotation", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        [[page]]
+        glob = "*.html"
+        """,
+        "pages/style.css" => "css"
+      })
+
+      assert {:ok, %Screen{pages: [], warnings: [_warning]}} = Screen.load(root)
+    end
+
+    test "invalid types are errors", %{tmp_dir: root} do
+      write(
+        root,
+        Map.put(@small, "screen.toml", """
+        [[page]]
+        glob    = 1
+        exclude = [2]
+        query   = "a b"
+        """)
+      )
+
+      assert errors(root) == [
+               "page #1.glob must be a non-empty string",
+               "page #1.exclude must be a string or a list of strings",
+               "page #1.query has characters not allowed in a URL"
+             ]
+    end
+  end
+
+  describe "load/2 with disabled entries" do
+    test "disabled entries are validated and kept apart", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        [[page]]
+        path = "a.html"
+
+        [[page]]
+        path    = "b.html?x=1"
+        enabled = false
+
+        [[page]]
+        glob    = "*.html"
+
+        [[page]]
+        glob    = "nothing/*.html"
+        enabled = false
+
+        [[override]]
+        path    = "a.html"
+        when    = { from = "10:00" }
+        enabled = false
+        """,
+        "pages/a.html" => "a",
+        "pages/b.html" => "b",
+        "pages/c.html" => "c"
+      })
+
+      assert {:ok, screen} = Screen.load(root)
+
+      # b.html is kept out of the glob by its disabled entry; the disabled
+      # glob reports no warning.
+      assert Enum.map(screen.pages, & &1.path) == ["a.html", "c.html"]
+      assert screen.overrides == []
+      assert screen.warnings == []
+
+      assert [
+               %Page{path: "b.html", query: "x=1", enabled: false, duration: 15_000},
+               %Page{path: nil, glob: "nothing/*.html", enabled: false},
+               %Override{path: "a.html", enabled: false}
+             ] = screen.disabled
+    end
+
+    test "a disabled entry must still be valid", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        [[page]]
+        path = "a.html"
+
+        [[page]]
+        path    = "gone.html"
+        enabled = false
+
+        [[page]]
+        path    = "a.html"
+        enabled = "no"
+        """,
+        "pages/a.html" => "a"
+      })
+
+      assert errors(root) == [
+               ~s(page #2.path "gone.html" is not a file in pages/),
+               "page #3.enabled must be true or false"
              ]
     end
   end

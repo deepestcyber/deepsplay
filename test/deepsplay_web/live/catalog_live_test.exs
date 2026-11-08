@@ -54,6 +54,14 @@ defmodule DeepsplayWeb.CatalogLiveTest do
 
     [[page]]
     path = "fragment.html"
+
+    [[page]]
+    glob = "*.html"
+
+    [[page]]
+    path        = "life.html?off=1"
+    enabled     = false
+    description = "Only in winter"
     """,
     "pages/shared/theme.js" => @theme,
     "pages/life.html" => """
@@ -101,7 +109,7 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     {:ok, view, _html} = live(conn, ~p"/catalog")
 
     assert has_element?(view, "#catalog-config-lobby", "3 files")
-    assert has_element?(view, "#catalog-config-lobby", "2 in rotation")
+    assert has_element?(view, "#catalog-config-lobby", "3 in rotation")
     assert has_element?(view, "#catalog-config-lobby", "warnings")
   end
 
@@ -114,6 +122,16 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     assert has_element?(view, "#rotation-0", "cells=40 (page query)")
     assert has_element?(view, "#rotation-0", "duration=20s (display time)")
     assert has_element?(view, "#rotation-0", "theme=neon (manifest)")
+
+    # A glob entry: life.html and fragment.html have entries of their own.
+    assert has_element?(view, "#rotation-2", "plain.html")
+    assert has_element?(view, "#rotation-2 .rotation-glob", "*.html")
+    refute has_element?(view, "#rotation-3")
+    refute has_element?(view, "#rotation-0 .rotation-glob")
+
+    # Disabled entries are listed apart, not in the rotation.
+    assert has_element?(view, "#disabled-0", "life.html?off=1")
+    assert has_element?(view, "#disabled-0", "Only in winter")
 
     # Pages: documented first, then undocumented, then fragments.
     assert has_element?(view, "#page-life-html", "Game of Life")

@@ -14,6 +14,7 @@ defmodule Deepsplay.Catalog do
   alias Deepsplay.PageParams
   alias Deepsplay.Pages
   alias Deepsplay.Revisions
+  alias Deepsplay.Screen.Override
   alias Deepsplay.State
   alias Deepsplay.TimeWindow
 
@@ -38,6 +39,7 @@ defmodule Deepsplay.Catalog do
           duration: pos_integer(),
           weight: float(),
           description: String.t() | nil,
+          glob: String.t() | nil,
           windows: String.t() | nil,
           active: boolean(),
           params: [{String.t(), String.t(), String.t()}]
@@ -51,6 +53,7 @@ defmodule Deepsplay.Catalog do
           helpers: [map()],
           upstreams: [map()],
           overrides: [map()],
+          disabled: [map()],
           backend: map() | nil,
           state: map() | nil,
           warnings: [String.t()]
@@ -75,6 +78,7 @@ defmodule Deepsplay.Catalog do
          helpers: helpers(index, pages),
          upstreams: upstreams(current.screen),
          overrides: overrides(current.screen),
+         disabled: disabled(current.screen),
          backend: backend(config, current.screen),
          state: state(config),
          warnings: warnings(current, index, pages)
@@ -129,6 +133,7 @@ defmodule Deepsplay.Catalog do
         duration: page.duration,
         weight: page.weight,
         description: page.description,
+        glob: page.glob,
         windows: page.when && TimeWindow.describe_all(page.when),
         active: TimeWindow.active?(page.when, now()),
         params: own ++ explained
@@ -162,6 +167,21 @@ defmodule Deepsplay.Catalog do
       }
     end
   end
+
+  # Entries switched off with `enabled = false` (ADR 29).
+  defp disabled(screen) do
+    for entry <- screen.disabled do
+      %{
+        kind: if(match?(%Override{}, entry), do: :override, else: :page),
+        what: entry_name(entry),
+        description: entry.description
+      }
+    end
+  end
+
+  defp entry_name(%{glob: glob}) when is_binary(glob), do: glob
+  defp entry_name(%{path: path, query: nil}), do: path
+  defp entry_name(%{path: path, query: query}), do: path <> "?" <> query
 
   defp now, do: NaiveDateTime.local_now()
 

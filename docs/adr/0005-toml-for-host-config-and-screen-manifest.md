@@ -15,6 +15,9 @@ have time windows (`when`), manifests `when_empty` and `[[override]]`.
 Amended by [28](0028-page-entries-by-glob.md): a page entry can name its
 pages with `glob` (and `exclude`) instead of `path`.
 
+Amended by [29](0029-disabled-manifest-entries.md): page entries and overrides
+can be switched off with `enabled = false`.
+
 ## Context
 
 deepsplay reads two kinds of configuration: the host configuration (server

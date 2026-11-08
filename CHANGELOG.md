@@ -5,6 +5,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- Manifest page entries can name their pages with `glob` (and `exclude`)
+  instead of `path`; each page found becomes an entry of its own (ADR 28).
+- Page entries and overrides can be switched off with `enabled = false`;
+  the catalog lists them as disabled (ADR 29).
+
 ## 0.3.1 – 2026-11-08
 
 Fixes the image build of 0.3.0, which has no published image. No changes are
