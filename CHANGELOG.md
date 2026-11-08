@@ -9,6 +9,10 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   instead of `path`; each page found becomes an entry of its own (ADR 28).
 - Page entries and overrides can be switched off with `enabled = false`;
   the catalog lists them as disabled (ADR 29).
+- Time windows may have seconds (`"11:59:30"`, `"2027-03-04 10:00:15"`);
+  screens then check overrides every second (ADR 30).
+- Screens load the page again when they reconnect after an update of
+  deepsplay, so they always run the current shell.
 
 ## 0.3.1 – 2026-11-08
 

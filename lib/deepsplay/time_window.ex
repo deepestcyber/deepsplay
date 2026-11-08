@@ -1,25 +1,27 @@
 defmodule Deepsplay.TimeWindow do
   @moduledoc """
-  Time windows for pages and overrides in manifests (ADR 25).
+  Time windows for pages and overrides in manifests (ADR 25, ADR 30).
 
   `when` is one window (a table) or a list of windows. Something is active if
   any of its windows matches; a window matches if all of its fields match.
   Fields, all optional:
 
-    * `start`, `end` - one continuous period: `YYYY-MM-DD` or
-      `YYYY-MM-DD HH:MM` (also with `T`); a start is included, an end
-      excluded
+    * `start`, `end` - one continuous period: `YYYY-MM-DD`,
+      `YYYY-MM-DD HH:MM` or `YYYY-MM-DD HH:MM:SS` (also with `T`); a start
+      is included, an end excluded
     * `dates` - `YYYY-MM-DD`, `MM-DD` (every year) or `DD` (every month);
       ranges with `..` (both ends of the same form, wrapping over the end of
       a year or month if the first is later); or a list of these
     * `days` - weekdays `mon` to `sun`, a list or a range (`"mon-fri"`,
       wrapping like `"fri-mon"`)
-    * `from`, `until` - daily time window `HH:MM`; `until` before `from` runs
+    * `from`, `until` - daily time window `HH:MM` or `HH:MM:SS`; `until`
+      before `from` runs
       overnight, and the part after midnight belongs to the day it started
       (so `dates` and `days` are checked for that day); `until = "24:00"` is
       the end of the day
 
-  Times are local, minute-precise; every boundary falls on a full minute.
+  Times are local and second-precise; daily times are kept as seconds of the
+  day.
   The same rules run in the browser (`assets/js/schedule.js`); both are
   tested against `test/support/fixtures/time_window_cases.json`.
   """
@@ -31,8 +33,8 @@ defmodule Deepsplay.TimeWindow do
           end: NaiveDateTime.t() | nil,
           dates: [{date_spec(), date_spec()}] | nil,
           days: [1..7] | nil,
-          from: 0..1440 | nil,
-          until: 0..1440 | nil,
+          from: 0..86_400 | nil,
+          until: 0..86_400 | nil,
           text: String.t()
         }
 
@@ -70,7 +72,7 @@ defmodule Deepsplay.TimeWindow do
         start && end_ && NaiveDateTime.compare(start, end_) != :lt ->
           {:error, "start must be before end"}
 
-        from == 1440 ->
+        from == 86_400 ->
           {:error, ~s(from must be before 24:00)}
 
         true ->
@@ -97,14 +99,17 @@ defmodule Deepsplay.TimeWindow do
   defp point(nil, _key, _which), do: {:ok, nil}
 
   defp point(value, key, _which) when is_binary(value) do
-    case Regex.run(~r/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}))?$/, value) do
+    case Regex.run(~r/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/, value) do
       [_all, date] ->
         with {:ok, date} <- Date.from_iso8601(date),
              do: {:ok, NaiveDateTime.new!(date, ~T[00:00:00])}
 
-      [_all, date, hour, minute] ->
+      [_all, date, hour, minute | second] ->
+        second = if second == [], do: 0, else: String.to_integer(hd(second))
+
         with {:ok, date} <- Date.from_iso8601(date),
-             {:ok, time} <- Time.new(String.to_integer(hour), String.to_integer(minute), 0) do
+             {:ok, time} <-
+               Time.new(String.to_integer(hour), String.to_integer(minute), second) do
           {:ok, NaiveDateTime.new!(date, time)}
         end
 
@@ -113,12 +118,14 @@ defmodule Deepsplay.TimeWindow do
     end
     |> case do
       {:ok, point} -> {:ok, point}
-      _invalid -> {:error, ~s(#{key} must be "YYYY-MM-DD" or "YYYY-MM-DD HH:MM")}
+      _invalid -> {:error, point_error(key)}
     end
   end
 
-  defp point(_value, key, _which),
-    do: {:error, ~s(#{key} must be "YYYY-MM-DD" or "YYYY-MM-DD HH:MM")}
+  defp point(_value, key, _which), do: {:error, point_error(key)}
+
+  defp point_error(key),
+    do: ~s(#{key} must be "YYYY-MM-DD", "YYYY-MM-DD HH:MM" or "YYYY-MM-DD HH:MM:SS")
 
   defp dates(nil), do: {:ok, nil}
   defp dates(value) when is_binary(value), do: dates([value])
@@ -227,20 +234,29 @@ defmodule Deepsplay.TimeWindow do
   defp time(nil, _key), do: {:ok, nil}
 
   defp time(value, key) when is_binary(value) do
-    case Regex.run(~r/^(\d{2}):(\d{2})$/, value) do
+    case Regex.run(~r/^(\d{2}):(\d{2})(?::(\d{2}))?$/, value) do
       [_all, "24", "00"] ->
-        {:ok, 1440}
+        {:ok, 86_400}
 
-      [_all, hour, minute] ->
+      [_all, "24", "00", "00"] ->
+        {:ok, 86_400}
+
+      [_all, hour, minute | second] ->
         {h, m} = {String.to_integer(hour), String.to_integer(minute)}
-        if h < 24 and m < 60, do: {:ok, h * 60 + m}, else: {:error, ~s(#{key} must be "HH:MM")}
+        s = if second == [], do: 0, else: String.to_integer(hd(second))
+
+        if h < 24 and m < 60 and s < 60,
+          do: {:ok, h * 3600 + m * 60 + s},
+          else: {:error, time_error(key)}
 
       nil ->
-        {:error, ~s[#{key} must be "HH:MM" (24-hour)]}
+        {:error, time_error(key)}
     end
   end
 
-  defp time(_value, key), do: {:error, ~s[#{key} must be "HH:MM" (24-hour)]}
+  defp time(_value, key), do: {:error, time_error(key)}
+
+  defp time_error(key), do: ~s[#{key} must be "HH:MM" or "HH:MM:SS" (24-hour)]
 
   defp inspect_value(value) when is_binary(value), do: value
   defp inspect_value(value), do: inspect(value)
@@ -277,21 +293,21 @@ defmodule Deepsplay.TimeWindow do
   end
 
   defp in_day_and_time?(window, at) do
-    minute = at.hour * 60 + at.minute
+    second = at.hour * 3600 + at.minute * 60 + at.second
     date = NaiveDateTime.to_date(at)
     from = window.from || 0
-    until = window.until || 1440
+    until = window.until || 86_400
 
     cond do
       from <= until ->
-        minute >= from and minute < until and day_matches?(window, date)
+        second >= from and second < until and day_matches?(window, date)
 
       # Overnight: the evening part is that day's, the morning part the
       # previous day's.
-      minute >= from ->
+      second >= from ->
         day_matches?(window, date)
 
-      minute < until ->
+      second < until ->
         day_matches?(window, Date.add(date, -1))
 
       true ->
@@ -317,7 +333,8 @@ defmodule Deepsplay.TimeWindow do
   defp in_cycle?(value, first, last), do: value >= first or value <= last
 
   @doc """
-  The windows as sent to the browser (see `assets/js/schedule.js`).
+  The windows as sent to the browser (see `assets/js/schedule.js`); `from`
+  and `until` in seconds of the day.
   """
   @spec to_plan([t()] | nil) :: [map()] | nil
   def to_plan(nil), do: nil

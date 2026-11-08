@@ -1,4 +1,4 @@
-// Time windows for the screen rotation (ADR 25): which pages are active, which
+// Time windows for the screen rotation (ADR 25, 30): which pages are active, which
 // override is shown, and for how long. Pure functions, used by the rotation
 // hook in the shell and tested in Node (test/js/schedule_test.mjs).
 //
@@ -6,7 +6,7 @@
 //   { start, end: "YYYY-MM-DDTHH:MM:SS" | null,
 //     dates: [[spec, spec], ...] | null,   spec: {year?, month?, day}
 //     days: [1..7] | null,                  1 = Monday
-//     from, until: minutes 0..1440 | null }
+//     from, until: seconds of the day 0..86400 | null }
 // A list of windows is active if any matches; null (no `when`) always is.
 // Times are the screen's local time. The same rules run in Elixir; both are
 // tested against test/support/fixtures/time_window_cases.json.
@@ -14,9 +14,11 @@
 function localDate(iso) {
   const [date, time = "00:00:00"] = iso.split("T")
   const [y, mo, d] = date.split("-").map(Number)
-  const [h, mi] = time.split(":").map(Number)
-  return new Date(y, mo - 1, d, h, mi)
+  const [h, mi, s = 0] = time.split(":").map(Number)
+  return new Date(y, mo - 1, d, h, mi, s)
 }
+
+const DAY = 86400
 
 function addDays(date, days) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
@@ -51,13 +53,13 @@ function inPeriod(w, date) {
 }
 
 function inDayAndTime(w, date) {
-  const minute = date.getHours() * 60 + date.getMinutes()
+  const second = date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds()
   const from = w.from ?? 0
-  const until = w.until ?? 1440
-  if (from <= until) return minute >= from && minute < until && dayMatches(w, date)
+  const until = w.until ?? DAY
+  if (from <= until) return second >= from && second < until && dayMatches(w, date)
   // Overnight: the evening part is that day's, the morning part the previous day's.
-  if (minute >= from) return dayMatches(w, date)
-  if (minute < until) return dayMatches(w, addDays(date, -1))
+  if (second >= from) return dayMatches(w, date)
+  if (second < until) return dayMatches(w, addDays(date, -1))
   return false
 }
 
@@ -81,19 +83,46 @@ export function currentOverride(overrides, date) {
   return best
 }
 
+// The moments after `date`, up to `limitDays` ahead, at which the windows
+// can change: their starts and ends, midnights, and the daily times.
+function boundaries(windows, date, limitDays) {
+  const points = []
+  for (const w of windows) {
+    if (w.start) points.push(localDate(w.start))
+    if (w.end) points.push(localDate(w.end))
+  }
+  for (let day = 0; day <= limitDays; day++) {
+    const y = date.getFullYear(), m = date.getMonth(), d = date.getDate() + day
+    points.push(new Date(y, m, d))
+    for (const w of windows) {
+      for (const s of [w.from, w.until]) if (s != null) points.push(new Date(y, m, d, 0, 0, s))
+    }
+  }
+  const end = addDays(date, limitDays + 1)
+  return points.filter(p => p > date && p <= end).sort((a, b) => a - b)
+}
+
 // Milliseconds until the windows stop being active, looking ahead at most
-// `limitMinutes`; null if they stay active beyond that. Boundaries fall on
-// full minutes.
-export function remainingMs(windows, date, limitMinutes = 7 * 1440) {
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes())
-  for (let minutes = 1; minutes <= limitMinutes; minutes++) {
-    const next = new Date(start.getTime() + minutes * 60000)
-    if (!active(windows, next)) return next.getTime() - date.getTime()
+// `limitDays`; null if they stay active beyond that.
+export function remainingMs(windows, date, limitDays = 7) {
+  if (!windows) return null
+  for (const point of boundaries(windows, date, limitDays)) {
+    if (!active(windows, point)) return point.getTime() - date.getTime()
   }
   return null
 }
 
-// Milliseconds until the next full minute, when windows can change.
-export function msToNextMinute(date) {
+// True if any boundary of the windows has seconds.
+export function secondPrecise(windows) {
+  return (windows || []).some(
+    w => [w.from, w.until].some(s => s != null && s % 60 !== 0) ||
+      [w.start, w.end].some(p => p && !p.endsWith(":00"))
+  )
+}
+
+// Milliseconds until the next moment windows can change: the next full
+// second if `seconds`, otherwise the next full minute.
+export function msToNextCheck(date, seconds) {
+  if (seconds) return 1000 - date.getMilliseconds()
   return 60000 - (date.getSeconds() * 1000 + date.getMilliseconds())
 }

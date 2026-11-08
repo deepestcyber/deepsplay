@@ -58,5 +58,20 @@
     "name": "February 29 matches in leap years only",
     "toml": "when = { dates = \"02-29\" }",
     "checks": [["2028-02-29T10:00", true], ["2027-03-01T10:00", false], ["2028-03-01T10:00", false]]
+  },
+  {
+    "name": "daily window with seconds",
+    "toml": "when = { from = \"11:59:30\", until = \"12:00:15\" }",
+    "checks": [["2027-01-04T11:59:29", false], ["2027-01-04T11:59:30", true], ["2027-01-04T12:00", true], ["2027-01-04T12:00:14", true], ["2027-01-04T12:00:15", false]]
+  },
+  {
+    "name": "overnight with seconds, until 24:00:00",
+    "toml": "when = [{ days = \"fri\", from = \"23:59:50\", until = \"00:00:10\" }, { days = \"sun\", from = \"23:00:00\", until = \"24:00:00\" }]",
+    "checks": [["2027-01-08T23:59:49", false], ["2027-01-08T23:59:50", true], ["2027-01-09T00:00:09", true], ["2027-01-09T00:00:10", false], ["2027-01-10T23:59:59", true]]
+  },
+  {
+    "name": "continuous period with seconds",
+    "toml": "when = { start = \"2027-01-02 04:00:05\", end = \"2027-01-02T04:01:00\" }",
+    "checks": [["2027-01-02T04:00:04", false], ["2027-01-02T04:00:05", true], ["2027-01-02T04:00:59", true], ["2027-01-02T04:01", false]]
   }
 ]

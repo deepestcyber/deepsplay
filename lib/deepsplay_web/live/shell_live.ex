@@ -53,14 +53,27 @@ defmodule DeepsplayWeb.ShellLive do
           assign(socket, state: :host_config, errors: errors, page_title: "Error")
       end
 
-    socket = assign(socket, requested: requested, lookup: Store.lookup(requested))
+    socket =
+      assign(socket,
+        requested: requested,
+        lookup: Store.lookup(requested),
+        # After a deployment, a screen reconnecting with the old app.js and
+        # app.css loads the page again to get the new ones (ADR 30): the plan
+        # it receives may be in a newer form.
+        static_changed: connected?(socket) and static_changed?(socket)
+      )
+
     {:ok, track(socket, requested, params["screen"])}
   end
 
   @impl true
   def handle_params(_params, uri, socket) do
     %URI{path: path, query: query} = URI.parse(uri)
-    {:noreply, assign(socket, path: if(query, do: path <> "?" <> query, else: path))}
+    path = if(query, do: path <> "?" <> query, else: path)
+
+    if socket.assigns.static_changed,
+      do: {:noreply, redirect(socket, to: path)},
+      else: {:noreply, assign(socket, path: path)}
   end
 
   # Tracks the connected screen; updated when its state or page changes.
@@ -239,13 +252,20 @@ defmodule DeepsplayWeb.ShellLive do
       // among the pages active at that moment. With none active, the plan's
       // empty page is shown, or a black screen. Overrides interrupt the
       // rotation while their windows are active; afterwards it continues with
-      // the interrupted page. Windows change only on full minutes, so the hook
-      // checks at every full minute.
+      // the interrupted page. The hook checks at every full minute, or every
+      // full second while a window of the plan has seconds (ADR 30).
       //
       // Plan: {sha, mode: "sequential" | "random" | "pinned", apply,
       //        pages: [{url, duration, weight, when}],
       //        overrides: [{url, when, priority, duration_params}], empty}
-      import {active, activeIndices, currentOverride, remainingMs, msToNextMinute} from "@/js/schedule"
+      import {
+        active,
+        activeIndices,
+        currentOverride,
+        remainingMs,
+        secondPrecise,
+        msToNextCheck,
+      } from "@/js/schedule"
 
       const LOAD_TIMEOUT = 10000
       const FADE = 500 // matches duration-500 on the frames
@@ -322,15 +342,21 @@ defmodule DeepsplayWeb.ShellLive do
           else this.showNext()
         },
 
-        // Checks at every full minute whether an override starts or ends, or
-        // whether a page became active while none was.
+        // Checks at every full minute (or second) whether an override starts
+        // or ends, or whether a page became active while none was.
         tick() {
           this.tickTimer = setTimeout(() => {
             if (!this.checkOverride() && this.mode === "empty" && this.activeNow().length > 0) {
               this.showNext()
             }
             this.tick()
-          }, msToNextMinute(new Date()) + 50)
+          }, msToNextCheck(new Date(), this.secondPrecise()) + 50)
+        },
+
+        secondPrecise() {
+          return [this.plan, this.pending].some(
+            plan => plan && [...plan.pages, ...(plan.overrides || [])].some(e => secondPrecise(e.when))
+          )
         },
 
         activeNow() {

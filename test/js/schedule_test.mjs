@@ -12,8 +12,8 @@ const cases = JSON.parse(readFileSync(casesPath, "utf8"))
 const at = text => {
   const [date, time] = text.split("T")
   const [y, mo, d] = date.split("-").map(Number)
-  const [h, mi] = time.split(":").map(Number)
-  return new Date(y, mo - 1, d, h, mi)
+  const [h, mi, s = 0] = time.split(":").map(Number)
+  return new Date(y, mo - 1, d, h, mi, s)
 }
 
 let failures = 0
@@ -32,8 +32,8 @@ for (const c of cases) {
   })
 }
 
-const daily = [{ start: null, end: null, dates: null, days: null, from: 480, until: 900 }]
-const evening = [{ start: null, end: null, dates: null, days: null, from: 1080, until: null }]
+const daily = [{ start: null, end: null, dates: null, days: null, from: 28800, until: 54000 }]
+const evening = [{ start: null, end: null, dates: null, days: null, from: 64800, until: null }]
 
 check("no windows: always active", () => assert.equal(S.active(null, at("2027-01-01T00:00")), true))
 
@@ -59,11 +59,35 @@ check("currentOverride: highest priority, first on a tie, -1 for none", () => {
 check("remainingMs until the window closes", () => {
   const now = new Date(2027, 0, 4, 14, 58, 30)
   assert.equal(S.remainingMs(daily, now), 90000)
-  assert.equal(S.remainingMs(null, now, 60), null)
+  assert.equal(S.remainingMs(null, now), null)
+  assert.equal(S.remainingMs([{ start: null, end: null, dates: null, days: null, from: null, until: null }], now, 2), null)
 })
 
-check("msToNextMinute", () => {
-  assert.equal(S.msToNextMinute(new Date(2027, 0, 4, 14, 58, 30, 250)), 29750)
+check("remainingMs to the second, over midnight and to a period's end", () => {
+  const countdown = [{ start: null, end: null, dates: null, days: null, from: 86390, until: 5 }]
+  assert.equal(S.remainingMs(countdown, new Date(2027, 0, 4, 23, 59, 55, 500)), 9500)
+  const period = [{ start: "2027-01-04T10:00:00", end: "2027-01-04T10:00:42", dates: null, days: null, from: null, until: null }]
+  assert.equal(S.remainingMs(period, new Date(2027, 0, 4, 10, 0, 40)), 2000)
+  // Two windows back to back count as one.
+  const joined = [
+    { start: null, end: null, dates: null, days: null, from: 36000, until: 36030 },
+    { start: null, end: null, dates: null, days: null, from: 36030, until: 36060 },
+  ]
+  assert.equal(S.remainingMs(joined, new Date(2027, 0, 4, 10, 0, 10)), 50000)
+})
+
+check("secondPrecise", () => {
+  assert.equal(S.secondPrecise(daily), false)
+  assert.equal(S.secondPrecise(null), false)
+  assert.equal(S.secondPrecise([{ ...daily[0], until: 54015 }]), true)
+  assert.equal(S.secondPrecise([{ ...daily[0], start: "2027-01-04T10:00:05" }]), true)
+  assert.equal(S.secondPrecise([{ ...daily[0], start: "2027-01-04T10:00:00" }]), false)
+})
+
+check("msToNextCheck", () => {
+  const date = new Date(2027, 0, 4, 14, 58, 30, 250)
+  assert.equal(S.msToNextCheck(date, false), 29750)
+  assert.equal(S.msToNextCheck(date, true), 750)
 })
 
 if (failures > 0) {

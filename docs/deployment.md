@@ -101,7 +101,11 @@ page.
   before that as well, use `unclutter` (X11) or a kiosk compositor such as
   `cage` (Wayland).
 - A screen keeps rotating with what it has when the server is unreachable, and
-  reconnects by itself.
+  reconnects by itself. After an update of deepsplay, it loads the page again
+  when it reconnects, to get the new shell.
+- Keep the screen's clock synchronised (NTP) and its time zone set: time
+  windows use the screen's local time, to the second where a manifest asks
+  for it (ADR 30).
 
 ## Releasing
 

@@ -133,16 +133,19 @@ matches if any does:
 
 | Field | Meaning |
 | --- | --- |
-| `start`, `end` | one continuous period: `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`; either may be left out |
+| `start`, `end` | one continuous period: `YYYY-MM-DD`, `YYYY-MM-DD HH:MM` or `YYYY-MM-DD HH:MM:SS`; either may be left out |
 | `dates` | `YYYY-MM-DD`, `MM-DD` (every year) or `DD` (every month); ranges with `..`; a list |
 | `days` | `mon` to `sun`, a range (`"mon-fri"`) or a list |
-| `from`, `until` | daily time `HH:MM`; `until` before `from` runs overnight; `"24:00"` ends the day |
+| `from`, `until` | daily time `HH:MM` or `HH:MM:SS`; `until` before `from` runs overnight; `"24:00"` ends the day |
 
 - Dates are always ISO, times always 24-hour, in the screen's local time;
   screens need a correct clock. A start is included, an end excluded.
 - At each page change, the next page is chosen among the active ones. A
   page whose window closes finishes its display time; a single active page
   stays without reloading; with none active, `when_empty` applies.
+- Seconds are optional (`"11:59:30"`); screens then check at every full
+  second instead of every full minute. They are as precise as the screens'
+  clocks, so keep those synchronised (NTP).
 - An override starts at once when its window opens, and the rotation
   continues with the interrupted page when it ends. Of several active ones,
   the highest `priority` wins, the first of equal ones. A parameter with

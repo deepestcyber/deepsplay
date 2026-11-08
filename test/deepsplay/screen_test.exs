@@ -551,7 +551,7 @@ defmodule Deepsplay.ScreenTest do
       })
 
       assert {:ok, screen} = Screen.load(root)
-      assert [%{when: [%{from: 480, until: 900}]}, %{when: nil}] = screen.pages
+      assert [%{when: [%{from: 28_800, until: 54_000}]}, %{when: nil}] = screen.pages
       assert screen.when_empty == {"idle.html", "dim=1"}
 
       assert [drill, lunch] = screen.overrides
@@ -587,7 +587,7 @@ defmodule Deepsplay.ScreenTest do
       })
 
       assert errors(root) == [
-               ~s[page #1.when from must be "HH:MM" (24-hour)],
+               ~s[page #1.when from must be "HH:MM" or "HH:MM:SS" (24-hour)],
                "override #1.when is missing",
                "override #2.priority must be an integer",
                ~s(override #2.path "gone.html" is not a file in pages/),

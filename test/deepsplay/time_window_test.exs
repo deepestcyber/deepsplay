@@ -18,7 +18,7 @@ defmodule Deepsplay.TimeWindowTest do
         windows = windows(@case["toml"])
 
         for [at, expected] <- @case["checks"] do
-          at = NaiveDateTime.from_iso8601!(at <> ":00")
+          at = NaiveDateTime.from_iso8601!(if byte_size(at) == 16, do: at <> ":00", else: at)
           assert TimeWindow.active?(windows, at) == expected, "#{at}: expected #{expected}"
         end
       end
@@ -35,6 +35,10 @@ defmodule Deepsplay.TimeWindowTest do
           {[], "must be a table or a list of tables"},
           {%{"from" => "8:00"}, "from must be"},
           {%{"from" => "08:60"}, "from must be"},
+          {%{"from" => "08:00:60"}, "from must be"},
+          {%{"from" => "08:00:5"}, "from must be"},
+          {%{"from" => "24:00:00"}, "from must be before 24:00"},
+          {%{"start" => "2027-01-02 04:00:61"}, "start must be"},
           {%{"until" => "25:00"}, "until must be"},
           {%{"from" => "24:00"}, "from must be before 24:00"},
           {%{"start" => "2027-1-2"}, "start must be"},

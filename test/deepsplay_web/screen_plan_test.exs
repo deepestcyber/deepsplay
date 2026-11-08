@@ -67,12 +67,12 @@ defmodule DeepsplayWeb.ScreenPlanTest do
         empty_added: [{"theme", "dark"}]
       )
 
-    assert [%{when: [%{from: 480, until: 900, days: nil}]}] = plan.pages
+    assert [%{when: [%{from: 28_800, until: 54_000, days: nil}]}] = plan.pages
 
     assert plan.overrides == [
              %{
                url: "/c/lobby/r/abc/drill.html?x=1&theme=dark",
-               when: [%{start: nil, end: nil, dates: nil, days: nil, from: 480, until: 900}],
+               when: [%{start: nil, end: nil, dates: nil, days: nil, from: 28_800, until: 54_000}],
                priority: 3,
                duration_params: ["duration"]
              }
