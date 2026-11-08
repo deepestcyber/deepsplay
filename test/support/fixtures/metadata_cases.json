@@ -2,34 +2,34 @@
   {
     "name": "nothing set",
     "toml": "description = \"Cells.\"",
-    "expect": {"authors": [], "credits": null, "license": null}
+    "expect": {"authors": [], "credits": null, "license": null, "details": null}
   },
   {
-    "name": "one author, credits and license, trimmed",
-    "toml": "author = \"  Ada Lovelace \"\ncredits = \" Radar: Deutscher Wetterdienst \"\nlicense = \"MIT\"",
-    "expect": {"authors": ["Ada Lovelace"], "credits": "Radar: Deutscher Wetterdienst", "license": "MIT"}
+    "name": "one author, credits, license and details, trimmed",
+    "toml": "author = \"  Ada Lovelace \"\ncredits = \" Radar: Deutscher Wetterdienst \"\nlicense = \"MIT\"\ndetails = \"\"\"\n  From the LED wall.\n\n- blinks\n- glances\n\"\"\"",
+    "expect": {"authors": ["Ada Lovelace"], "credits": "Radar: Deutscher Wetterdienst", "license": "MIT", "details": "From the LED wall.\n\n- blinks\n- glances"}
   },
   {
     "name": "several authors, empty names dropped",
     "toml": "author = [\"Ada\", \"  \", \"Grace\"]",
-    "expect": {"authors": ["Ada", "Grace"], "credits": null, "license": null}
+    "expect": {"authors": ["Ada", "Grace"], "credits": null, "license": null, "details": null}
   },
   {
     "name": "empty texts count as not set",
-    "toml": "author = \"\"\ncredits = \"  \"\nlicense = \"\"",
-    "expect": {"authors": [], "credits": null, "license": null}
+    "toml": "author = \"\"\ncredits = \"  \"\nlicense = \"\"\ndetails = \"\\n  \\n\"",
+    "expect": {"authors": [], "credits": null, "license": null, "details": null}
   },
   {
     "name": "invalid values are dropped",
-    "toml": "author = 3\ncredits = [\"x\"]\nlicense = true",
-    "expect": {"authors": [], "credits": null, "license": null},
-    "warnings": 3
+    "toml": "author = 3\ncredits = [\"x\"]\nlicense = true\ndetails = 1",
+    "expect": {"authors": [], "credits": null, "license": null, "details": null},
+    "warnings": 4
   },
   {
     "name": "too long values are dropped, other names kept",
-    "toml": "author = [\"Ada\", \"LONGNAME\"]\nlicense = \"LONGLICENSE\"",
-    "long": {"LONGNAME": 201, "LONGLICENSE": 101},
-    "expect": {"authors": ["Ada"], "credits": null, "license": null},
-    "warnings": 2
+    "toml": "author = [\"Ada\", \"LONGNAME\"]\nlicense = \"LONGLICENSE\"\ndetails = \"LONGDETAILS\"",
+    "long": {"LONGNAME": 201, "LONGLICENSE": 101, "LONGDETAILS": 5001},
+    "expect": {"authors": ["Ada"], "credits": null, "license": null, "details": null},
+    "warnings": 3
   }
 ]

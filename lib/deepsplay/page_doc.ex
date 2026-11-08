@@ -18,14 +18,16 @@ defmodule Deepsplay.PageDoc do
 
   alias Deepsplay.PageDoc.Param
 
-  @fields ~w(title description author credits license uses page params variants)
+  @fields ~w(title description details author credits license uses page params variants)
 
   @max_name 200
   @max_credits 500
   @max_license 100
+  @max_details 5000
 
   defstruct title: nil,
             description: nil,
+            details: nil,
             authors: [],
             credits: nil,
             license: nil,
@@ -40,6 +42,7 @@ defmodule Deepsplay.PageDoc do
   @type t :: %__MODULE__{
           title: String.t() | nil,
           description: String.t() | nil,
+          details: String.t() | nil,
           authors: [String.t()],
           credits: String.t() | nil,
           license: String.t() | nil,
@@ -115,6 +118,7 @@ defmodule Deepsplay.PageDoc do
     {authors, w7} = authors(data["author"])
     {credits, w8} = text(data, "credits", @max_credits)
     {license, w9} = text(data, "license", @max_license)
+    {details, w10} = text(data, "details", @max_details)
 
     unknown =
       for key <- Map.keys(data) -- @fields, do: ~s(unknown key "#{key}")
@@ -122,6 +126,7 @@ defmodule Deepsplay.PageDoc do
     %__MODULE__{
       title: title || fallback_title,
       description: description,
+      details: details,
       authors: authors,
       credits: credits,
       license: license,
@@ -129,7 +134,7 @@ defmodule Deepsplay.PageDoc do
       page: page,
       params: params,
       variants: variants,
-      warnings: w1 ++ w2 ++ w3 ++ w4 ++ w5 ++ w6 ++ w7 ++ w8 ++ w9 ++ Enum.sort(unknown)
+      warnings: w1 ++ w2 ++ w3 ++ w4 ++ w5 ++ w6 ++ w7 ++ w8 ++ w9 ++ w10 ++ Enum.sort(unknown)
     }
   end
 

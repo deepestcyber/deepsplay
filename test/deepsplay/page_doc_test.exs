@@ -32,8 +32,8 @@ defmodule Deepsplay.PageDocTest do
         doc = PageDoc.parse(expand_case(@case))
         expect = @case["expect"]
 
-        assert {doc.authors, doc.credits, doc.license} ==
-                 {expect["authors"], expect["credits"], expect["license"]}
+        assert {doc.authors, doc.credits, doc.license, doc.details} ==
+                 {expect["authors"], expect["credits"], expect["license"], expect["details"]}
 
         assert length(doc.warnings) == (@case["warnings"] || 0), inspect(doc.warnings)
       end

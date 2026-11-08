@@ -136,6 +136,12 @@ A page describes itself and its URL parameters in a block in its `<head>`:
 <title>Game of Life</title>
 <script type="application/toml" id="deepsplay-page">
 description = "Conway's Game of Life over the whole screen."
+details     = """
+Cells live with two or three neighbours and are born with three.
+
+- the screen wraps around at the edges
+- a stale pattern is replaced by a new random one
+"""                                     # optional: longer explanation
 author      = "Ada Lovelace"            # optional; or ["Ada", "Grace"]
 credits     = "Rules by John Conway"    # optional: data and assets used
 license     = "MIT"                     # optional: the page's own license
@@ -168,6 +174,10 @@ query = "cells=40&gps=4"
   as a fragment another page loads. It is still served, but not offered as a
   page.
 - `title` is optional; the page's `<title>` is used otherwise.
+- `description` is one short sentence; the catalog's overview shows it.
+  `details` is optional, for anything longer: where the page comes from, how
+  it behaves, how to use its parameters. Plain text, line breaks are kept;
+  the catalog shows it collapsed. Helpers can have it too.
 - `author`, `credits` and `license` are optional and shown in the catalog.
   `credits` attributes data and assets (e.g. "Radar: Deutscher
   Wetterdienst"); `license` is preferably an SPDX identifier. Helpers can
@@ -196,8 +206,8 @@ Pages using it work only when served by deepsplay.
 A page (or its theme) reads its metadata with `Deepsplay.page()`:
 
 ```js
-const { title, description, authors, credits, license } = Deepsplay.page()
-// authors is always a list; credits and license are null when not set
+const { title, description, details, authors, credits, license } = Deepsplay.page()
+// authors is always a list; details, credits and license are null when not set
 if (authors.length) credit.textContent = "by " + authors.join(", ")
 ```
 
@@ -419,6 +429,8 @@ These are recommendations; build what your screens need.
   screen (e.g. "© BKG" for TopPlusOpen); the page shows it. Note it in
   `credits` too, so the catalog lists it.
 - **Videos**: `muted`, `autoplay` and `playsinline`.
+- **Explanations** go into `details`, not into a comment at the top of the
+  file, so they appear in the catalog; comments are about the code.
 
 ## Several displays from one repository
 

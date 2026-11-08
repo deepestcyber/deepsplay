@@ -15,8 +15,8 @@
 //   Deepsplay.helper(name, toml)  registers a helper's parameter definition
 //                                 and returns its parameters
 //   Deepsplay.page()              the page's metadata from its block
-//                                 (ADR 24): { title, description, authors,
-//                                 credits, license }
+//                                 (ADR 24, 27): { title, description,
+//                                 details, authors, credits, license }
 //   Deepsplay.api(upstream, path) URL of an upstream of the page's
 //                                 configuration (ADR 8)
 //   Deepsplay.state               shared state of the page's configuration
@@ -199,6 +199,7 @@ function pageDefinitions() {
 const MAX_NAME = 200
 const MAX_CREDITS = 500
 const MAX_LICENSE = 100
+const MAX_DETAILS = 5000
 
 function metaText(data, key, max, where) {
   const value = data[key]
@@ -245,6 +246,7 @@ function metadataFrom(toml, fallbackTitle, where) {
   return Object.freeze({
     title,
     description,
+    details: metaText(data, "details", MAX_DETAILS, where),
     authors: Object.freeze(metaAuthors(data.author, where)),
     credits: metaText(data, "credits", MAX_CREDITS, where),
     license: metaText(data, "license", MAX_LICENSE, where),

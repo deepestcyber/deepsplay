@@ -13,6 +13,7 @@ defmodule DeepsplayWeb.CatalogLiveTest do
   @theme """
   const T = Deepsplay.helper("theme", `
   description = "Colours."
+  details = "Neon for evenings."
   author = "Grace"
   [params.theme]
   type    = "enum"
@@ -59,6 +60,11 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     <title>Game of Life</title>
     <script type="application/toml" id="deepsplay-page">
     description = "Cells."
+    details = \"\"\"
+    Conway's rules.
+
+    - cells live with two or three neighbours
+    \"\"\"
     author = ["Ada", "Grace"]
     credits = "Rules by John Conway"
     license = "MIT"
@@ -128,6 +134,17 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     assert has_element?(view, "#overview-page-life-html .overview-playground")
     assert has_element?(view, "#overview-page-plain-html", "undocumented")
     refute has_element?(view, "#overview-page-fragment-html .overview-preview")
+
+    # Details are collapsed, line breaks kept; not in the overview.
+    assert has_element?(
+             view,
+             "#page-life-html details.item-details:not([open]) p",
+             "- cells live with two or three neighbours"
+           )
+
+    refute has_element?(view, "#overview-page-life-html", "Conway")
+    assert has_element?(view, "#helper-theme details.item-details", "Neon for evenings.")
+    refute has_element?(view, "#page-plain-html details.item-details")
 
     # Parameters are collapsed.
     assert has_element?(

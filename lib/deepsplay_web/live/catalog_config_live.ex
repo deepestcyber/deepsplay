@@ -2,7 +2,8 @@ defmodule DeepsplayWeb.CatalogConfigLive do
   @moduledoc """
   The catalog page of one configuration at `/catalog/<name>` (ADR 17): a
   short list of all pages, the rotation with the parameters each page gets,
-  all pages with their documentation, parameters (collapsed) and variants,
+  all pages with their documentation, details and parameters (both
+  collapsed) and variants,
   the helpers and all warnings.
 
   One page at a time can be previewed (rendered at a real screen size and
@@ -437,6 +438,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
           <span class="font-mono text-xs text-base-content/50">{helper.file}</span>
         </div>
         <p :if={helper.description} class="mt-1 text-base-content/70">{helper.description}</p>
+        <.details text={helper.details} />
         <.metadata item={helper} />
         <p class="mt-2 font-mono text-xs">
           {helper.params |> Map.keys() |> Enum.sort() |> Enum.join(", ")}
@@ -558,6 +560,20 @@ defmodule DeepsplayWeb.CatalogConfigLive do
     """
   end
 
+  attr :text, :string, default: nil
+
+  # The longer text of a page or helper, collapsed (ADR 27).
+  defp details(assigns) do
+    ~H"""
+    <details :if={@text} class="item-details mt-2">
+      <summary class="cursor-pointer select-none text-xs text-base-content/60 hover:text-base-content">
+        Details
+      </summary>
+      <p class="mt-1 whitespace-pre-line text-base-content/70">{@text}</p>
+    </details>
+    """
+  end
+
   attr :item, :map,
     required: true,
     doc: "a page's doc or a helper, with authors, credits, license"
@@ -640,6 +656,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
       >
         {String.trim(@page.doc.description)}
       </p>
+      <.details :if={@page.doc} text={@page.doc.details} />
       <.metadata :if={@page.doc} item={@page.doc} />
       <p :if={@page.doc && @page.doc.uses != []} class="mt-1 text-xs text-base-content/50">
         Uses: {Enum.join(@page.doc.uses, ", ")}

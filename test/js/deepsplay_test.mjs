@@ -161,7 +161,7 @@ for (const c of metadataCases) {
     for (const [placeholder, length] of Object.entries(c.long || {})) toml = toml.replace(placeholder, "x".repeat(length))
     const { Deepsplay, warnings } = load({ toml })
     const meta = Deepsplay.page()
-    assert.deepEqual(plain({ authors: meta.authors, credits: meta.credits, license: meta.license }), c.expect)
+    assert.deepEqual(plain({ authors: meta.authors, credits: meta.credits, license: meta.license, details: meta.details }), c.expect)
     assert.equal(warnings.length, c.warnings || 0, warnings.join("; "))
   })
 }
@@ -176,7 +176,7 @@ check("page() gives title and description, with <title> as fallback", () => {
   assert.equal(fallback.description, null)
 
   const none = load({ title: "" }).Deepsplay.page()
-  assert.deepEqual(plain(none), { title: null, description: null, authors: [], credits: null, license: null })
+  assert.deepEqual(plain(none), { title: null, description: null, details: null, authors: [], credits: null, license: null })
   assert.ok(Object.isFrozen(none))
 })
 

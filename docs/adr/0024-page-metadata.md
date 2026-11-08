@@ -9,6 +9,9 @@ Accepted
 Amends [14](0014-page-parameters-defined-in-the-page.md) and
 [15](0015-shared-helpers-define-their-parameters.md).
 
+Amended by [27](0027-page-details.md): optional `details`, a longer text
+shown collapsed in the catalog.
+
 ## Context
 
 Pages in a content repository are written by different people, who want to
