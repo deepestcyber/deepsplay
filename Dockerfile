@@ -54,7 +54,13 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
-RUN mix assets.setup
+# Tailwind is downloaded from github.com/.../releases/download/..., which has
+# failed with "504 Gateway Time-out" while the GitHub API kept working; the
+# fallback fetches it through the API (see docs/deployment.md, "Releasing").
+COPY docker/fetch_tailwind.exs docker/
+RUN --mount=type=secret,id=github_token \
+  mix assets.setup \
+  || (mix run --no-compile --no-start docker/fetch_tailwind.exs && mix assets.setup)
 
 COPY priv priv
 

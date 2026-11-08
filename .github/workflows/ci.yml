@@ -84,6 +84,8 @@ jobs:
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,scope=${{ matrix.platform }},mode=max
+          # For the Tailwind fallback in the Dockerfile (GitHub API rate limit).
+          secrets: github_token=${{ secrets.GITHUB_TOKEN }}
 
       - name: Export digest
         run: |
