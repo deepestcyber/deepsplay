@@ -12,6 +12,9 @@ configuration is reloaded when it changes.
 Amended by [25](0025-time-windows-and-overrides.md): manifest page entries can
 have time windows (`when`), manifests `when_empty` and `[[override]]`.
 
+Amended by [28](0028-page-entries-by-glob.md): a page entry can name its
+pages with `glob` (and `exclude`) instead of `path`.
+
 ## Context
 
 deepsplay reads two kinds of configuration: the host configuration (server
