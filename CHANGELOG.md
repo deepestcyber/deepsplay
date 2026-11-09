@@ -5,6 +5,12 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+## 0.4.0 – 2026-11-09
+
+Shorter manifests, entries that can be switched off and second-precise time
+windows. No changes are needed for existing setups; screens load the new
+shell on their own when they reconnect after the update.
+
 - Manifest page entries can name their pages with `glob` (and `exclude`)
   instead of `path`; each page found becomes an entry of its own (ADR 28).
 - Page entries and overrides can be switched off with `enabled = false`;

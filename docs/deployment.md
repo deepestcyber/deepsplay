@@ -53,7 +53,7 @@ files by renaming, so the container sees the new file.
 3. `docker compose up -d`; open `http://<host>:4000/status`.
 
 Update: `docker compose pull && docker compose up -d`. To pin a version, use
-`image: ghcr.io/deepestcyber/deepsplay:0.3.1` instead of `latest`.
+`image: ghcr.io/deepestcyber/deepsplay:0.4.0` instead of `latest`.
 
 ## NixOS
 
@@ -64,7 +64,7 @@ Declared in the system configuration with `virtualisation.oci-containers`:
   virtualisation.oci-containers = {
     backend = "docker"; # or "podman"
     containers.deepsplay = {
-      image = "ghcr.io/deepestcyber/deepsplay:0.3.1";
+      image = "ghcr.io/deepestcyber/deepsplay:0.4.0";
       ports = [ "4000:4000" ];
       environmentFiles = [ "/etc/deepsplay/env" ]; # SECRET_KEY_BASE=..., mode 0600
       environment = {
