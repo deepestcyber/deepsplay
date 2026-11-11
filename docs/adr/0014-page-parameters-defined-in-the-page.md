@@ -9,6 +9,9 @@ Accepted
 Amended by [24](0024-page-metadata.md): optional `author`, `credits` and
 `license`.
 
+Amended by [31](0031-pages-end-their-display-time.md): `deepsplay.js` gets
+`Deepsplay.done()`.
+
 ## Context
 
 Pages take parameters from their URL (e.g. `?cells=90&gps=10`). Their

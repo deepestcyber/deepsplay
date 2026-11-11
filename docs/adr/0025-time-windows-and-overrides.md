@@ -15,6 +15,13 @@ off with `enabled = false`.
 Amended by [30](0030-seconds-in-time-windows.md): times in windows may have
 seconds.
 
+Amended by [31](0031-pages-end-their-display-time.md): `Deepsplay.done()` on an
+override page ends the override on that screen until its window closes.
+
+Amended by [32](0032-interrupts.md): interrupts replace overrides of equal or
+lower priority, and overrides opening during an interrupt replace it the same
+way; overrides among themselves are unchanged.
+
 ## Context
 
 Some pages belong to certain times only: a night page from 22:00 to 06:00,

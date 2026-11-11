@@ -9,6 +9,12 @@ Accepted
 Amended by [25](0025-time-windows-and-overrides.md): pages can be limited to time
 windows, the rotation picks among the active ones, and overrides interrupt it.
 
+Amended by [31](0031-pages-end-their-display-time.md): a page can end its
+display time early with `Deepsplay.done()`.
+
+Amended by [32](0032-interrupts.md): interrupts triggered over HTTP are pushed
+to screens and shown at once.
+
 ## Context
 
 A screen cycles through the pages of a revision. Screens must keep working when

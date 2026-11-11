@@ -6,6 +6,9 @@ Date: 2026-11-06
 
 Accepted
 
+Amended by [32](0032-interrupts.md): `/c/<name>/interrupts/<name>` triggers
+and ends interrupts.
+
 ## Context
 
 Screens pick a configuration by URL. Page files must be cacheable, and a screen

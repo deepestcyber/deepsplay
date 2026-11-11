@@ -6,6 +6,9 @@ Date: 2026-11-07
 
 Accepted
 
+Amended by [32](0032-interrupts.md): a backend gets `DEEPSPLAY_TOKEN` to trigger
+interrupts.
+
 ## Context
 
 Upstreams with caching (ADR 19, ADR 20) and shared state (ADR 21) cover most

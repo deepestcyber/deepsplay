@@ -6,6 +6,9 @@ Date: 2026-11-07
 
 Accepted
 
+Amended by [32](0032-interrupts.md): parameters of an interrupt's trigger take
+precedence over all levels.
+
 ## Context
 
 One content repository should be able to look different per screen or per
