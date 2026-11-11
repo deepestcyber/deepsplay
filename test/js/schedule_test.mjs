@@ -74,6 +74,48 @@ check("currentOverride skips dismissed overrides until their window closes", () 
   assert.deepEqual([...dismissed.keys()], [S.overrideKey(overrides[0])])
 })
 
+check("acceptsInterrupt: equal or higher replaces, lower is ignored", () => {
+  assert.equal(S.acceptsInterrupt(0, null), true)
+  assert.equal(S.acceptsInterrupt(-5, null), true)
+  assert.equal(S.acceptsInterrupt(10, 5), true)
+  // equal: also the same interrupt again, which starts fresh
+  assert.equal(S.acceptsInterrupt(5, 5), true)
+  assert.equal(S.acceptsInterrupt(4, 5), false)
+})
+
+check("overrideOpened: a new active override of equal or higher priority", () => {
+  const morning = [{ ...daily[0], from: 32400, until: 36000 }] // 09:00-10:00
+  const overrides = [
+    { url: "/low", when: morning, priority: 1 },
+    { url: "/high", when: morning, priority: 10 },
+    { url: "/old", when: daily, priority: 50 },
+  ]
+  const before = S.activeOverrideKeys(overrides, at("2027-01-04T08:59"))
+  assert.deepEqual([...before], [S.overrideKey(overrides[2])])
+  const nine = at("2027-01-04T09:00")
+  // /high opens with 10: replaces an interrupt of 10 or less, not of 11
+  assert.equal(S.overrideOpened(overrides, nine, new Map(), before, 10), true)
+  assert.equal(S.overrideOpened(overrides, nine, new Map(), before, 11), false)
+  // /old was active before: it does not count, whatever its priority
+  assert.equal(S.overrideOpened(overrides, nine, new Map(), before, 50), false)
+  // nothing new since the last check
+  const after = S.activeOverrideKeys(overrides, nine)
+  assert.equal(S.overrideOpened(overrides, at("2027-01-04T09:30"), new Map(), after, 0), false)
+  // a dismissed override is not active
+  const dismissed = S.dismiss(new Map(), overrides[1], nine)
+  assert.equal(S.overrideOpened(overrides, nine, dismissed, before, 10), false)
+  // an override in a new plan counts as opened (keys survive identical plans)
+  const newPlan = [...overrides.map(o => ({ ...o })), { url: "/new", when: daily, priority: 3 }]
+  assert.equal(S.overrideOpened(newPlan, at("2027-01-04T12:00"), new Map(), S.activeOverrideKeys(overrides, at("2027-01-04T12:00")), 3), true)
+})
+
+check("an override replaced by an interrupt comes back while its window is open", () => {
+  // Nothing is dismissed by an interrupt: currentOverride still finds it.
+  const overrides = [{ url: "/a", when: daily, priority: 0 }]
+  assert.equal(S.currentOverride(overrides, at("2027-01-04T12:00")), 0)
+  assert.equal(S.currentOverride(overrides, at("2027-01-04T16:00")), -1)
+})
+
 check("remainingMs until the window closes", () => {
   const now = new Date(2027, 0, 4, 14, 58, 30)
   assert.equal(S.remainingMs(daily, now), 90000)

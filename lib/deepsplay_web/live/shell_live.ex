@@ -283,17 +283,29 @@ defmodule DeepsplayWeb.ShellLive do
       // the other frame; an override ends on this screen until its window
       // closes.
       //
+      // Interrupts (ADR 32) arrive as events from the server: {name, url,
+      // priority, duration}. One replaces what an override or another
+      // interrupt shows if its priority is equal or higher, and is shown for
+      // its duration from its arrival, until done() or interrupt_end. An
+      // override that opens meanwhile with equal or higher priority drops it.
+      // Afterwards the screen shows what ADR 25 gives: the highest active
+      // override, or the rotation with the interrupted page. Nothing about
+      // interrupts survives a reload.
+      //
       // Plan: {sha, mode: "sequential" | "random" | "pinned", apply,
       //        pages: [{url, duration, weight, when}],
       //        overrides: [{url, when, priority, duration_params}], empty}
       import {
+        acceptsInterrupt,
         active,
         activeIndices,
+        activeOverrideKeys,
         currentOverride,
         dismiss,
         remainingMs,
         secondPrecise,
         msToNextCheck,
+        overrideOpened,
       } from "@/js/schedule"
 
       const LOAD_TIMEOUT = 10000
@@ -305,13 +317,16 @@ defmodule DeepsplayWeb.ShellLive do
           this.frames = [this.createFrame(), this.createFrame()]
           this.active = 0
           this.index = -1
-          this.mode = "rotation" // or "override", "empty"
+          this.mode = "rotation" // or "override", "interrupt", "empty"
           this.overrideIndex = -1
           this.resumeIndex = -1
           this.plan = null
           this.planKey = null
           this.pending = null
           this.dismissed = new Map()
+          this.activeKeys = new Set() // overrides active at the last check
+          this.interrupt = null // {name, url, priority, duration}
+          this.interruptTimer = null
           this.loading = false
           this.shownAt = 0
           this.doneTimer = null
@@ -319,6 +334,10 @@ defmodule DeepsplayWeb.ShellLive do
           window.addEventListener("message", this.onMessage)
           this.setPlan(JSON.parse(this.el.dataset.plan))
           this.handleEvent("plan", plan => this.setPlan(plan))
+          this.handleEvent("interrupt", interrupt => this.startInterrupt(interrupt))
+          this.handleEvent("interrupt_end", ({name}) => {
+            if (this.interrupt && this.interrupt.name === name) this.endInterrupt()
+          })
           this.tick()
         },
 
@@ -328,6 +347,7 @@ defmodule DeepsplayWeb.ShellLive do
           clearTimeout(this.clearTimer)
           clearTimeout(this.tickTimer)
           clearTimeout(this.doneTimer)
+          clearTimeout(this.interruptTimer)
           window.removeEventListener("message", this.onMessage)
         },
 
@@ -351,7 +371,9 @@ defmodule DeepsplayWeb.ShellLive do
         // empty page again.
         done() {
           if (this.loading) return
-          if (this.mode === "override") {
+          if (this.mode === "interrupt") {
+            this.endInterrupt()
+          } else if (this.mode === "override") {
             const override = (this.plan.overrides || [])[this.overrideIndex]
             if (override) dismiss(this.dismissed, override, new Date())
             this.checkOverride()
@@ -387,6 +409,15 @@ defmodule DeepsplayWeb.ShellLive do
             this.plan = plan
             this.pending = null
             this.restart()
+          } else if (this.mode === "interrupt") {
+            // Nothing of the rotation is visible: the new plan applies at
+            // once, the interrupt goes on unless an override it brings
+            // replaces it. The rotation starts over afterwards.
+            this.plan = plan
+            this.pending = null
+            this.index = -1
+            this.resumeIndex = -1
+            this.checkOverride()
           } else if (plan.apply === "now") {
             this.plan = plan
             this.pending = null
@@ -398,6 +429,7 @@ defmodule DeepsplayWeb.ShellLive do
 
         restart() {
           clearTimeout(this.timer)
+          this.dropInterrupt()
           this.index = -1
           this.mode = "rotation"
           this.overrideIndex = -1
@@ -441,6 +473,19 @@ defmodule DeepsplayWeb.ShellLive do
           const now = new Date()
           const overrides = this.plan.overrides || []
           const current = currentOverride(overrides, now, this.dismissed)
+          const previous = this.activeKeys
+          this.activeKeys = activeOverrideKeys(overrides, now, this.dismissed)
+
+          // An interrupt stays unless an override opened since the last
+          // check with equal or higher priority (ADR 32).
+          if (this.mode === "interrupt") {
+            if (!overrideOpened(overrides, now, this.dismissed, previous, this.interrupt.priority)) return true
+            this.dropInterrupt()
+            this.mode = "override"
+            this.overrideIndex = current
+            this.display(this.overrideUrl(overrides[current], now), () => {})
+            return true
+          }
 
           if (current >= 0) {
             if (force || this.mode !== "override" || current !== this.overrideIndex) {
@@ -453,15 +498,77 @@ defmodule DeepsplayWeb.ShellLive do
             return true
           }
 
-          if (this.mode === "override") {
-            // Continue with the interrupted page, with a fresh display time.
-            this.mode = "rotation"
-            this.overrideIndex = -1
-            const page = this.plan.pages[this.resumeIndex]
-            if (page && active(page.when, now)) this.showPage(this.resumeIndex)
-            else this.showNext()
-          }
+          if (this.mode === "override") this.resume(now)
           return false
+        },
+
+        // Continues the rotation with the interrupted page, with a fresh
+        // display time.
+        resume(now) {
+          this.mode = "rotation"
+          this.overrideIndex = -1
+          const page = this.plan.pages[this.resumeIndex]
+          if (page && active(page.when, now)) this.showPage(this.resumeIndex)
+          else this.showNext()
+        },
+
+        // The priority of what an override or interrupt shows, or null.
+        shownPriority() {
+          if (this.mode === "interrupt") return this.interrupt.priority
+          if (this.mode === "override") return (this.plan.overrides || [])[this.overrideIndex]?.priority ?? null
+          return null
+        },
+
+        // An interrupt arrives (ADR 32): shown if nothing of equal or higher
+        // priority is; the same one again starts fresh.
+        startInterrupt(interrupt) {
+          if (!this.plan || this.plan.mode === "pinned") return
+          if (!acceptsInterrupt(interrupt.priority, this.shownPriority())) return
+          const now = new Date()
+          if (this.mode !== "override" && this.mode !== "interrupt") {
+            this.resumeIndex = this.mode === "rotation" ? this.index : -1
+          }
+          // Nothing of the rotation stays visible: a waiting plan applies now,
+          // so its overrides count, and the rotation starts over afterwards.
+          if (this.pending) {
+            this.plan = this.pending
+            this.pending = null
+            this.index = -1
+            this.resumeIndex = -1
+          }
+          // Overrides active now do not replace it; only those opening later.
+          this.activeKeys = activeOverrideKeys(this.plan.overrides || [], now, this.dismissed)
+          clearTimeout(this.timer)
+          this.dropInterrupt()
+          this.mode = "interrupt"
+          this.overrideIndex = -1
+          this.interrupt = interrupt
+          this.interruptTimer = setTimeout(() => this.endInterrupt(), interrupt.duration)
+          this.display(interrupt.url, () => {})
+        },
+
+        // The interrupt is over on this screen (its time, done(),
+        // interrupt_end): the highest active override, or the rotation.
+        endInterrupt() {
+          if (this.mode !== "interrupt") return
+          this.dropInterrupt()
+          const now = new Date()
+          const overrides = this.plan.overrides || []
+          const current = currentOverride(overrides, now, this.dismissed)
+          this.activeKeys = activeOverrideKeys(overrides, now, this.dismissed)
+          if (current >= 0) {
+            this.mode = "override"
+            this.overrideIndex = current
+            this.display(this.overrideUrl(overrides[current], now), () => {})
+          } else {
+            this.resume(now)
+          }
+        },
+
+        dropInterrupt() {
+          clearTimeout(this.interruptTimer)
+          this.interruptTimer = null
+          this.interrupt = null
         },
 
         // An override's URL, with the remaining time of its window for
@@ -476,7 +583,7 @@ defmodule DeepsplayWeb.ShellLive do
         // The next page among the active ones; with none, the empty page.
         // `force` loads the page again when it is the same one.
         showNext(force = false) {
-          if (this.mode === "override") return
+          if (this.mode === "override" || this.mode === "interrupt") return
           if (this.pending) {
             this.plan = this.pending
             this.pending = null

@@ -87,6 +87,32 @@ export function currentOverride(overrides, date, dismissed = new Map()) {
   return best
 }
 
+// Interrupts (ADR 32). An incoming interrupt replaces what an override or
+// another interrupt shows if its priority is equal or higher; `shown` is the
+// priority of what is shown, or null for the rotation or the empty page.
+export function acceptsInterrupt(priority, shown) {
+  return shown === null || priority >= shown
+}
+
+// Keys of the overrides active at `date` and not dismissed.
+export function activeOverrideKeys(overrides, date, dismissed = new Map()) {
+  const keys = new Set()
+  for (const override of overrides) {
+    if (active(override.when, date) && !(dismissed.get(overrideKey(override)) > date.getTime())) {
+      keys.add(overrideKey(override))
+    }
+  }
+  return keys
+}
+
+// Whether an override became active since `previous` (keys from
+// activeOverrideKeys) with a priority equal or higher than `priority`: it
+// then replaces the interrupt shown.
+export function overrideOpened(overrides, date, dismissed, previous, priority) {
+  const now = activeOverrideKeys(overrides, date, dismissed)
+  return overrides.some(o => o.priority >= priority && now.has(overrideKey(o)) && !previous.has(overrideKey(o)))
+}
+
 // Identifies an override across plans, so a dismissal survives a new plan
 // with the same override.
 export function overrideKey(override) {

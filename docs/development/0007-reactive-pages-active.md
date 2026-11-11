@@ -22,7 +22,7 @@ Status values: `open`, `in progress`, `done`.
 | 2 | Manifest: `[[interrupt]]` | done |
 | 3 | Tokens: host configuration and backends | done |
 | 4 | Trigger route and broadcast | done |
-| 5 | Shell: interrupts next to overrides | open |
+| 5 | Shell: interrupts next to overrides | done |
 | 6 | Catalog and status page | open |
 | 7 | Docs | open |
 
@@ -222,7 +222,7 @@ Built:
 
 ## 5. Shell: interrupts next to overrides
 
-Status: open
+Status: done
 
 - The hook keeps at most one interrupt: the one shown, with its end
   computed on arrival (`performance.now()` based, so the screen clock does
@@ -244,6 +244,37 @@ Status: open
 - Tests: the decisions as pure functions in `schedule.js` with Node tests
   (incoming higher, equal, lower; override opening higher, equal, lower;
   replaced override coming back; same name again).
+
+Built:
+
+- `schedule.js`: `acceptsInterrupt/2`, `activeOverrideKeys/3`,
+  `overrideOpened/5`, with Node checks.
+- Hook: mode `"interrupt"` next to `"override"`; `startInterrupt`,
+  `endInterrupt` (time, `done()`, `interrupt_end`), `resume` shared with the
+  end of an override. `activeKeys` holds the overrides active at the last
+  check; an override not among them that is active now with equal or
+  higher priority drops the interrupt. Starting an interrupt refreshes
+  `activeKeys`, so overrides already active do not count.
+- A plan arriving during an interrupt, or waiting when one starts, applies
+  at once (nothing of the rotation is visible), so overrides it brings
+  count; the rotation then starts over instead of resuming. Without this, a
+  new override waited for the next page change, up to the page's duration.
+
+Checked in headless Chromium against a production build (2026-11-11),
+pages of 60 s, interrupts of 8 s:
+
+- interrupt during the rotation: shown, then the interrupted page again;
+- higher replaces lower; lower during higher ignored; `done()` after 3 s
+  ends it; `DELETE` ends it;
+- override (priority 5) opening during an interrupt of 0: replaces it;
+  interrupt of 10 during the override: replaces it, the override comes
+  back; interrupt of 0 during the override: ignored; interrupt of 5:
+  replaces it, the override comes back, then the rotation at the window's
+  end;
+- override opening during an interrupt of 10: ignored, shown when the
+  interrupt ends;
+- the same interrupt again after 4 s: loaded again, ends 8 s after the
+  second trigger.
 
 ## 6. Catalog and status page
 
