@@ -25,6 +25,7 @@ defmodule DeepsplayWeb.StatusLive do
   alias Deepsplay.UpstreamProxy
   alias Deepsplay.UpstreamProxy.Cache
   alias Deepsplay.UpstreamProxy.Stats
+  alias DeepsplayWeb.Interrupts
   alias DeepsplayWeb.Presence
 
   @upstream_interval 5_000
@@ -52,10 +53,13 @@ defmodule DeepsplayWeb.StatusLive do
   def handle_info({:host_config_changed}, socket), do: {:noreply, load(socket)}
 
   defp load(socket) do
+    configs = configs()
+
     assign(socket,
       host_config: Store.get(),
       reload: Watcher.info(),
-      configs: configs(),
+      configs: configs,
+      interrupts: interrupts(configs),
       screens: screens(),
       errors: Status.recent_errors()
     )
@@ -172,6 +176,21 @@ defmodule DeepsplayWeb.StatusLive do
     end
   end
 
+  # Interrupts of the current revisions with their last trigger (ADR 32).
+  defp interrupts(configs) do
+    for row <- configs,
+        {:ok, current} <- [row.current],
+        last = Interrupts.last(row.config.name),
+        interrupt <- current.screen.interrupts do
+      %{
+        config: row.config.name,
+        name: interrupt.name,
+        priority: interrupt.priority,
+        last: last[interrupt.name]
+      }
+    end
+  end
+
   defp screens do
     Presence.list(Presence.topic())
     |> Enum.flat_map(fn {id, %{metas: metas}} -> Enum.map(metas, &Map.put(&1, :id, id)) end)
@@ -260,6 +279,9 @@ defmodule DeepsplayWeb.StatusLive do
                   >
                     {row.config.description}
                   </div>
+                  <div class="config-screens text-xs font-normal text-base-content/60">
+                    {count(Enum.count(@screens, &(&1.config == row.config.name)), "screen", "screens")}
+                  </div>
                   <div>
                     <.link navigate={~p"/catalog/#{row.config.name}"} class="text-xs hover:underline">
                       catalog
@@ -288,6 +310,40 @@ defmodule DeepsplayWeb.StatusLive do
                   <p :for={warning <- warnings(row.current)} class="config-warning text-amber-500">
                     {warning}
                   </p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section :if={@interrupts != []} id="status-interrupts">
+        <h2 class="text-lg font-semibold">Interrupts</h2>
+        <p class="mt-1 text-xs text-base-content/50">
+          The last trigger of each interrupt since the start; screens counts those that got
+          the event (connected, not pinned).
+        </p>
+        <div class="mt-3 overflow-x-auto rounded-lg border border-base-300">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-base-200 text-xs uppercase tracking-wide text-base-content/60">
+              <tr>
+                <th class="px-3 py-2">Configuration</th>
+                <th class="px-3 py-2">Interrupt</th>
+                <th class="px-3 py-2">Priority</th>
+                <th class="px-3 py-2">Last trigger</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={row <- @interrupts}
+                id={"interrupt-#{row.config}-#{row.name}"}
+                class="border-t border-base-300 align-top"
+              >
+                <td class="px-3 py-2">{row.config}</td>
+                <td class="px-3 py-2 font-medium">{row.name}</td>
+                <td class="px-3 py-2">{row.priority}</td>
+                <td class="px-3 py-2 text-xs">
+                  {if row.last, do: Interrupts.describe(row.last), else: "–"}
                 </td>
               </tr>
             </tbody>

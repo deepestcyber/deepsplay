@@ -54,6 +54,7 @@ defmodule Deepsplay.Catalog do
           helpers: [map()],
           upstreams: [map()],
           overrides: [map()],
+          interrupts: [map()],
           disabled: [map()],
           backend: map() | nil,
           state: map() | nil,
@@ -79,6 +80,7 @@ defmodule Deepsplay.Catalog do
          helpers: helpers(index, pages),
          upstreams: upstreams(current.screen),
          overrides: overrides(current.screen),
+         interrupts: interrupts(current.screen),
          disabled: disabled(current.screen),
          backend: backend(config, current.screen),
          state: state(config),
@@ -166,6 +168,13 @@ defmodule Deepsplay.Catalog do
         description: override.description,
         active: TimeWindow.active?(override.when, now())
       }
+    end
+  end
+
+  # Interrupts (ADR 32); the last trigger is added by the page.
+  defp interrupts(screen) do
+    for interrupt <- screen.interrupts do
+      Map.take(interrupt, [:name, :path, :query, :priority, :duration, :description])
     end
   end
 

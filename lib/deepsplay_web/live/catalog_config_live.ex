@@ -21,6 +21,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
   alias Deepsplay.RepoUrl
   alias Deepsplay.Revisions
   alias Deepsplay.Status
+  alias DeepsplayWeb.Interrupts
   alias DeepsplayWeb.ScreenPlan
 
   @sizes [
@@ -58,7 +59,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         {:error, {:host_config, errors}} -> {:host_config, errors}
       end
 
-    socket = assign(socket, result: result)
+    socket = assign(socket, result: result, last_triggers: Interrupts.last(socket.assigns.name))
 
     # Keep the selection while its page still exists.
     case {result, socket.assigns.selected} do
@@ -213,6 +214,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
             height={@height}
             size_form={@size_form}
             sizes={@sizes}
+            last_triggers={@last_triggers}
           />
         <% :none -> %>
           <p id="catalog-no-revision" class="text-base-content/60">
@@ -248,6 +250,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
   attr :height, :integer, required: true
   attr :size_form, :any, required: true
   attr :sizes, :list, required: true
+  attr :last_triggers, :map, default: %{}
 
   defp catalog(assigns) do
     ~H"""
@@ -494,6 +497,39 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         <p class="mt-1 text-xs text-base-content/60">
           {override.windows} · priority {override.priority}
         </p>
+      </div>
+    </section>
+
+    <section :if={@catalog.interrupts != []} id="catalog-interrupts">
+      <h2 class="text-lg font-semibold">Interrupts</h2>
+      <p class="mt-1 text-xs text-base-content/50">
+        Shown on all screens of this configuration when triggered with
+        <span class="font-mono">POST</span>
+        and a token (a backend's <span class="font-mono">DEEPSPLAY_TOKEN</span>
+        or the host's <span class="font-mono">interrupt_token</span>); ended early with <span class="font-mono">DELETE</span>. Equal or higher priority replaces what an
+        override or interrupt shows.
+      </p>
+      <div
+        :for={interrupt <- @catalog.interrupts}
+        id={"interrupt-#{interrupt.name}"}
+        class="mt-3 rounded-lg border border-base-300 p-4 text-sm"
+      >
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="font-medium">{interrupt.name}</span>
+          <span class="interrupt-last text-xs text-base-content/50">
+            {last_trigger(@last_triggers[interrupt.name])}
+          </span>
+        </div>
+        <p :if={interrupt.description} class="mt-1 text-base-content/70">
+          {interrupt.description}
+        </p>
+        <p class="mt-1 text-xs text-base-content/60">
+          <span class="font-mono">
+            {interrupt.path}<span :if={interrupt.query}>?{interrupt.query}</span>
+          </span>
+          · up to {PageParams.format_duration(interrupt.duration)} · priority {interrupt.priority}
+        </p>
+        <pre class="interrupt-curl mt-2 overflow-x-auto rounded bg-base-200 p-2 text-xs">{curl(@catalog.config.name, interrupt.name)}</pre>
       </div>
     </section>
 
@@ -946,4 +982,14 @@ defmodule DeepsplayWeb.CatalogConfigLive do
   defp when_empty(:black), do: "black screen"
   defp when_empty({path, nil}), do: path
   defp when_empty({path, query}), do: path <> "?" <> query
+
+  # A trigger example without the token (ADR 32).
+  defp curl(name, interrupt) do
+    url = DeepsplayWeb.Endpoint.url() <> Interrupts.path(name, interrupt)
+    ~s(curl -X POST -H "Authorization: Bearer $TOKEN" "#{url}")
+  end
+
+  defp last_trigger(nil), do: "not triggered since the start"
+
+  defp last_trigger(entry), do: "last: " <> Interrupts.describe(entry)
 end

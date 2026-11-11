@@ -23,7 +23,7 @@ Status values: `open`, `in progress`, `done`.
 | 3 | Tokens: host configuration and backends | done |
 | 4 | Trigger route and broadcast | done |
 | 5 | Shell: interrupts next to overrides | done |
-| 6 | Catalog and status page | open |
+| 6 | Catalog and status page | done |
 | 7 | Docs | open |
 
 Decisions taken in discussion (2026-11-11), recorded in the ADRs:
@@ -278,7 +278,7 @@ pages of 60 s, interrupts of 8 s:
 
 ## 6. Catalog and status page
 
-Status: open
+Status: done
 
 - Catalog: section "Interrupts" next to overrides: name, page, priority,
   duration, description, the last trigger, the trigger URL (as text, with a
@@ -286,6 +286,22 @@ Status: open
 - Status page: per configuration the number of connected screens and the
   last trigger of each interrupt with time, answer and screens; the warning
   from part 3.
+
+Built:
+
+- Catalog: section "Interrupts" (`#interrupt-<name>`) with description,
+  page, duration, priority, a `curl` example with `$TOKEN` and the full URL
+  (from the endpoint's URL), and the last trigger. Disabled ones were
+  already listed (part 2).
+- Status page: the number of connected screens under each configuration's
+  name, and a table "Interrupts" with each interrupt of the current
+  revisions, its priority and last trigger. The warning shows with the
+  other manifest warnings (part 3).
+- Both pages update when an interrupt is triggered: `Interrupts` calls the
+  new `Status.notify/1`.
+- `Interrupts.describe/1` writes a trigger as e.g. "POST 2026-11-11
+  17:00:00 UTC, 202 to 2 screens".
+- Tests: `interrupt_pages_test.exs`.
 
 ## 7. Docs
 

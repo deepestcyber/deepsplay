@@ -87,6 +87,22 @@ defmodule DeepsplayWeb.Interrupts do
   end
 
   @doc """
+  One line about a trigger from `last/1`, e.g.
+  `"POST 2027-03-04 10:00:00 UTC, 202 to 2 screens"`.
+  """
+  @spec describe(map()) :: String.t()
+  def describe(%{at: at, action: action, status: status, screens: screens}) do
+    method = if action == :start, do: "POST", else: "DELETE"
+    time = at |> DateTime.truncate(:second) |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
+    to = if screens, do: " to #{screens} screen#{if screens == 1, do: "", else: "s"}", else: ""
+    "#{method} #{time}, #{status}#{to}"
+  end
+
+  @doc "The path that triggers the interrupt `interrupt` of the configuration `name`."
+  @spec path(String.t(), String.t()) :: String.t()
+  def path(name, interrupt), do: "/c/#{name}/interrupts/#{interrupt}"
+
+  @doc """
   Screens of the configuration `name` that get interrupts: connected,
   showing a revision and not pinned.
   """
@@ -186,6 +202,7 @@ defmodule DeepsplayWeb.Interrupts do
 
     entry = %{at: DateTime.utc_now(), action: action, status: status, screens: screens}
     :ets.insert(@table, {{:last, config_name, name}, entry})
+    Deepsplay.Status.notify(config_name)
     answer
   end
 

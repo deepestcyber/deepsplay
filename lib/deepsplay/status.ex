@@ -73,6 +73,16 @@ defmodule Deepsplay.Status do
   end
 
   @doc """
+  Announces that something shown about the configuration `name` changed
+  without changing its status, such as a triggered interrupt (ADR 32).
+  """
+  @spec notify(String.t()) :: :ok
+  def notify(name) do
+    Phoenix.PubSub.broadcast(@pubsub, @all_topic, {:status_changed, name})
+    :ok
+  end
+
+  @doc """
   Subscribes the caller to status changes of all configurations.
   """
   @spec subscribe_all() :: :ok | {:error, term()}
