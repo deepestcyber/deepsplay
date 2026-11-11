@@ -12,6 +12,12 @@ Amended by [24](0024-page-metadata.md): optional `author`, `credits` and
 Amended by [31](0031-pages-end-their-display-time.md): `deepsplay.js` gets
 `Deepsplay.done()`.
 
+Amended (2026-11-11): `/lib/v1/deepsplay.js` is cached for an hour, then up
+to 30 days with `stale-while-revalidate`, and has an `ETag`. A new build
+reaches screens within about an hour instead of a day. Screens that cannot
+reach the server use their copy for 30 days instead of 8; after that the
+browser no longer uses it.
+
 ## Context
 
 Pages take parameters from their URL (e.g. `?cells=90&gps=10`). Their
@@ -68,9 +74,10 @@ query = "cells=40&gps=4"
     page's configuration (ADR 8), independent of how deep the page lies in
     `pages/`.
 - Paths of the helper:
-  - `/lib/v1/deepsplay.js`: compatible within `v1`; cached for a day, then up
-    to a week with `stale-while-revalidate`. An incompatible change becomes
-    `v2`; `v1` stays served.
+  - `/lib/v1/deepsplay.js`: compatible within `v1`; cached for an hour, then
+    up to 30 days with `stale-while-revalidate`, with an `ETag` (amended
+    2026-11-11, see Status). An incompatible change becomes `v2`; `v1` stays
+    served.
   - `/lib/deepsplay@X.Y.Z.js`: one exact version, cached immutably; old
     versions stay served.
 - deepsplay reads the same block on the server (catalog, defaults per

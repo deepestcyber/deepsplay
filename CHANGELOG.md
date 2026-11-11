@@ -5,6 +5,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- `/lib/v1/deepsplay.js` is cached for an hour instead of a day and has an
+  `ETag`, so a new build reaches screens within about an hour. Screens that
+  cannot reach the server keep using their copy for 30 days instead of 8
+  (ADR 14).
+
 ## 0.4.0 – 2026-11-09
 
 Shorter manifests, entries that can be switched off and second-precise time
