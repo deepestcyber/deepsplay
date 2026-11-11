@@ -1,6 +1,6 @@
 # Reactive pages
 
-Status: in progress (2026-11-11)
+Status: done (2026-11-11)
 
 Two ways for what is on screen to react to events instead of a fixed
 schedule: a page ends its own display time when it is done
@@ -24,7 +24,7 @@ Status values: `open`, `in progress`, `done`.
 | 4 | Trigger route and broadcast | done |
 | 5 | Shell: interrupts next to overrides | done |
 | 6 | Catalog and status page | done |
-| 7 | Docs | open |
+| 7 | Docs | done |
 
 Decisions taken in discussion (2026-11-11), recorded in the ADRs:
 
@@ -305,12 +305,16 @@ Built:
 
 ## 7. Docs
 
-Status: open
+Status: done
 
 - pages.md: "Ending a page early" (done with part 1) and "Interrupts" (manifest, trigger, tokens,
   parameters, priority with overrides, a Python example for a backend).
 - deployment.md: `interrupt_token`, HTTPS for triggers from outside.
 - CHANGELOG entries.
+
+Built: pages.md "Interrupts" (and `DEEPSPLAY_TOKEN` under Backends),
+deployment.md and `deploy/host.example.toml` with `interrupt_token`, the
+CHANGELOG entries.
 
 ## Open questions
 

@@ -9,6 +9,14 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   becomes an upper limit. On an override, `done()` ends it on that screen
   until its window closes. Pages are shown at least 2 seconds (ADR 31,
   [pages.md](docs/pages.md#ending-a-page-early)).
+- Interrupts: a manifest declares `[[interrupt]]` pages that backends or
+  other systems put on all screens of a configuration at once, with
+  `POST /c/<config>/interrupts/<name>` and a bearer token (a backend's
+  `DEEPSPLAY_TOKEN`, or the secret named by the new `interrupt_token` in the
+  host configuration). Their priority decides against overrides and other
+  interrupts; the catalog and the status page show the last trigger
+  (ADR 32, [pages.md](docs/pages.md#interrupts)).
+- The status page shows how many screens each configuration has connected.
 - `/lib/v1/deepsplay.js` is cached for an hour instead of a day and has an
   `ETag`, so a new build reaches screens within about an hour. Screens that
   cannot reach the server keep using their copy for 30 days instead of 8

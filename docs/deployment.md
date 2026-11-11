@@ -34,6 +34,23 @@ memory; `tini` reaps processes they leave behind. Backends run as the
 deepsplay user and can read what it can: allow them only for trusted
 repositories.
 
+Interrupts (ADR 32) are triggered over HTTP with a bearer token. Backends
+get one in `DEEPSPLAY_TOKEN`; for other systems, name a secret in the
+configuration:
+
+```toml
+[[config]]
+name            = "lobby"
+repo            = "https://github.com/example/lobby-screen.git"
+ref             = "main"
+interrupt_token = "lobby_trigger"   # a secret (ADR 8), e.g. DEEPSPLAY_SECRET_LOBBY_TRIGGER
+```
+
+Use a long random value (`openssl rand -base64 32`). The token travels in
+plain text over plain HTTP like everything else on port 4000: keep triggers
+on the internal network, or let systems from outside go through a reverse
+proxy with HTTPS.
+
 Changes to the host configuration and the secrets file are picked up while
 running, within about 5 seconds (ADR 23); `SIGHUP` (e.g. `docker kill -s HUP
 deepsplay`) checks at once. An invalid change is not applied: the last good

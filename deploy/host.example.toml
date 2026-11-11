@@ -12,6 +12,7 @@ name = "lobby"
 repo = "https://github.com/example/lobby-screen.git"
 ref  = "main"
 # params = { theme = "dc" }   # default parameters for pages that declare them
+# interrupt_token = "lobby_trigger"   # secret that may trigger interrupts (ADR 32)
 
 # A private repository over SSH; the key comes from the secrets file.
 # [[config]]

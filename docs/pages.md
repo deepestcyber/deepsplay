@@ -441,6 +441,8 @@ const data = await (await fetch(`/c/${config}/backend/forecast`)).json()
   `DEEPSPLAY_CONFIG`, `DEEPSPLAY_URL` (deepsplay itself, e.g. for shared
   state), `DEEPSPLAY_DATA_DIR` (a directory that persists) and the secrets it
   names and the host allows.
+- `DEEPSPLAY_TOKEN` triggers the configuration's interrupts (see
+  [Interrupts](#interrupts)); it changes with every start of the process.
 - Dependencies come from `uv.lock` (`uv sync --frozen`); `uv` installs the
   Python version the project asks for. Keep `.venv` out of the repository.
 - A new revision is shown only once its backend is ready; if it fails, the
@@ -451,6 +453,83 @@ const data = await (await fetch(`/c/${config}/backend/forecast`)).json()
   events for now.
 - With a local directory (`path =`), the backend restarts when files in
   `dir` change.
+
+### Interrupts
+
+An interrupt puts a page on all screens of a configuration at once, when a
+backend or another system triggers it: someone rings the doorbell, a build
+breaks, a goal is scored.
+
+```toml
+[[interrupt]]
+name        = "doorbell"            # in the trigger URL: a-z, 0-9, -, _
+path        = "doorbell.html"       # a page in pages/, with an optional query
+duration    = "30s"                 # how long it lasts at most
+priority    = 20                    # optional, default 0
+description = "Someone at the door" # optional
+# uses, enabled: as for overrides
+```
+
+Triggering:
+
+```sh
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "http://screens:4000/c/lobby/interrupts/doorbell?who=Ada"
+# {"screens": 3, "duration": 30000}
+
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  "http://screens:4000/c/lobby/interrupts/doorbell"
+```
+
+- `POST` starts it on the screens connected at that moment, `DELETE` ends
+  it on the screens showing it. The answer says to how many screens it was
+  sent (connected, not pinned), not whether they showed it.
+- The token is the backend's `DEEPSPLAY_TOKEN`, or, for other systems, a
+  secret the host names with `interrupt_token` for the configuration (see
+  [deployment](deployment.md)). Pages never get a token: anything in a page
+  can be read on the network. Without a backend and without
+  `interrupt_token`, the status page warns that nobody can trigger them.
+- The query passes parameters to the page. Only parameters the page
+  declares (itself or through a helper) are allowed, with values that fit
+  their type; they take precedence over the manifest's query and all
+  default parameters. A parameter with `from = "duration"` gets the
+  interrupt's duration. The query may be at most 2 KB.
+- Answers: `202`; `401` without a valid token; `404` for an unknown or
+  disabled interrupt; `422` with `reasons` for parameters that do not fit;
+  `429` when the same interrupt was started less than 2 seconds ago.
+
+On the screen:
+
+- An interrupt replaces what an override or another interrupt shows if its
+  `priority` is equal or higher; otherwise the screen ignores it. The same
+  interrupt again starts fresh: page loaded again, full duration.
+- An override whose window opens during an interrupt replaces it if its
+  priority is equal or higher. An override that an interrupt replaced comes
+  back afterwards while its window is open.
+- When an interrupt ends (its duration, `Deepsplay.done()`, `DELETE`), the
+  screen shows the highest active override, or the rotation with the
+  interrupted page.
+- Interrupts are events: a screen that is not connected at that moment, or
+  reconnects or reloads, never sees it. They suit things that matter now,
+  not states that last.
+- Pinned screens (`?page=`) ignore interrupts. The catalog lists the
+  interrupts with their trigger URL; the catalog and the status page show
+  the last trigger of each.
+
+A backend triggering an interrupt, in Python:
+
+```python
+import os
+import httpx
+
+def ring(who: str) -> None:
+    config = os.environ["DEEPSPLAY_CONFIG"]
+    httpx.post(
+        f"{os.environ['DEEPSPLAY_URL']}/c/{config}/interrupts/doorbell",
+        params={"who": who},
+        headers={"Authorization": f"Bearer {os.environ['DEEPSPLAY_TOKEN']}"},
+    ).raise_for_status()
+```
 
 ## Trying pages
 
