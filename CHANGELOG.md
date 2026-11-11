@@ -5,6 +5,10 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- Pages can end their display time with `Deepsplay.done()`; `duration`
+  becomes an upper limit. On an override, `done()` ends it on that screen
+  until its window closes. Pages are shown at least 2 seconds (ADR 31,
+  [pages.md](docs/pages.md#ending-a-page-early)).
 - `/lib/v1/deepsplay.js` is cached for an hour instead of a day and has an
   `ETag`, so a new build reaches screens within about an hour. Screens that
   cannot reach the server keep using their copy for 30 days instead of 8

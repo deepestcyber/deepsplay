@@ -14,6 +14,7 @@ defmodule Deepsplay.Catalog do
   alias Deepsplay.PageParams
   alias Deepsplay.Pages
   alias Deepsplay.Revisions
+  alias Deepsplay.Screen.Interrupt
   alias Deepsplay.Screen.Override
   alias Deepsplay.State
   alias Deepsplay.TimeWindow
@@ -172,13 +173,18 @@ defmodule Deepsplay.Catalog do
   defp disabled(screen) do
     for entry <- screen.disabled do
       %{
-        kind: if(match?(%Override{}, entry), do: :override, else: :page),
+        kind: disabled_kind(entry),
         what: entry_name(entry),
         description: entry.description
       }
     end
   end
 
+  defp disabled_kind(%Override{}), do: :override
+  defp disabled_kind(%Interrupt{}), do: :interrupt
+  defp disabled_kind(_page), do: :page
+
+  defp entry_name(%Interrupt{name: name}), do: name
   defp entry_name(%{glob: glob}) when is_binary(glob), do: glob
   defp entry_name(%{path: path, query: nil}), do: path
   defp entry_name(%{path: path, query: query}), do: path <> "?" <> query

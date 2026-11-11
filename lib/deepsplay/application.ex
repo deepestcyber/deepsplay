@@ -14,6 +14,7 @@ defmodule Deepsplay.Application do
       {DNSCluster, query: Application.get_env(:deepsplay, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Deepsplay.PubSub},
       DeepsplayWeb.Presence,
+      DeepsplayWeb.Interrupts,
       {Registry, keys: :unique, name: Deepsplay.RevisionStore.Registry},
       {DynamicSupervisor, name: Deepsplay.RevisionStore.Supervisor, strategy: :one_for_one},
       Deepsplay.Status,
@@ -23,6 +24,7 @@ defmodule Deepsplay.Application do
       Deepsplay.State,
       Deepsplay.Pages,
       # Backends of configurations (ADR 26), before the pollers that start them.
+      Deepsplay.InterruptTokens,
       {DynamicSupervisor, name: Deepsplay.Backends.Supervisor, strategy: :one_for_one},
       Deepsplay.Backends,
       {Registry, keys: :unique, name: Deepsplay.LocalWatcher.Registry},

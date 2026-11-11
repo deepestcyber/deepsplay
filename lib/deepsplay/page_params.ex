@@ -66,10 +66,10 @@ defmodule Deepsplay.PageParams do
             end
           end)
 
-        # A fragment in a rotation is likely a mistake (ADR 14).
+        # A fragment shown for a time is likely a mistake (ADR 14).
         fragment =
           if duration && doc.page == false,
-            do: [~s(#{path} is marked page = false but is in the rotation)],
+            do: [~s(#{path} is marked page = false but is in the rotation or an interrupt)],
             else: []
 
         {added, warnings ++ fragment, Map.keys(params)}
@@ -117,6 +117,49 @@ defmodule Deepsplay.PageParams do
     # Any display time shows which names it would fill.
     {explained, _warnings, _declared} = explain(context, path, query, 1_000)
     {added, for({name, _value, "display time"} <- explained, do: name)}
+  end
+
+  @doc """
+  Checks parameters given from outside, such as a trigger's query (ADR 32):
+  each must be declared by the page (itself or through a helper in `uses`)
+  and fit its definition. Returns the reasons for those that do not.
+  """
+  @spec check(context(), String.t(), [{String.t(), String.t()}]) :: :ok | {:error, [String.t()]}
+  def check(_context, _path, []), do: :ok
+
+  def check(context, path, given) do
+    params =
+      case Pages.doc(context.pages_dir, context.key, path) do
+        {:ok, doc} ->
+          {params, _collisions} =
+            HelperIndex.params_for(doc, Pages.index(context.pages_dir, context.key))
+
+          params
+
+        _undocumented ->
+          %{}
+      end
+
+    reasons =
+      for {name, value} <- given,
+          reason = check_one(params, name, value, path),
+          reason != nil,
+          do: reason
+
+    if reasons == [], do: :ok, else: {:error, reasons}
+  end
+
+  defp check_one(params, name, value, path) do
+    case Map.fetch(params, name) do
+      {:ok, {param, _origin}} ->
+        case Param.cast(param, value) do
+          {:ok, _typed} -> nil
+          :error -> ~s(#{name}=#{inspect(value)} is invalid for #{path})
+        end
+
+      :error ->
+        ~s(#{path} declares no parameter "#{name}")
+    end
   end
 
   @doc """

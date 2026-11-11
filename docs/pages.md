@@ -289,6 +289,40 @@ repository can look different per screen (`params = { theme = "light" }`)
 without changing its pages, and a progress bar gets its time without repeating
 it in the manifest. A pinned page gets the same values, but no display time.
 
+### Ending a page early
+
+A page with a natural end (a game that finishes, a video, a slideshow of a
+varying number of pictures) tells the screen when it is done:
+
+```js
+Deepsplay.done()
+```
+
+Its `duration` then is an upper limit: the screen moves on at `done()` or
+when the display time is over, whichever comes first.
+
+- Rotation page: the next page follows, as at the end of the display time.
+  If that is the same page (one active page, a pinned page, the `when_empty`
+  page), it is loaded again and starts fresh.
+- Override: it ends on this screen until its window closes; a lower override
+  that is still active, or the rotation with the interrupted page, comes
+  back.
+- A page is shown at least 2 seconds after it has faded in; an earlier
+  `done()` takes effect then. A page calling `done()` at once is shown for
+  2 seconds at a time.
+- Only the visible page counts, and only on its own screen; other screens go
+  on as before.
+- Outside a screen (opened on its own, in the catalog) nobody listens and
+  `done()` has no effect. Try it with a pinned page (`?page=`).
+
+`done()` is newer than deepsplay 0.4.0. A screen can still hold an older
+`deepsplay.js` for a while after an update (about an hour, longer while it
+cannot reach the server), so a page that should also run there checks first:
+
+```js
+if (Deepsplay.done) Deepsplay.done()
+```
+
 ### External data
 
 Pages call external APIs through deepsplay rather than directly, so all

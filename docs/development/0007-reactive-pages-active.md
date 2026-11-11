@@ -19,9 +19,9 @@ Status values: `open`, `in progress`, `done`.
 | # | Part | Status |
 | --- | --- | --- |
 | 1 | `Deepsplay.done()` and the shell | done |
-| 2 | Manifest: `[[interrupt]]` | open |
-| 3 | Tokens: host configuration and backends | open |
-| 4 | Trigger route and broadcast | open |
+| 2 | Manifest: `[[interrupt]]` | done |
+| 3 | Tokens: host configuration and backends | done |
+| 4 | Trigger route and broadcast | done |
 | 5 | Shell: interrupts next to overrides | open |
 | 6 | Catalog and status page | open |
 | 7 | Docs | open |
@@ -102,11 +102,14 @@ Checked in headless Chromium against a production build (2026-11-11):
   `done()`, the rotation continued with the interrupted page, and the
   override did not come back during the rest of its window.
 
-Not done yet: pages.md and the CHANGELOG (part 7).
+Also: `/lib/v1/deepsplay.js` is now cached an hour with an `ETag` and up to
+30 days stale (ADR 14 amended), so `done()` reaches screens within about an
+hour after an update. pages.md "Ending a page early" and the CHANGELOG entry
+are written; part 7 adds the interrupts.
 
 ## 2. Manifest: `[[interrupt]]`
 
-Status: open
+Status: done
 
 - `Deepsplay.Screen`: `@interrupt_fields` with `name` (required, upstream
   name rule), `path` (required, with query, file must exist), `duration`
@@ -117,9 +120,19 @@ Status: open
 - Tests in `screen_test.exs`: valid entries, missing fields, duplicates,
   bad names, disabled.
 
+Built:
+
+- `Deepsplay.Screen.Interrupt`; `Screen` reads `[[interrupt]]` into
+  `interrupts`, disabled ones into `disabled`. Duplicate names are an error
+  also when one of them is disabled, since a trigger names one.
+- The catalog lists disabled interrupts as `(interrupt)` with their name;
+  the rest of the catalog comes with part 6.
+- Moved to part 4: the warning for a `page = false` file. It comes from
+  `PageParams` when the page URL is built, as for pages.
+
 ## 3. Tokens: host configuration and backends
 
-Status: open
+Status: done
 
 - Host configuration: `interrupt_token = "<secret name>"` per `[[config]]`;
   error if the secret is not defined (as `credential`). Picked up on reload
@@ -134,13 +147,33 @@ Status: open
 - Warning on the status page when a manifest has interrupts but the
   configuration has neither a backend nor `interrupt_token`.
 
+Built:
+
+- `interrupt_token` in `[[config]]`, an error when the secret is not
+  defined. `Deepsplay.InterruptTokens` reads the secret at each check, so a
+  changed secret or host configuration counts at once.
+- `Deepsplay.InterruptTokens`: a `Registry` with duplicate keys per
+  configuration. `Deepsplay.Backend` creates a token at each launch of the
+  process (also after a crash), registers it and passes it as
+  `DEEPSPLAY_TOKEN`; it is dropped when the process exits, and with the
+  `Backend` process. During a backend swap both tokens are valid until the
+  old one stops. `valid?/2` compares with every candidate in constant time.
+- The warning is a manifest warning (`Screen` knows the configuration and
+  whether it runs a backend), so it shows where the other manifest
+  warnings show.
+- Tests: `interrupt_tokens_test.exs`, `host_config_test.exs`,
+  `backend_test.exs` (token in the environment, new after a crash, old one
+  invalid), `screen_test.exs` (warning).
+
 ## 4. Trigger route and broadcast
 
-Status: open
+Status: done
 
 - Route `POST` and `DELETE /c/:name/interrupts/:interrupt`, a controller
   outside the browser pipeline (no CSRF, no session), with a plug for the
   bearer token.
+- `page = false` warning for interrupt pages, from `PageParams` (moved
+  from part 2).
 - Parameters: from the query (at most 2 KB), checked with the existing
   parameter code (`PageParams`) against the page's definitions and its
   `uses`; unknown or invalid ones give `422` with the reasons.
@@ -161,6 +194,31 @@ Status: open
 - Tests: controller tests for each answer, token from backend and from
   secret, screen count with a pinned and an unpinned shell, the broadcast
   reaching a connected shell.
+
+Built:
+
+- `DeepsplayWeb.InterruptController` on `POST`/`DELETE
+  /c/:name/interrupts/:interrupt`, outside the browser pipeline. The token
+  is checked first (`401`, with `WWW-Authenticate: Bearer`), then the
+  interrupt (`404`). Answers are JSON and `no-store`.
+- `DeepsplayWeb.Interrupts`: finds the interrupt in the current revision,
+  checks the query (2 KB, no name twice, `PageParams.check/3` against the
+  page's definitions), builds the URL (trigger parameters, the rest of the
+  manifest query, then the ADR 16 levels with the interrupt's duration),
+  broadcasts on `"interrupts:<name>"` and answers with the screen count. An
+  ETS table keeps the last answer per interrupt (`last/1`, for part 6) and
+  the last start for the rate limit; only accepted starts count for it.
+- Out-of-range numbers are clamped, not rejected, as the page helper does;
+  only values that cannot be read as the type give `422`.
+- Screen count from `DeepsplayWeb.Presence` (already tracking shells):
+  connected, `state: :playing`, not pinned (new `pinned` in the meta). No
+  separate registry.
+- `ShellLive` subscribes to the topic and pushes `interrupt` (name, URL,
+  priority, duration) or `interrupt_end` (name), not when pinned or without
+  a revision. The hook ignores them until part 5.
+- The `page = false` warning now reads "in the rotation or an interrupt";
+  `Revisions` adds the warnings of interrupt pages to the parameter
+  warnings.
 
 ## 5. Shell: interrupts next to overrides
 
@@ -202,8 +260,7 @@ Status: open
 
 Status: open
 
-- pages.md: "Ending a page early" (`Deepsplay.done()`, minimum time, what
-  happens per kind of page) and "Interrupts" (manifest, trigger, tokens,
+- pages.md: "Ending a page early" (done with part 1) and "Interrupts" (manifest, trigger, tokens,
   parameters, priority with overrides, a Python example for a backend).
 - deployment.md: `interrupt_token`, HTTPS for triggers from outside.
 - CHANGELOG entries.

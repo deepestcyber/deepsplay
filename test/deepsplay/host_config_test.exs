@@ -499,6 +499,18 @@ defmodule Deepsplay.HostConfigTest do
       assert ~s(upstream.secretive: secret "missing" is not defined) in errors
     end
 
+    test "interrupt_token names a defined secret" do
+      assert {:ok, host_config} = parse(minimal())
+      assert host_config.configs["lobby"].interrupt_token == nil
+
+      assert {:ok, host_config} = parse(minimal(~s(interrupt_token = "weather_api")))
+      assert host_config.configs["lobby"].interrupt_token == "weather_api"
+
+      assert ~s(config "lobby": interrupt_token secret "nope" is not defined) in errors(
+               minimal(~s(interrupt_token = "nope"))
+             )
+    end
+
     test "a credential naming an undefined secret" do
       toml = minimal(~s(credential = "missing_key"))
       assert ~s(config "lobby": credential secret "missing_key" is not defined) in errors(toml)

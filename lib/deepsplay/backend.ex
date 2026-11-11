@@ -15,14 +15,19 @@ defmodule Deepsplay.Backend do
 
   The process gets only: `PORT`, `HOME` (its data directory), `PATH` (the
   environment's `bin` first), `VIRTUAL_ENV`, `PYTHONDONTWRITEBYTECODE`,
-  `UV_CACHE_DIR`, `DEEPSPLAY_CONFIG`, `DEEPSPLAY_URL`, `DEEPSPLAY_DATA_DIR`
-  and the secrets passed in `:secrets`.
+  `UV_CACHE_DIR`, `DEEPSPLAY_CONFIG`, `DEEPSPLAY_URL`, `DEEPSPLAY_DATA_DIR`,
+  `DEEPSPLAY_TOKEN` and the secrets passed in `:secrets`.
+
+  `DEEPSPLAY_TOKEN` triggers the configuration's interrupts (ADR 32). It is
+  new at every start of the process and valid while the process runs
+  (`Deepsplay.InterruptTokens`).
   """
 
   use GenServer
 
   require Logger
 
+  alias Deepsplay.InterruptTokens
   alias Deepsplay.Screen.Backend, as: Spec
 
   @sync_timeout 10 * 60_000
@@ -119,6 +124,7 @@ defmodule Deepsplay.Backend do
       port: nil,
       os_port: nil,
       os_pid: nil,
+      token: nil,
       started_at: nil,
       restarts: 0,
       crashes: [],
@@ -168,7 +174,7 @@ defmodule Deepsplay.Backend do
     do: {:noreply, add_output(state, line)}
 
   def handle_info({os_port, {:exit_status, code}}, %{os_port: os_port} = state) do
-    state = %{state | os_port: nil, os_pid: nil}
+    state = stopped(state)
     message = "process exited with status #{code}"
     Logger.warning(~s(backend of "#{state.name}": #{message}))
     {:noreply, crashed(state, message)}
@@ -240,6 +246,8 @@ defmodule Deepsplay.Backend do
   # memory limit, then `exec`, so the process id is the backend's own.
   defp launch(state) do
     port = free_port()
+    token = InterruptTokens.generate()
+    state = %{state | token: token}
     File.mkdir_p!(state.data_dir)
     command = Enum.map(state.spec.command, &String.replace(&1, "{port}", Integer.to_string(port)))
     limit = if state.memory, do: "ulimit -v #{div(state.memory, 1024)}; ", else: ""
@@ -259,6 +267,7 @@ defmodule Deepsplay.Backend do
       ])
 
     {:os_pid, os_pid} = Port.info(os_port, :os_pid)
+    InterruptTokens.register(state.name, token)
     Process.send_after(self(), :check_ready, @ready_poll)
 
     %{
@@ -282,10 +291,17 @@ defmodule Deepsplay.Backend do
       {"PYTHONUNBUFFERED", "1"},
       {"UV_CACHE_DIR", Path.join(state.uv_dir, "cache")},
       {"DEEPSPLAY_CONFIG", state.name},
-      {"DEEPSPLAY_DATA_DIR", state.data_dir}
+      {"DEEPSPLAY_DATA_DIR", state.data_dir},
+      {"DEEPSPLAY_TOKEN", state.token}
     ] ++
       if(state.url, do: [{"DEEPSPLAY_URL", state.url}], else: []) ++
       Enum.sort(state.secrets)
+  end
+
+  # The OS process is gone: so is its token.
+  defp stopped(state) do
+    InterruptTokens.unregister(state.name)
+    %{state | os_port: nil, os_pid: nil, token: nil}
   end
 
   defp free_port do
@@ -305,7 +321,7 @@ defmodule Deepsplay.Backend do
         kill(state)
 
         fail(
-          %{state | os_port: nil, os_pid: nil},
+          stopped(state),
           "not ready within #{div(@start_timeout, 1000)} s"
         )
 

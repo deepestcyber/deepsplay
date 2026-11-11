@@ -6,6 +6,8 @@ defmodule Deepsplay.BackendTest do
   import ExUnit.CaptureLog
 
   alias Deepsplay.Backend
+  alias Deepsplay.HostConfig.Config
+  alias Deepsplay.InterruptTokens
   alias Deepsplay.Screen.Backend, as: Spec
 
   @moduletag :uv
@@ -84,6 +86,12 @@ defmodule Deepsplay.BackendTest do
     assert env["DEEPSPLAY_URL"] == "http://127.0.0.1:4000"
     assert env["DEEPSPLAY_DATA_DIR"] == env["HOME"]
     assert env["weather_api"] == "s3cr3t"
+
+    # A token for interrupts (ADR 32), valid while the process runs.
+    token = env["DEEPSPLAY_TOKEN"]
+    assert byte_size(token) == 43
+    assert InterruptTokens.valid?(%Config{name: "lobby"}, token)
+    refute InterruptTokens.valid?(%Config{name: "other"}, token)
     assert String.starts_with?(env["PATH"], Path.join(ctx.tmp_dir, "env/bin"))
     # Nothing of deepsplay's own environment.
     refute Map.has_key?(env, "MIX_ENV")
@@ -106,6 +114,7 @@ defmodule Deepsplay.BackendTest do
     backend = start(ctx)
     assert Backend.await_ready(backend) == :ok
     %{port: first} = Backend.info(backend)
+    old_token = backend |> get("/env") |> Jason.decode!() |> Map.fetch!("DEEPSPLAY_TOKEN")
 
     capture_log(fn ->
       catch_error(get(backend, "/crash"))
@@ -118,6 +127,12 @@ defmodule Deepsplay.BackendTest do
     assert info.last_crash =~ "exited with status 3"
     assert info.error == nil
     assert is_integer(first) and is_integer(info.port)
+
+    # A new start, a new token; the old one is no longer valid.
+    new_token = backend |> get("/env") |> Jason.decode!() |> Map.fetch!("DEEPSPLAY_TOKEN")
+    assert new_token != old_token
+    assert InterruptTokens.valid?(%Config{name: "lobby"}, new_token)
+    refute InterruptTokens.valid?(%Config{name: "lobby"}, old_token)
   end
 
   test "a process that exits before it is ready fails the start", ctx do

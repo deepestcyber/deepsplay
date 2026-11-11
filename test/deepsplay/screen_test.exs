@@ -5,6 +5,7 @@ defmodule Deepsplay.ScreenTest do
   alias Deepsplay.HostConfig.Config
   alias Deepsplay.RevisionStore
   alias Deepsplay.Screen
+  alias Deepsplay.Screen.Interrupt
   alias Deepsplay.Screen.Override
   alias Deepsplay.Screen.Page
 
@@ -594,6 +595,169 @@ defmodule Deepsplay.ScreenTest do
                ~s(override #2: upstream "nope" is not allowed for this configuration),
                ~s(screen.when_empty.path "missing.html" is not a file in pages/)
              ]
+    end
+  end
+
+  describe "load/2 with interrupts" do
+    test "reads interrupts with defaults", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => """
+        [[page]]
+        path = "a.html"
+
+        [[interrupt]]
+        name        = "doorbell"
+        path        = "bell.html?loud=1"
+        duration    = "30s"
+        priority    = 20
+        description = "Someone at the door"
+        uses        = ["weather"]
+
+        [[interrupt]]
+        name     = "build_broken-2"
+        path     = "a.html"
+        duration = "1m"
+        """,
+        "pages/a.html" => "a",
+        "pages/bell.html" => "bell"
+      })
+
+      assert {:ok, screen} = Screen.load(root, upstreams: ["weather"])
+
+      assert [
+               %Interrupt{
+                 name: "doorbell",
+                 path: "bell.html",
+                 query: "loud=1",
+                 duration: 30_000,
+                 priority: 20,
+                 description: "Someone at the door",
+                 uses: ["weather"],
+                 enabled: true
+               },
+               %Interrupt{name: "build_broken-2", query: nil, duration: 60_000, priority: 0}
+             ] = screen.interrupts
+    end
+
+    test "a warning when nobody can trigger them", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          @one_page <>
+            """
+
+            [[interrupt]]
+            name     = "doorbell"
+            path     = "a.html"
+            duration = "30s"
+            """,
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, screen} = Screen.load(root)
+
+      assert screen.warnings == [
+               "[[interrupt]] cannot be triggered: the configuration has no backend and no interrupt_token"
+             ]
+
+      config = %Config{name: "lobby", interrupt_token: "trigger"}
+      assert {:ok, %{warnings: []}} = Screen.load(root, config: config)
+    end
+
+    test "none by default", %{tmp_dir: root} do
+      write(root, %{"screen.toml" => @one_page, "pages/a.html" => "a"})
+      assert {:ok, %{interrupts: []}} = Screen.load(root)
+    end
+
+    test "disabled interrupts are kept apart", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          @one_page <>
+            """
+
+            [[interrupt]]
+            name     = "doorbell"
+            path     = "a.html"
+            duration = "30s"
+            enabled  = false
+            """,
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, screen} = Screen.load(root)
+      assert screen.interrupts == []
+      assert [%Interrupt{name: "doorbell", enabled: false}] = screen.disabled
+    end
+
+    test "invalid entries reject the manifest", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          @one_page <>
+            """
+
+            [[interrupt]]
+            path = "a.html"
+
+            [[interrupt]]
+            name     = "Door Bell"
+            path     = "gone.html"
+            duration = "soon"
+            priority = "high"
+            uses     = ["nope"]
+
+            [[interrupt]]
+            name     = "#{String.duplicate("a", 65)}"
+            path     = "a.html"
+            duration = "5s"
+            colour   = "red"
+            """,
+        "pages/a.html" => "a"
+      })
+
+      assert [
+               "interrupt #1.name is missing",
+               "interrupt #1.duration is missing",
+               "interrupt #2.name " <> _,
+               "interrupt #2.duration " <> _,
+               "interrupt #2.priority must be an integer",
+               ~s(interrupt #2.path "gone.html" is not a file in pages/),
+               ~s(interrupt #2: upstream "nope" is not allowed for this configuration),
+               "interrupt #3.name " <> _,
+               "interrupt #3" <> unknown
+             ] = errors(root)
+
+      assert unknown =~ "colour"
+    end
+
+    test "names are unique, also among disabled ones", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          @one_page <>
+            """
+
+            [[interrupt]]
+            name     = "doorbell"
+            path     = "a.html"
+            duration = "30s"
+
+            [[interrupt]]
+            name     = "doorbell"
+            path     = "a.html"
+            duration = "10s"
+            enabled  = false
+            """,
+        "pages/a.html" => "a"
+      })
+
+      assert errors(root) == [~s(interrupt "doorbell" is defined more than once)]
+    end
+
+    test "must be an array of tables", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" => ~s(interrupt = "doorbell"\n) <> @one_page,
+        "pages/a.html" => "a"
+      })
+
+      assert errors(root) == ["interrupt must be an array of tables ([[interrupt]])"]
     end
   end
 

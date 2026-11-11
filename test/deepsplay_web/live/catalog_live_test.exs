@@ -231,7 +231,7 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     assert has_element?(
              view,
              "#catalog-warnings .catalog-warning",
-             "fragment.html is marked page = false but is in the rotation"
+             "fragment.html is marked page = false but is in the rotation or an interrupt"
            )
   end
 

@@ -325,6 +325,9 @@ defmodule Deepsplay.HostConfig do
       errors ++
         source_errors(config, ctx) ++
         credential_errors(fields[:credential], ctx, allowed.secrets) ++
+        for secret <- List.wrap(fields[:interrupt_token]), secret not in allowed.secrets do
+          ~s(#{ctx}: interrupt_token secret "#{secret}" is not defined)
+        end ++
         for secret <- fields[:backend_secrets] || [], secret not in allowed.secrets do
           ~s(#{ctx}: backend secret "#{secret}" is not defined)
         end ++
@@ -419,7 +422,8 @@ defmodule Deepsplay.HostConfig do
       {"state", :state, &cast_state/1, default: :default},
       {"backend", :backend, :boolean, default: false},
       {"backend_secrets", :backend_secrets, :string_list, default: []},
-      {"backend_memory", :backend_memory, :size, default: nil}
+      {"backend_memory", :backend_memory, :size, default: nil},
+      {"interrupt_token", :interrupt_token, :string, default: nil}
     ]
   end
 

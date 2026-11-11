@@ -15,8 +15,13 @@ defmodule DeepsplayWeb.ShellLive do
   reloads itself.
 
   Connected shells are tracked with `DeepsplayWeb.Presence` for the status
-  page: configuration, state, revision and current page, plus the optional
-  `?screen=<label>` naming a kiosk.
+  page: configuration, state, revision and current page, whether pinned,
+  plus the optional `?screen=<label>` naming a kiosk.
+
+  Interrupts (ADR 32) arrive over PubSub and are pushed to the hook as
+  `interrupt` and `interrupt_end` events, unless the screen is pinned or has
+  no revision to show. Nothing is pushed on mount: an interrupt reaches only
+  the screens connected when it is triggered.
   """
 
   use DeepsplayWeb, :live_view
@@ -29,6 +34,7 @@ defmodule DeepsplayWeb.ShellLive do
   alias Deepsplay.Revisions
   alias Deepsplay.Screen
   alias Deepsplay.Status
+  alias DeepsplayWeb.Interrupts
   alias DeepsplayWeb.Presence
   alias DeepsplayWeb.ScreenPlan
 
@@ -40,7 +46,10 @@ defmodule DeepsplayWeb.ShellLive do
     socket =
       case Store.lookup(requested) do
         {:ok, config} ->
-          if connected?(socket), do: Revisions.subscribe(config.name)
+          if connected?(socket) do
+            Revisions.subscribe(config.name)
+            Interrupts.subscribe(config.name)
+          end
 
           socket
           |> assign(config: config, pinned: params["page"], status: Status.get(config.name))
@@ -85,6 +94,7 @@ defmodule DeepsplayWeb.ShellLive do
         Map.merge(presence_state(socket), %{
           config: if(requested == :default, do: default_name(socket), else: requested),
           label: label,
+          pinned: socket.assigns[:pinned] != nil,
           page: nil,
           page_since: nil,
           connected_at: DateTime.utc_now(),
@@ -146,6 +156,12 @@ defmodule DeepsplayWeb.ShellLive do
       else: {:noreply, push_navigate(socket, to: socket.assigns.path)}
   end
 
+  def handle_info({:interrupt, payload}, socket),
+    do: {:noreply, push_interrupt(socket, "interrupt", payload)}
+
+  def handle_info({:interrupt_end, payload}, socket),
+    do: {:noreply, push_interrupt(socket, "interrupt_end", payload)}
+
   def handle_info({:status_changed, name}, socket) do
     {:noreply, assign(socket, status: Status.get(name))}
   end
@@ -198,6 +214,12 @@ defmodule DeepsplayWeb.ShellLive do
       _missing -> {:error, :pinned_missing}
     end
   end
+
+  # Pinned screens ignore interrupts; screens without a revision have no hook.
+  defp push_interrupt(%{assigns: %{state: :playing, pinned: nil}} = socket, event, payload),
+    do: push_event(socket, event, payload)
+
+  defp push_interrupt(socket, _event, _payload), do: socket
 
   # The hook element is not re-rendered (phx-update="ignore"), so later plans
   # are pushed as events; the hook ignores a plan it already has.

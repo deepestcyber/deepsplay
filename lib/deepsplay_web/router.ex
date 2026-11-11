@@ -39,6 +39,12 @@ defmodule DeepsplayWeb.Router do
     post "/*key", StateController, :increment
   end
 
+  # Interrupt triggers: bearer token, no session, no CSRF (ADR 32).
+  scope "/c/:name/interrupts", DeepsplayWeb do
+    post "/:interrupt", InterruptController, :start
+    delete "/:interrupt", InterruptController, :stop
+  end
+
   # Files of a revision: no session, no CSRF, any content type (ADR 10).
   scope "/c/:name/r/:sha", DeepsplayWeb do
     get "/*path", RevisionController, :show

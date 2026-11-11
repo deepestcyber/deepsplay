@@ -178,6 +178,16 @@ defmodule Deepsplay.Revisions do
         context = param_context(config, current)
         {added, warnings} = PageParams.for_rotation(context)
 
+        # Interrupt pages get their parameters when triggered (ADR 32); their
+        # warnings are known now.
+        interrupt_warnings =
+          for interrupt <- screen.interrupts,
+              warning <-
+                context
+                |> PageParams.for_page(interrupt.path, interrupt.query, interrupt.duration)
+                |> elem(1),
+              do: warning
+
         # Overrides and the page shown when nothing is active (ADR 25).
         override_added =
           for override <- screen.overrides,
@@ -194,7 +204,7 @@ defmodule Deepsplay.Revisions do
            added: added,
            override_added: override_added,
            empty_added: empty_added,
-           param_warnings: warnings
+           param_warnings: Enum.uniq(warnings ++ interrupt_warnings)
          })}
 
       {:error, errors} ->

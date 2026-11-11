@@ -25,6 +25,7 @@ defmodule Deepsplay.Screen do
   alias Deepsplay.RevisionFile
   alias Deepsplay.Screen.Backend
   alias Deepsplay.Screen.Glob
+  alias Deepsplay.Screen.Interrupt
   alias Deepsplay.Screen.Override
   alias Deepsplay.Screen.Page
   alias Deepsplay.Screen.Upstreams
@@ -42,6 +43,7 @@ defmodule Deepsplay.Screen do
             params: %{},
             upstreams: %{},
             overrides: [],
+            interrupts: [],
             when_empty: :black,
             backend: nil,
             disabled: [],
@@ -55,9 +57,10 @@ defmodule Deepsplay.Screen do
           params: %{String.t() => String.t()},
           upstreams: %{String.t() => Upstream.t()},
           overrides: [Override.t()],
+          interrupts: [Interrupt.t()],
           when_empty: :black | {String.t(), String.t() | nil},
           backend: Backend.t() | nil,
-          disabled: [Page.t() | Override.t()],
+          disabled: [Page.t() | Override.t() | Interrupt.t()],
           warnings: [String.t()]
         }
 
@@ -93,6 +96,17 @@ defmodule Deepsplay.Screen do
   @override_fields [
     {"path", :path, &__MODULE__.cast_page_ref/1, []},
     {"when", :when, &__MODULE__.cast_when/1, []},
+    {"priority", :priority, &__MODULE__.cast_priority/1, default: 0},
+    {"description", :description, :description, default: nil},
+    {"uses", :uses, :string_list, default: []},
+    {"enabled", :enabled, :boolean, default: true}
+  ]
+
+  # Pages put on all screens when triggered (ADR 32).
+  @interrupt_fields [
+    {"name", :name, &__MODULE__.cast_interrupt_name/1, []},
+    {"path", :path, &__MODULE__.cast_page_ref/1, []},
+    {"duration", :duration, :duration, []},
     {"priority", :priority, &__MODULE__.cast_priority/1, default: 0},
     {"description", :description, :description, default: nil},
     {"uses", :uses, :string_list, default: []},
@@ -137,6 +151,16 @@ defmodule Deepsplay.Screen do
   @doc false
   def cast_priority(value) when is_integer(value), do: {:ok, value}
   def cast_priority(_value), do: {:error, "must be an integer"}
+
+  @doc false
+  # Interrupt names end up in trigger URLs (ADR 32).
+  def cast_interrupt_name(value) when is_binary(value) do
+    if byte_size(value) <= 64 and Regex.match?(~r/^[a-z0-9][a-z0-9_-]*$/, value),
+      do: {:ok, value},
+      else: {:error, ~s(must be lowercase letters, digits, "-" and "_", at most 64 characters)}
+  end
+
+  def cast_interrupt_name(_value), do: {:error, "must be a string"}
 
   @doc """
   Splits a page reference into the file path and the query string, if any.
@@ -316,7 +340,7 @@ defmodule Deepsplay.Screen do
     # everything else is checked as top-level fields, including unknown keys.
     {top, top_errors} =
       TomlSchema.fields(
-        Map.drop(data, ["page", "backend", "params", "upstream", "override"]),
+        Map.drop(data, ["page", "backend", "params", "upstream", "override", "interrupt"]),
         "screen",
         @top_fields
       )
@@ -337,6 +361,9 @@ defmodule Deepsplay.Screen do
     {pages, page_errors, page_warnings} = pages(Map.get(data, "page"), root, upstreams ++ names)
     {overrides, override_errors} = overrides(Map.get(data, "override"), root, upstreams ++ names)
 
+    {interrupts, interrupt_errors} =
+      interrupts(Map.get(data, "interrupt"), root, upstreams ++ names)
+
     when_empty_errors =
       case top.when_empty do
         {path, _query} -> file_errors(path, root, "screen.when_empty")
@@ -350,11 +377,13 @@ defmodule Deepsplay.Screen do
     case top_errors ++
            param_errors ++
            upstream_errors ++
-           page_errors ++ override_errors ++ when_empty_errors ++ backend_errors do
+           page_errors ++
+           override_errors ++ interrupt_errors ++ when_empty_errors ++ backend_errors do
       [] ->
         with_duration = &%{&1 | duration: &1.duration || top.duration}
         {pages, disabled_pages} = Enum.split_with(pages, & &1.enabled)
         {overrides, disabled_overrides} = Enum.split_with(overrides, & &1.enabled)
+        {interrupts, disabled_interrupts} = Enum.split_with(interrupts, & &1.enabled)
 
         {:ok,
          %__MODULE__{
@@ -365,10 +394,12 @@ defmodule Deepsplay.Screen do
            params: params,
            upstreams: declared,
            overrides: overrides,
+           interrupts: interrupts,
            when_empty: top.when_empty,
            backend: backend,
-           disabled: Enum.map(disabled_pages, with_duration) ++ disabled_overrides,
-           warnings: page_warnings ++ warnings
+           disabled:
+             Enum.map(disabled_pages, with_duration) ++ disabled_overrides ++ disabled_interrupts,
+           warnings: page_warnings ++ warnings ++ interrupt_warnings(interrupts, backend, config)
          }}
 
       errors ->
@@ -581,6 +612,57 @@ defmodule Deepsplay.Screen do
 
   defp override(_entry, index, _root, _upstreams),
     do: {nil, ["override ##{index} must be a table"]}
+
+  # Interrupts need someone who may trigger them (ADR 32).
+  defp interrupt_warnings([], _backend, _config), do: []
+
+  defp interrupt_warnings(_interrupts, backend, %Config{interrupt_token: token})
+       when backend != nil or token != nil,
+       do: []
+
+  defp interrupt_warnings(_interrupts, _backend, _config),
+    do: [
+      "[[interrupt]] cannot be triggered: the configuration has no backend and no interrupt_token"
+    ]
+
+  defp interrupts(nil, _root, _upstreams), do: {[], []}
+
+  defp interrupts(entries, root, upstreams) when is_list(entries) do
+    {parsed, errors} =
+      entries
+      |> Enum.with_index(1)
+      |> Enum.map_reduce([], fn {entry, index}, acc ->
+        {interrupt, errors} = interrupt(entry, index, root, upstreams)
+        {interrupt, acc ++ errors}
+      end)
+
+    parsed = Enum.reject(parsed, &is_nil/1)
+
+    # Names are unique, also among disabled ones: a trigger names one.
+    duplicates =
+      for {name, [_, _ | _]} <- Enum.group_by(parsed, & &1.name),
+          do: ~s(interrupt "#{name}" is defined more than once)
+
+    {parsed, errors ++ Enum.sort(duplicates)}
+  end
+
+  defp interrupts(_entries, _root, _upstreams),
+    do: {[], ["interrupt must be an array of tables ([[interrupt]])"]}
+
+  defp interrupt(entry, index, root, upstreams) when is_map(entry) do
+    ctx = "interrupt ##{index}"
+    {fields, errors} = TomlSchema.fields(entry, ctx, @interrupt_fields)
+    {path, query} = fields.path || {nil, nil}
+    errors = errors ++ file_errors(path, root, ctx) ++ uses_errors(fields.uses, upstreams, ctx)
+
+    case errors do
+      [] -> {struct!(Interrupt, %{fields | path: path} |> Map.put(:query, query)), []}
+      errors -> {nil, errors}
+    end
+  end
+
+  defp interrupt(_entry, index, _root, _upstreams),
+    do: {nil, ["interrupt ##{index} must be a table"]}
 
   defp file_errors(nil, _root, _ctx), do: []
 
