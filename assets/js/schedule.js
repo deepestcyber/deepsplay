@@ -75,12 +75,32 @@ export function activeIndices(entries, date) {
 
 // The override to show: the active one with the highest priority, the first
 // of equal ones; -1 for none.
-export function currentOverride(overrides, date) {
+// The index of the override shown at `date`: the active one with the
+// highest priority, the first on a tie; -1 for none. Overrides dismissed on
+// this screen (ADR 31) are skipped while their dismissal lasts.
+export function currentOverride(overrides, date, dismissed = new Map()) {
   let best = -1
   overrides.forEach((override, i) => {
-    if (active(override.when, date) && (best < 0 || override.priority > overrides[best].priority)) best = i
+    if (!active(override.when, date) || dismissed.get(overrideKey(override)) > date.getTime()) return
+    if (best < 0 || override.priority > overrides[best].priority) best = i
   })
   return best
+}
+
+// Identifies an override across plans, so a dismissal survives a new plan
+// with the same override.
+export function overrideKey(override) {
+  return JSON.stringify([override.url, override.when, override.priority])
+}
+
+// Dismisses an override on this screen until its current window closes
+// (ADR 31). Drops dismissals that have run out.
+export function dismiss(dismissed, override, date) {
+  const now = date.getTime()
+  for (const [key, until] of dismissed) if (until <= now) dismissed.delete(key)
+  const remaining = remainingMs(override.when, date)
+  dismissed.set(overrideKey(override), remaining === null ? Infinity : now + remaining)
+  return dismissed
 }
 
 // The moments after `date`, up to `limitDays` ahead, at which the windows

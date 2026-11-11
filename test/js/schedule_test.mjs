@@ -56,6 +56,24 @@ check("currentOverride: highest priority, first on a tie, -1 for none", () => {
   assert.equal(S.currentOverride([], at("2027-01-04T09:00")), -1)
 })
 
+check("currentOverride skips dismissed overrides until their window closes", () => {
+  const overrides = [
+    { url: "/a", when: daily, priority: 0 },
+    { url: "/b", when: daily, priority: 5 },
+  ]
+  const nine = at("2027-01-04T09:00")
+  const dismissed = S.dismiss(new Map(), overrides[1], nine)
+  assert.equal(S.currentOverride(overrides, nine, dismissed), 0)
+  // The same override in a new plan stays dismissed.
+  assert.equal(S.currentOverride(overrides.map(o => ({ ...o })), at("2027-01-04T12:00"), dismissed), 0)
+  // Its window closes at 15:00; the next day it is back.
+  assert.equal(dismissed.get(S.overrideKey(overrides[1])), at("2027-01-04T15:00").getTime())
+  assert.equal(S.currentOverride(overrides, at("2027-01-05T09:00"), dismissed), 1)
+  // Running out dismissals are dropped on the next dismissal.
+  S.dismiss(dismissed, overrides[0], at("2027-01-05T09:00"))
+  assert.deepEqual([...dismissed.keys()], [S.overrideKey(overrides[0])])
+})
+
 check("remainingMs until the window closes", () => {
   const now = new Date(2027, 0, 4, 14, 58, 30)
   assert.equal(S.remainingMs(daily, now), 90000)

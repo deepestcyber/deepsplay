@@ -64,17 +64,18 @@ function stateServer() {
 }
 
 // Loads the helper in a fresh page with the given block, query and path.
-function load({ toml = null, search = "", pathname = "/c/lobby/r/abc/page.html", fetch, title = "" } = {}) {
+function load({ toml = null, search = "", pathname = "/c/lobby/r/abc/page.html", fetch, title = "", parent } = {}) {
   const warnings = []
   const block = toml === null ? null : { type: "application/toml", textContent: toml }
   const context = {
     console: { warn: (...args) => warnings.push(args.join(" ")) },
-    location: { search, pathname },
+    location: { search, pathname, origin: "http://screen" },
     document: { title, getElementById: id => (id === "deepsplay-page" ? block : null) },
     URLSearchParams,
     fetch,
   }
   context.window = context
+  context.parent = parent || context
   vm.runInNewContext(source, context)
   return { Deepsplay: context.window.Deepsplay, warnings }
 }
@@ -153,6 +154,18 @@ check("version and a frozen API", () => {
   const { Deepsplay } = load()
   assert.match(Deepsplay.version, /^\d+\.\d+\.\d+$/)
   assert.ok(Object.isFrozen(Deepsplay))
+})
+
+check("done() posts to the parent window, with the page's origin", () => {
+  const posted = []
+  const parent = { postMessage: (data, origin) => posted.push({ data, origin }) }
+  load({ parent }).Deepsplay.done()
+  assert.deepEqual(plain(posted), [{ data: { deepsplay: "done" }, origin: "http://screen" }])
+})
+
+check("done() outside a frame does nothing", () => {
+  const { Deepsplay } = load()
+  assert.doesNotThrow(() => Deepsplay.done())
 })
 
 for (const c of metadataCases) {

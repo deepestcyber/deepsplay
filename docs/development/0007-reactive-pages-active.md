@@ -1,6 +1,6 @@
 # Reactive pages
 
-Status: proposed (2026-11-11)
+Status: in progress (2026-11-11)
 
 Two ways for what is on screen to react to events instead of a fixed
 schedule: a page ends its own display time when it is done
@@ -18,7 +18,7 @@ Status values: `open`, `in progress`, `done`.
 
 | # | Part | Status |
 | --- | --- | --- |
-| 1 | `Deepsplay.done()` and the shell | open |
+| 1 | `Deepsplay.done()` and the shell | done |
 | 2 | Manifest: `[[interrupt]]` | open |
 | 3 | Tokens: host configuration and backends | open |
 | 4 | Trigger route and broadcast | open |
@@ -51,7 +51,7 @@ since interrupt pages end with `done()`.
 
 ## 1. `Deepsplay.done()` and the shell
 
-Status: open
+Status: done
 
 - `assets/lib/deepsplay.js`: `done()` posts `{deepsplay: "done"}` to
   `window.parent` with `location.origin` as target. No-op when
@@ -77,6 +77,32 @@ Status: open
   bookkeeping as pure functions in `schedule.js` where possible. The
   message handling itself needs a browser; check it with a pinned test page
   and a rotation of two pages, as for the 0.4.0 checks.
+
+Built:
+
+- `Deepsplay.done()` in `assets/lib/deepsplay.js`, with Node checks in
+  `test/js/deepsplay_test.mjs`.
+- `schedule.js`: `currentOverride/3` takes the dismissals; `dismiss/3` and
+  `overrideKey/1` keep them, keyed by URL, windows and priority so a new
+  plan with the same override keeps it dismissed. Node checks in
+  `schedule_test.mjs`.
+- Shell hook: `message/1` filters (origin, visible frame, not while a new
+  page loads, one pending `done()` at a time), `done/0` acts by mode,
+  `showNext(true)` loads the same page again. `shownAt` is set at the swap
+  plus the crossfade; `display/2` and `blank/0` cancel a pending `done()`.
+
+Checked in headless Chromium against a production build (2026-11-11):
+
+- rotation: a page calling `done()` after 3 s was shown about 3 s, a page
+  without it its full 5 s, a page calling `done()` at once 2.5 s (2 s
+  minimum plus the crossfade);
+- pinned page with `done()` after 3 s: reloaded in the other frame every
+  3 s;
+- override with `done()` after 3 s: started on its second, ended after the
+  `done()`, the rotation continued with the interrupted page, and the
+  override did not come back during the rest of its window.
+
+Not done yet: pages.md and the CHANGELOG (part 7).
 
 ## 2. Manifest: `[[interrupt]]`
 

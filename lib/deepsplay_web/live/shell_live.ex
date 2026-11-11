@@ -255,6 +255,12 @@ defmodule DeepsplayWeb.ShellLive do
       // the interrupted page. The hook checks at every full minute, or every
       // full second while a window of the plan has seconds (ADR 30).
       //
+      // A page can end its display time with Deepsplay.done() (ADR 31): the
+      // shell accepts the message from the visible page once it has been fully
+      // visible for MIN_SHOWN, and moves on. The same page is loaded again in
+      // the other frame; an override ends on this screen until its window
+      // closes.
+      //
       // Plan: {sha, mode: "sequential" | "random" | "pinned", apply,
       //        pages: [{url, duration, weight, when}],
       //        overrides: [{url, when, priority, duration_params}], empty}
@@ -262,6 +268,7 @@ defmodule DeepsplayWeb.ShellLive do
         active,
         activeIndices,
         currentOverride,
+        dismiss,
         remainingMs,
         secondPrecise,
         msToNextCheck,
@@ -269,6 +276,7 @@ defmodule DeepsplayWeb.ShellLive do
 
       const LOAD_TIMEOUT = 10000
       const FADE = 500 // matches duration-500 on the frames
+      const MIN_SHOWN = 2000 // before Deepsplay.done() takes effect
 
       export default {
         mounted() {
@@ -281,6 +289,12 @@ defmodule DeepsplayWeb.ShellLive do
           this.plan = null
           this.planKey = null
           this.pending = null
+          this.dismissed = new Map()
+          this.loading = false
+          this.shownAt = 0
+          this.doneTimer = null
+          this.onMessage = event => this.message(event)
+          window.addEventListener("message", this.onMessage)
           this.setPlan(JSON.parse(this.el.dataset.plan))
           this.handleEvent("plan", plan => this.setPlan(plan))
           this.tick()
@@ -291,6 +305,41 @@ defmodule DeepsplayWeb.ShellLive do
           clearTimeout(this.loadTimer)
           clearTimeout(this.clearTimer)
           clearTimeout(this.tickTimer)
+          clearTimeout(this.doneTimer)
+          window.removeEventListener("message", this.onMessage)
+        },
+
+        // Deepsplay.done() from a page (ADR 31). Only the visible page of our
+        // own origin counts, not one being replaced; it takes effect once the
+        // page has been fully visible for MIN_SHOWN.
+        message(event) {
+          if (event.origin !== location.origin || event.data?.deepsplay !== "done") return
+          const frame = this.frames[this.active]
+          if (event.source !== frame.contentWindow) return
+          if (this.loading || !frame.classList.contains("opacity-100") || this.doneTimer) return
+          const wait = Math.max(0, this.shownAt + MIN_SHOWN - performance.now())
+          this.doneTimer = setTimeout(() => {
+            this.doneTimer = null
+            this.done()
+          }, wait)
+        },
+
+        // Moves on from a page that is done: the next page (the same one
+        // again, loaded fresh), the end of an override on this screen, or the
+        // empty page again.
+        done() {
+          if (this.loading) return
+          if (this.mode === "override") {
+            const override = (this.plan.overrides || [])[this.overrideIndex]
+            if (override) dismiss(this.dismissed, override, new Date())
+            this.checkOverride()
+          } else if (this.mode === "empty") {
+            if (this.activeNow().length > 0) this.showNext()
+            else if (this.plan.empty) this.display(this.plan.empty.url, () => {})
+          } else {
+            clearTimeout(this.timer)
+            this.showNext(true)
+          }
         },
 
         // Frames take no pointer input: the mouse always stays over the shell,
@@ -369,7 +418,7 @@ defmodule DeepsplayWeb.ShellLive do
           if (this.plan.mode === "pinned") return false
           const now = new Date()
           const overrides = this.plan.overrides || []
-          const current = currentOverride(overrides, now)
+          const current = currentOverride(overrides, now, this.dismissed)
 
           if (current >= 0) {
             if (force || this.mode !== "override" || current !== this.overrideIndex) {
@@ -403,7 +452,8 @@ defmodule DeepsplayWeb.ShellLive do
         },
 
         // The next page among the active ones; with none, the empty page.
-        showNext() {
+        // `force` loads the page again when it is the same one.
+        showNext(force = false) {
           if (this.mode === "override") return
           if (this.pending) {
             this.plan = this.pending
@@ -415,7 +465,7 @@ defmodule DeepsplayWeb.ShellLive do
           const next = this.pick()
           if (next === null) return this.showEmpty()
           // A single active page stays on screen without reloading.
-          if (next === this.index && this.mode === "rotation") return this.schedule(this.plan.pages[next])
+          if (!force && next === this.index && this.mode === "rotation") return this.schedule(this.plan.pages[next])
           this.showPage(next)
         },
 
@@ -440,6 +490,9 @@ defmodule DeepsplayWeb.ShellLive do
         // A black screen: the visible frame fades out and stops.
         blank() {
           clearTimeout(this.loadTimer)
+          clearTimeout(this.doneTimer)
+          this.doneTimer = null
+          this.loading = false
           const old = this.frames[this.active]
           old.classList.replace("opacity-100", "opacity-0")
           this.pushEvent("page", {url: ""})
@@ -485,13 +538,18 @@ defmodule DeepsplayWeb.ShellLive do
           // another page; this load replaces both.
           clearTimeout(this.clearTimer)
           clearTimeout(this.loadTimer)
+          clearTimeout(this.doneTimer)
+          this.doneTimer = null
+          this.loading = true
 
-          let done = false
+          let swapped = false
           const swap = () => {
-            if (done) return
-            done = true
+            if (swapped) return
+            swapped = true
             clearTimeout(this.loadTimer)
             frame.onload = null
+            this.loading = false
+            this.shownAt = performance.now() + FADE
 
             const old = this.frames[this.active]
             old.classList.replace("opacity-100", "opacity-0")

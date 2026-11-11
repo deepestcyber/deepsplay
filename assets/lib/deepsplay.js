@@ -33,6 +33,9 @@
 //                                 retried otherwise; resolves to it
 //   Failed requests reject with an Error carrying `status` (412: someone
 //   else wrote first).
+//   Deepsplay.done()              tells the screen the page is done, so it
+//                                 moves on before the display time is up
+//                                 (ADR 31); no effect outside a screen
 //   Deepsplay.version             version of this helper
 //
 // The value rules here and in Deepsplay.PageDoc (Elixir) are the same; both
@@ -366,4 +369,12 @@ const state = Object.freeze({
   },
 })
 
-window.Deepsplay = Object.freeze({ version: VERSION, params, helper, page, api, state })
+// Tells the shell that the page is done (ADR 31). The shell accepts it only
+// from the visible page of its own origin; elsewhere nobody listens.
+function done() {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ deepsplay: "done" }, location.origin)
+  }
+}
+
+window.Deepsplay = Object.freeze({ version: VERSION, params, helper, page, api, state, done })
