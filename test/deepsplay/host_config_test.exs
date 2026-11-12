@@ -5,6 +5,7 @@ defmodule Deepsplay.HostConfigTest do
   alias Deepsplay.HostConfig.Config
 
   doctest Deepsplay.HostConfig.Upstream
+  doctest Deepsplay.HostConfig.Mqtt
 
   @transports ["https", "ssh"]
 
@@ -520,6 +521,165 @@ defmodule Deepsplay.HostConfigTest do
       assert ~s(config "lobby": upstream "weather" is not defined) in errors(
                minimal(~s(upstreams = ["weather"]))
              )
+    end
+  end
+
+  describe "parse/2 MQTT" do
+    alias Deepsplay.HostConfig.Mqtt
+
+    defp with_mqtt(mqtt, config_extra \\ "") do
+      minimal(config_extra) <> "\n[mqtt]\n" <> mqtt <> "\n"
+    end
+
+    defp mqtt_secrets(toml),
+      do: HostConfig.parse(toml, transports: @transports, secrets: ["mqtt_password" | @secrets])
+
+    test "is optional" do
+      assert {:ok, %HostConfig{mqtt: nil}} = parse(minimal())
+      assert {:ok, host_config} = parse(minimal())
+      assert host_config.configs["lobby"].mqtt_topic == nil
+    end
+
+    test "a broker with TLS, user name, password secret and topic filter" do
+      toml =
+        with_mqtt(
+          """
+          url       = "mqtts://broker.example.org"
+          username  = "deepsplay"
+          password  = "{secret:mqtt_password}"
+          client_id = "deepsplay-lobby"
+          """,
+          ~s(mqtt_topic = "deepcyber/lobby/interrupts/+")
+        )
+
+      assert {:ok, host_config} = mqtt_secrets(toml)
+
+      assert host_config.mqtt == %Mqtt{
+               host: "broker.example.org",
+               port: 8883,
+               tls: true,
+               username: "deepsplay",
+               password_secret: "mqtt_password",
+               client_id: "deepsplay-lobby",
+               ca_file: nil
+             }
+
+      assert host_config.configs["lobby"].mqtt_topic == "deepcyber/lobby/interrupts/+"
+    end
+
+    test "plain MQTT with a port, without credentials" do
+      assert {:ok, host_config} = parse(with_mqtt(~s(url = "mqtt://localhost:1884")))
+      assert %Mqtt{host: "localhost", port: 1884, tls: false, username: nil} = host_config.mqtt
+    end
+
+    @tag :tmp_dir
+    test "a CA file that exists", %{tmp_dir: dir} do
+      ca = Path.join(dir, "ca.pem")
+      File.write!(ca, "-----BEGIN CERTIFICATE-----\n")
+
+      assert {:ok, host_config} =
+               parse(with_mqtt(~s(url = "mqtts://broker"\nca_file = "#{ca}")))
+
+      assert host_config.mqtt.ca_file == ca
+
+      assert Enum.any?(
+               errors(with_mqtt(~s(url = "mqtts://broker"\nca_file = "#{dir}/nope.pem"))),
+               &(&1 =~ "mqtt.ca_file cannot be read")
+             )
+
+      assert "mqtt.ca_file must be a readable file" in errors(
+               with_mqtt(~s(url = "mqtts://broker"\nca_file = "#{dir}"))
+             )
+    end
+
+    test "rejects a bad URL, a literal password and unknown keys" do
+      errors =
+        errors(
+          with_mqtt("""
+          url      = "https://broker.example.org/path"
+          username = "deepsplay"
+          password = "hunter2"
+          qos      = 2
+          """)
+        )
+
+      assert Enum.any?(errors, &(&1 =~ "mqtt.url must be an mqtts:// or mqtt:// URL"))
+      assert Enum.any?(errors, &(&1 =~ "mqtt.password must be a secret reference"))
+      assert ~s(mqtt: unknown key "qos") in errors
+    end
+
+    test "rejects URLs with credentials, paths or queries" do
+      for url <- [
+            "mqtts://user:pass@broker",
+            "mqtts://broker/topic",
+            "mqtts://broker?x=1",
+            "mqtts://",
+            "broker:8883"
+          ] do
+        assert Enum.any?(
+                 errors(with_mqtt(~s(url = "#{url}"))),
+                 &(&1 =~ "mqtt.url must be")
+               ),
+               url
+      end
+    end
+
+    test "rejects a missing URL, a password without user name and undefined secrets" do
+      assert "mqtt.url is missing" in errors(with_mqtt(~s(username = "deepsplay")))
+
+      assert ~s(mqtt: "password" needs "username") in errors(
+               with_mqtt(~s(url = "mqtts://broker"\npassword = "{secret:weather_api}"))
+             )
+
+      assert ~s(mqtt: password secret "nope" is not defined) in errors(
+               with_mqtt(~s(url = "mqtts://broker"\nusername = "u"\npassword = "{secret:nope}"))
+             )
+    end
+
+    test "rejects a bad client_id" do
+      for id <- ["", "has space", String.duplicate("a", 24)] do
+        assert Enum.any?(
+                 errors(with_mqtt(~s(url = "mqtts://broker"\nclient_id = "#{id}"))),
+                 &(&1 =~ "mqtt.client_id must be")
+               ),
+               id
+      end
+    end
+
+    test "topic filters" do
+      for filter <- ["a/+", "a/+/b/+", "deepcyber/lobby/interrupts/+"] do
+        assert {:ok, _host_config} =
+                 parse(with_mqtt(~s(url = "mqtts://broker"), ~s(mqtt_topic = "#{filter}"))),
+               filter
+      end
+
+      for filter <- [
+            "+",
+            "a/b",
+            "a/#",
+            "a/#/+",
+            "a//+",
+            "$SYS/+",
+            "a/b+/+",
+            "",
+            "a/" <> String.duplicate("b", 256) <> "/+"
+          ] do
+        assert ~s(config "lobby".mqtt_topic must be a topic filter ending in "/+", without "#") in errors(
+                 with_mqtt(~s(url = "mqtts://broker"), ~s(mqtt_topic = "#{filter}"))
+               ),
+               filter
+      end
+    end
+
+    test "a topic filter needs an [mqtt] section" do
+      assert ~s(config "lobby": mqtt_topic needs an [mqtt] section) in errors(
+               minimal(~s(mqtt_topic = "a/+"))
+             )
+    end
+
+    test "a broken [mqtt] section does not also report topic filters" do
+      errors = errors(with_mqtt(~s(url = "nope"), ~s(mqtt_topic = "a/+")))
+      refute Enum.any?(errors, &(&1 =~ "needs an [mqtt] section"))
     end
   end
 

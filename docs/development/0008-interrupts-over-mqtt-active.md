@@ -17,7 +17,7 @@ Status values: `open`, `in progress`, `done`.
 | # | Part | Status |
 | --- | --- | --- |
 | 1 | Client library | done |
-| 2 | Host configuration: `[mqtt]` and `mqtt_topic` | open |
+| 2 | Host configuration: `[mqtt]` and `mqtt_topic` | done |
 | 3 | Interrupts: start from parameters, source of a trigger | open |
 | 4 | Payload and topic handling | open |
 | 5 | Connection, subscriptions and reloading | open |
@@ -112,7 +112,7 @@ and its reasons here; add the dependency to `mix.exs`.
 
 ## 2. Host configuration: `[mqtt]` and `mqtt_topic`
 
-Status: open
+Status: done
 
 - `Deepsplay.HostConfig`: a new optional `[mqtt]` table, parsed into a
   struct (`Deepsplay.HostConfig.Mqtt`: `host`, `port`, `tls`, `username`,
@@ -134,6 +134,22 @@ Status: open
 - Unknown keys in `[mqtt]` are errors, as elsewhere.
 - Tests in `host_config_test.exs` for each rule; `host.example.toml` gets a
   commented `[mqtt]` example and `mqtt_topic`.
+
+Built:
+
+- `Deepsplay.HostConfig.Mqtt` with `host`, `port`, `tls`, `username`,
+  `password_secret` (the secret's name, not the template: the template can
+  only be one reference, so the name is all there is to keep), `client_id`
+  and `ca_file` (expanded). The casts (`cast_url/1`, `cast_password/1`,
+  `cast_client_id/1`, `cast_ca_file/1`, `cast_topic_filter/1`) live there,
+  with doctests.
+- `HostConfig.mqtt` (`nil` without `[mqtt]`), `Config.mqtt_topic`.
+- `mqtt_topic` without `[mqtt]` is reported per configuration, but not when
+  `[mqtt]` is present and broken, so one mistake gives one message.
+- `ca_file` is checked when the file is loaded, so a missing file shows up
+  on reload like any other error. A relative path is expanded against the
+  working directory, as `cache_dir` is.
+- 11 tests in `host_config_test.exs` ("parse/2 MQTT") plus doctests.
 
 ## 3. Interrupts: start from parameters, source of a trigger
 

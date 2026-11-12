@@ -8,6 +8,7 @@ defmodule Deepsplay.HostConfig do
   """
 
   alias Deepsplay.HostConfig.Config
+  alias Deepsplay.HostConfig.Mqtt
   alias Deepsplay.HostConfig.Upstream
   alias Deepsplay.RepoUrl
   alias Deepsplay.Secrets
@@ -20,6 +21,7 @@ defmodule Deepsplay.HostConfig do
     :default_config,
     :configs,
     upstreams: %{},
+    mqtt: nil,
     poll_interval: 30_000,
     keep_revisions: 3,
     upstream_cache_size: 200_000_000,
@@ -40,10 +42,11 @@ defmodule Deepsplay.HostConfig do
           state_dir: String.t(),
           shared_state: boolean(),
           configs: %{String.t() => Config.t()},
-          upstreams: %{String.t() => Upstream.t()}
+          upstreams: %{String.t() => Upstream.t()},
+          mqtt: Mqtt.t() | nil
         }
 
-  @top_keys ~w(server config upstream)
+  @top_keys ~w(server config upstream mqtt)
 
   @upstream_methods ~w(GET HEAD POST PUT PATCH DELETE)
 
@@ -119,13 +122,17 @@ defmodule Deepsplay.HostConfig do
     {server, server_errors} = server(Map.get(data, "server"))
     {upstreams, upstream_errors} = upstreams(Map.get(data, "upstream", %{}), allowed.secrets)
     {configs, config_errors} = configs(Map.get(data, "config", []), allowed, Map.keys(upstreams))
+    {mqtt, mqtt_errors} = mqtt(Map.get(data, "mqtt"), allowed.secrets)
 
     errors =
       unknown ++
         server_errors ++
         upstream_errors ++
         cache_size_errors(upstreams, server) ++
-        config_errors ++ default_errors(server, declared_names(data))
+        config_errors ++
+        mqtt_errors ++
+        mqtt_topic_errors(configs, Map.has_key?(data, "mqtt")) ++
+        default_errors(server, declared_names(data))
 
     case errors do
       [] ->
@@ -143,7 +150,8 @@ defmodule Deepsplay.HostConfig do
            state_dir: Path.expand(server.state_dir || Path.join(server.cache_dir, ".state")),
            shared_state: server.shared_state,
            configs: Map.new(configs, &{&1.name, with_server_defaults(&1, server)}),
-           upstreams: upstreams
+           upstreams: upstreams,
+           mqtt: mqtt
          }}
 
       errors ->
@@ -300,6 +308,45 @@ defmodule Deepsplay.HostConfig do
 
   defp cast_header_name(_value), do: {:error, "must be a string"}
 
+  # The MQTT broker for interrupts (ADR 33); absent means no MQTT at all.
+  defp mqtt(nil, _secrets), do: {nil, []}
+
+  defp mqtt(table, secrets) when is_map(table) do
+    {fields, errors} =
+      TomlSchema.fields(table, "mqtt", [
+        {"url", :url, &Mqtt.cast_url/1, []},
+        {"username", :username, :string, default: nil},
+        {"password", :password_secret, &Mqtt.cast_password/1, default: nil},
+        {"client_id", :client_id, &Mqtt.cast_client_id/1, default: nil},
+        {"ca_file", :ca_file, &Mqtt.cast_ca_file/1, default: nil}
+      ])
+
+    errors =
+      errors ++
+        if(Map.has_key?(table, "password") and not Map.has_key?(table, "username"),
+          do: [~s(mqtt: "password" needs "username")],
+          else: []
+        ) ++
+        for secret <- List.wrap(fields.password_secret), secret not in secrets do
+          ~s(mqtt: password secret "#{secret}" is not defined)
+        end
+
+    case errors do
+      [] -> {struct!(Mqtt, fields |> Map.merge(fields.url) |> Map.delete(:url)), []}
+      errors -> {nil, errors}
+    end
+  end
+
+  defp mqtt(_table, _secrets), do: {nil, ["mqtt must be a table"]}
+
+  defp mqtt_topic_errors(_configs, true), do: []
+
+  defp mqtt_topic_errors(configs, false) do
+    for %Config{name: name, mqtt_topic: topic} <- configs, topic != nil do
+      ~s(config "#{name}": mqtt_topic needs an [mqtt] section)
+    end
+  end
+
   defp configs(configs, allowed, upstreams) when is_list(configs) do
     {parsed, errors} =
       configs
@@ -423,7 +470,8 @@ defmodule Deepsplay.HostConfig do
       {"backend", :backend, :boolean, default: false},
       {"backend_secrets", :backend_secrets, :string_list, default: []},
       {"backend_memory", :backend_memory, :size, default: nil},
-      {"interrupt_token", :interrupt_token, :string, default: nil}
+      {"interrupt_token", :interrupt_token, :string, default: nil},
+      {"mqtt_topic", :mqtt_topic, &Mqtt.cast_topic_filter/1, default: nil}
     ]
   end
 

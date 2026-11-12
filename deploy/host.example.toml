@@ -13,6 +13,7 @@ repo = "https://github.com/example/lobby-screen.git"
 ref  = "main"
 # params = { theme = "dc" }   # default parameters for pages that declare them
 # interrupt_token = "lobby_trigger"   # secret that may trigger interrupts (ADR 32)
+# mqtt_topic = "deepcyber/lobby/interrupts/+"   # MQTT topics that start interrupts (ADR 33)
 
 # A private repository over SSH; the key comes from the secrets file.
 # [[config]]
@@ -27,3 +28,11 @@ ref  = "main"
 # query       = "appid"
 # query_value = "{secret:weather_api}"
 # cache_ttl   = "60s"
+
+# An MQTT broker whose messages start interrupts (ADR 33); configurations
+# subscribe with mqtt_topic. Without this section, deepsplay uses no MQTT.
+# [mqtt]
+# url      = "mqtts://broker.example.org:8883"
+# username = "deepsplay"
+# password = "{secret:mqtt_password}"     # only as a secret reference
+# ca_file  = "/etc/deepsplay/broker-ca.pem"   # for a private CA; default: system CAs
