@@ -18,6 +18,9 @@ pages with `glob` (and `exclude`) instead of `path`.
 Amended by [29](0029-disabled-manifest-entries.md): page entries and overrides
 can be switched off with `enabled = false`.
 
+Amended by [33](0033-interrupts-over-mqtt.md): the host configuration can
+have an `[mqtt]` section and a configuration an `mqtt_topic`.
+
 ## Context
 
 deepsplay reads two kinds of configuration: the host configuration (server

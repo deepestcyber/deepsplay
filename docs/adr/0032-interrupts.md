@@ -10,6 +10,9 @@ Amends [9](0009-rotation-in-the-browser.md),
 [10](0010-url-scheme.md), [16](0016-default-parameters-per-configuration.md),
 [25](0025-time-windows-and-overrides.md) and [26](0026-sidecars.md).
 
+Amended by [33](0033-interrupts-over-mqtt.md): interrupts can also be
+started by MQTT messages.
+
 ## Context
 
 Overrides (ADR 25) interrupt the rotation at times known in advance. Some
