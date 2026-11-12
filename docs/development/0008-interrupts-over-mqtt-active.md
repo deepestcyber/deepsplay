@@ -19,7 +19,7 @@ Status values: `open`, `in progress`, `done`.
 | 1 | Client library | done |
 | 2 | Host configuration: `[mqtt]` and `mqtt_topic` | done |
 | 3 | Interrupts: start from parameters, source of a trigger | done |
-| 4 | Payload and topic handling | open |
+| 4 | Payload and topic handling | done |
 | 5 | Connection, subscriptions and reloading | open |
 | 6 | Status page and catalog | open |
 | 7 | Docs | open |
@@ -189,7 +189,7 @@ Built:
 
 ## 4. Payload and topic handling
 
-Status: open
+Status: done
 
 A pure module (`DeepsplayWeb.InterruptMessage` or similar), no connection
 involved, so all of it is unit tested:
@@ -207,6 +207,27 @@ involved, so all of it is unit tested:
   its last trigger, so the status page shows it.
 - Names that are not valid interrupt names (ADR 32) are logged and
   dropped.
+
+Built:
+
+- `DeepsplayWeb.InterruptMessage` with `match/2`, `params/1` and
+  `dispatch/3`.
+- `params/1` returns the pairs sorted by name: a JSON object has no order,
+  and a fixed one keeps the page URL the same for the same message.
+  Floats use their shortest text (`2.5`). Each nested value is reported
+  with its name.
+- `dispatch/3` returns `[{config_name, answer}]` (configurations sorted by
+  name), so the connection and tests can see what happened. The interrupt
+  name is checked once per message (it is the topic's last level, the same
+  for every matching configuration). Configurations without a revision or
+  without the interrupt answer `:not_found`, which is logged but not
+  recorded, as for HTTP.
+- Logging: started and rate-limited at `info`, unknown interrupt and
+  invalid parameters at `warning`. A wide filter in one configuration
+  (`deepcyber/+/interrupts/+`) therefore warns for interrupts that only
+  another configuration has.
+- `test/deepsplay_web/interrupt_message_test.exs`: 9 tests and 5
+  doctests, with three configurations (two matching filters, one without).
 
 ## 5. Connection, subscriptions and reloading
 
