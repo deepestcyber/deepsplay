@@ -5,6 +5,14 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+## 0.5.0 – 2026-11-12
+
+Pages that end themselves, interrupts over HTTP and MQTT. No changes are
+needed for existing setups; interrupts and MQTT stay off until a manifest
+declares `[[interrupt]]` pages and the host configuration gives a way to
+trigger them. Screens load the new shell on their own when they reconnect
+after the update.
+
 - Pages can end their display time with `Deepsplay.done()`; `duration`
   becomes an upper limit. On an override, `done()` ends it on that screen
   until its window closes. Pages are shown at least 2 seconds (ADR 31,

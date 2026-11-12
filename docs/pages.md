@@ -315,7 +315,7 @@ when the display time is over, whichever comes first.
 - Outside a screen (opened on its own, in the catalog) nobody listens and
   `done()` has no effect. Try it with a pinned page (`?page=`).
 
-`done()` is newer than deepsplay 0.4.0. A screen can still hold an older
+`done()` came with deepsplay 0.5.0. A screen can still hold an older
 `deepsplay.js` for a while after an update (about an hour, longer while it
 cannot reach the server), so a page that should also run there checks first:
 
