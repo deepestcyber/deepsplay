@@ -20,7 +20,7 @@ Status values: `open`, `in progress`, `done`.
 | 2 | Host configuration: `[mqtt]` and `mqtt_topic` | done |
 | 3 | Interrupts: start from parameters, source of a trigger | done |
 | 4 | Payload and topic handling | done |
-| 5 | Connection, subscriptions and reloading | open |
+| 5 | Connection, subscriptions and reloading | done |
 | 6 | Status page and catalog | open |
 | 7 | Docs | open |
 
@@ -231,7 +231,7 @@ Built:
 
 ## 5. Connection, subscriptions and reloading
 
-Status: open
+Status: done
 
 - A process under the application supervisor (`DeepsplayWeb.Mqtt`), always
   started; idle when the host configuration has no `[mqtt]`.
@@ -257,6 +257,40 @@ Status: open
   a generated configuration in a temporary directory: connect with TLS and
   password, publish, a screen gets the interrupt; retained message ignored;
   filter change without reconnect.
+
+Built:
+
+- `DeepsplayWeb.Mqtt`, a GenServer in the application tree after the host
+  configuration watcher. `wanted/2` (host configuration and password
+  lookup to broker and filters) and `plan/2` (current and wanted to
+  actions) are pure and unit tested; `info/0` for the status page,
+  `refresh/0` for tests.
+- Every call that waits for the broker (connect with the first
+  subscriptions, subscribe, unsubscribe) runs in a task, one at a time;
+  further actions wait for its result and are planned again then. The
+  GenServer itself only starts and stops clients, so `info/0` never
+  blocks. Running two subscription tasks at once lost the first result;
+  the broker test caught it.
+- A failed connect, a refused subscription or a lost connection stops the
+  client and retries after the delay; results of old clients are ignored.
+  Errors are put into words for the status page ("connection refused",
+  "not authorised (user name or password)", "TLS: unknown_ca", …).
+- A password secret that disappeared after the file was checked is left
+  out rather than failing; the broker then refuses the login, which shows
+  as the last error.
+- An IP address as host gets no SNI (not allowed for addresses); the host
+  name check still runs.
+- `test/deepsplay_web/mqtt_test.exs`: `plan/2` and `wanted/2`, 6 tests and
+  2 doctests.
+- `test/deepsplay_web/mqtt_broker_test.exs`: 6 tests against a mosquitto
+  started for each test, with a CA and server certificate made by
+  `openssl`, a password file, a TLS listener for deepsplay and a plain one
+  for `mosquitto_pub`: connect and trigger, retained message ignored,
+  filter change without reconnect, wrong password, broker lost and back,
+  `[mqtt]` removed. Tagged `:mosquitto` and, like the `node` and `uv`
+  tests, excluded only when the tools are missing, rather than always
+  (the plan said excluded by default): they take about 5 s and need no
+  network.
 
 ## 6. Status page and catalog
 

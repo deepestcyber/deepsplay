@@ -33,6 +33,8 @@ defmodule Deepsplay.Application do
       Deepsplay.Janitor,
       # Reloads the host configuration when it changes (ADR 23).
       watcher(),
+      # Starts interrupts from MQTT messages, if configured (ADR 33).
+      DeepsplayWeb.Mqtt,
       # Start a worker by calling: Deepsplay.Worker.start_link(arg)
       # {Deepsplay.Worker, arg},
       # Start to serve requests, typically the last entry
