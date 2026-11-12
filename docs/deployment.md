@@ -51,6 +51,43 @@ plain text over plain HTTP like everything else on port 4000: keep triggers
 on the internal network, or let systems from outside go through a reverse
 proxy with HTTPS.
 
+Interrupts can also be started by MQTT messages (ADR 33). This is optional:
+without an `[mqtt]` section deepsplay opens no connection. With one, it
+connects to the broker and subscribes to the `mqtt_topic` of each
+configuration that has one:
+
+```toml
+[mqtt]
+url       = "mqtts://broker.example.org:8883"  # mqtt://… (plain) only for a local broker
+username  = "deepsplay"
+password  = "{secret:mqtt_password}"           # only as a secret reference
+# ca_file   = "/etc/deepsplay/broker-ca.pem"   # for a private CA; default: system CAs
+# client_id = "deepsplay-lobby"                # default: deepsplay- and a random suffix
+
+[[config]]
+name       = "lobby"
+repo       = "https://github.com/example/lobby-screen.git"
+ref        = "main"
+mqtt_topic = "deepcyber/lobby/interrupts/+"    # last level: the interrupt's name
+```
+
+- TLS checks the broker's certificate and host name. Mount `ca_file` into
+  the container if the broker uses a private CA.
+- The filter must end in `/+`; other levels may be `+`, `#` is not
+  allowed. Several configurations may share a filter: a message then starts
+  the interrupt in each that has it.
+- Whoever may publish to a configuration's topics can put pages on its
+  screens: restrict the topics in the broker's access rules. deepsplay only
+  subscribes and needs no publish rights.
+- deepsplay reconnects on its own (after 1 s, growing to 60 s). Messages
+  published meanwhile are lost; retained messages are ignored.
+- `/status` shows the connection, its last error and the subscribed
+  filters; the catalog shows each interrupt's topic with a `mosquitto_pub`
+  example. To test:
+  `mosquitto_pub -h broker.example.org -p 8883 --capath /etc/ssl/certs -u <user> -P <password> -t deepcyber/lobby/interrupts/doorbell -m '{"who": "Ada"}'`.
+- Changes to `[mqtt]` or the password secret reconnect; changed filters are
+  subscribed without reconnecting.
+
 Changes to the host configuration and the secrets file are picked up while
 running, within about 5 seconds (ADR 23); `SIGHUP` (e.g. `docker kill -s HUP
 deepsplay`) checks at once. An invalid change is not applied: the last good

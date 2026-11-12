@@ -656,10 +656,14 @@ defmodule Deepsplay.ScreenTest do
       assert {:ok, screen} = Screen.load(root)
 
       assert screen.warnings == [
-               "[[interrupt]] cannot be triggered: the configuration has no backend and no interrupt_token"
+               "[[interrupt]] cannot be triggered: the configuration has no backend, " <>
+                 "no interrupt_token and no mqtt_topic"
              ]
 
       config = %Config{name: "lobby", interrupt_token: "trigger"}
+      assert {:ok, %{warnings: []}} = Screen.load(root, config: config)
+
+      config = %Config{name: "lobby", mqtt_topic: "deepcyber/lobby/+"}
       assert {:ok, %{warnings: []}} = Screen.load(root, config: config)
     end
 

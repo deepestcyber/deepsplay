@@ -1,6 +1,6 @@
 # Interrupts over MQTT
 
-Status: in progress (2026-11-12)
+Status: done (2026-11-12)
 
 Interrupts can be started by messages on an MQTT broker, next to the HTTP
 trigger ([ADR 33](../adr/0033-interrupts-over-mqtt.md)). MQTT is optional:
@@ -22,7 +22,7 @@ Status values: `open`, `in progress`, `done`.
 | 4 | Payload and topic handling | done |
 | 5 | Connection, subscriptions and reloading | done |
 | 6 | Status page and catalog | done |
-| 7 | Docs | open |
+| 7 | Docs | done |
 
 Decisions taken in discussion (2026-11-12), recorded in ADR 33:
 
@@ -329,7 +329,7 @@ Built:
 
 ## 7. Docs
 
-Status: open
+Status: done
 
 - `pages.md` "Interrupts": triggering over MQTT, the payload rules, that
   retained messages are ignored and the publisher gets no answer.
@@ -338,6 +338,18 @@ Status: open
   `mosquitto_pub`.
 - `deploy/host.example.toml` (from part 2), CHANGELOG.
 - This file: status `done`, renamed to `-completed`.
+
+Built:
+
+- `pages.md` "Interrupts": triggering over MQTT, the payload, no answer,
+  retained and missed messages, no ending, the broker's access rules.
+- `deployment.md`: `[mqtt]` and `mqtt_topic` with an example, TLS and
+  `ca_file`, shared filters, access rules, reconnecting, `/status` and a
+  test with `mosquitto_pub`.
+- CHANGELOG under Unreleased.
+- Found while writing: the manifest warning "[[interrupt]] cannot be
+  triggered" ignored `mqtt_topic`; a configuration with only a topic
+  filter no longer gets it (`Screen`, with a test).
 
 ## Open questions
 

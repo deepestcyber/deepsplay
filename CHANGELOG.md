@@ -16,6 +16,14 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   host configuration). Their priority decides against overrides and other
   interrupts; the catalog and the status page show the last trigger
   (ADR 32, [pages.md](docs/pages.md#interrupts)).
+- Interrupts over MQTT: with an `[mqtt]` section in the host configuration
+  (TLS, user name, password from the secrets), deepsplay connects to a
+  broker and starts interrupts from messages on each configuration's
+  `mqtt_topic`; the topic's last level names the interrupt and a JSON
+  payload carries the page parameters. Retained messages are ignored. The
+  status page shows the connection, the catalog each interrupt's topic
+  (ADR 33, [deployment.md](docs/deployment.md)). Without `[mqtt]` nothing
+  changes. New dependency: `emqtt` (built without QUIC).
 - The status page shows how many screens each configuration has connected.
 - `/lib/v1/deepsplay.js` is cached for an hour instead of a day and has an
   `ETag`, so a new build reaches screens within about an hour. Screens that

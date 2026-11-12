@@ -613,16 +613,17 @@ defmodule Deepsplay.Screen do
   defp override(_entry, index, _root, _upstreams),
     do: {nil, ["override ##{index} must be a table"]}
 
-  # Interrupts need someone who may trigger them (ADR 32).
+  # Interrupts need someone who may trigger them (ADR 32, ADR 33).
   defp interrupt_warnings([], _backend, _config), do: []
 
-  defp interrupt_warnings(_interrupts, backend, %Config{interrupt_token: token})
-       when backend != nil or token != nil,
+  defp interrupt_warnings(_interrupts, backend, %Config{interrupt_token: token, mqtt_topic: topic})
+       when backend != nil or token != nil or topic != nil,
        do: []
 
   defp interrupt_warnings(_interrupts, _backend, _config),
     do: [
-      "[[interrupt]] cannot be triggered: the configuration has no backend and no interrupt_token"
+      "[[interrupt]] cannot be triggered: the configuration has no backend, " <>
+        "no interrupt_token and no mqtt_topic"
     ]
 
   defp interrupts(nil, _root, _upstreams), do: {[], []}

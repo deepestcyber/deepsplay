@@ -487,8 +487,9 @@ curl -X DELETE -H "Authorization: Bearer $TOKEN" \
 - The token is the backend's `DEEPSPLAY_TOKEN`, or, for other systems, a
   secret the host names with `interrupt_token` for the configuration (see
   [deployment](deployment.md)). Pages never get a token: anything in a page
-  can be read on the network. Without a backend and without
-  `interrupt_token`, the status page warns that nobody can trigger them.
+  can be read on the network. Without a backend, without
+  `interrupt_token` and without MQTT (below), the status page warns that
+  nobody can trigger them.
 - The query passes parameters to the page. Only parameters the page
   declares (itself or through a helper) are allowed, with values that fit
   their type; they take precedence over the manifest's query and all
@@ -497,6 +498,32 @@ curl -X DELETE -H "Authorization: Bearer $TOKEN" \
 - Answers: `202`; `401` without a valid token; `404` for an unknown or
   disabled interrupt; `422` with `reasons` for parameters that do not fit;
   `429` when the same interrupt was started less than 2 seconds ago.
+
+Over MQTT (ADR 33), if the host connects deepsplay to a broker and gives the
+configuration a topic filter (`mqtt_topic`, see [deployment](deployment.md)):
+a message on a matching topic starts the interrupt named by the topic's last
+level. The catalog shows each interrupt's topic and a `mosquitto_pub` line.
+
+```sh
+mosquitto_pub -h broker -p 8883 --capath /etc/ssl/certs -u deepsplay -P "$PASSWORD" \
+  -t "deepcyber/lobby/interrupts/doorbell" -m '{"who": "Ada"}'
+```
+
+- The payload is empty (no parameters) or a JSON object of page
+  parameters. Strings are used as they are, numbers and booleans as their
+  text (`5`, `true`), `null` as not given. Nested objects and arrays,
+  anything that is not a JSON object, and payloads over 2 KB are rejected.
+  The parameters are checked as for `POST`.
+- The publisher gets no answer. The outcome (started on how many screens,
+  or why not) is logged and shown as the last trigger in the catalog and
+  on the status page ("MQTT …, invalid parameters: …").
+- Retained messages are ignored: the broker would send them again after
+  every reconnect. Messages sent while deepsplay is not connected to the
+  broker are lost.
+- MQTT only starts interrupts; ending one early stays `DELETE` or
+  `Deepsplay.done()`. The 2-second limit counts `POST` and MQTT together.
+- Who may publish to the topic is decided by the broker's access rules;
+  no token is involved.
 
 On the screen:
 
