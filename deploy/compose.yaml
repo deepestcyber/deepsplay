@@ -16,6 +16,7 @@ services:
       # DEEPSPLAY_SECRETS: /etc/deepsplay/secrets.toml
       # DEEPSPLAY_SECRET_WEATHER_API: ...           # or secrets as variables
       # DEEPSPLAY_ORIGINS: //display.lan,//10.0.0.5 # default: the request's own host
+      # DEEPSPLAY_TRUSTED_PROXIES: 10.0.0.2         # reverse proxy with HTTPS (ADR 34)
     volumes:
       - ./host.toml:/etc/deepsplay/host.toml:ro
       # - ./secrets.toml:/etc/deepsplay/secrets.toml:ro

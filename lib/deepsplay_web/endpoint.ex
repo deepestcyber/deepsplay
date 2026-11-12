@@ -52,4 +52,9 @@ defmodule DeepsplayWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
   plug DeepsplayWeb.Router
+
+  # Scheme and port from a trusted reverse proxy (ADR 34). Here and not as a
+  # plug: Phoenix dispatches sockets before the plugs above, and the origin
+  # check of the LiveView socket needs the rewritten request.
+  def call(conn, opts), do: super(DeepsplayWeb.TrustedProxies.rewrite(conn), opts)
 end

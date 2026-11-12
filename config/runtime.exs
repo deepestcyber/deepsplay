@@ -31,6 +31,10 @@ if secrets_path = System.get_env("DEEPSPLAY_SECRETS") do
   config :deepsplay, :secrets_path, secrets_path
 end
 
+# Reverse proxies whose X-Forwarded-Proto and X-Forwarded-Port are trusted
+# (ADR 34): IP addresses or CIDR ranges, separated by commas.
+config :deepsplay, :trusted_proxies, System.get_env("DEEPSPLAY_TRUSTED_PROXIES")
+
 config :deepsplay, DeepsplayWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

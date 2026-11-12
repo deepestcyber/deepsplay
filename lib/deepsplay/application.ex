@@ -8,6 +8,7 @@ defmodule Deepsplay.Application do
   @impl true
   def start(_type, _args) do
     Deepsplay.HostConfig.Store.load()
+    DeepsplayWeb.TrustedProxies.setup!(Application.get_env(:deepsplay, :trusted_proxies))
 
     children = [
       DeepsplayWeb.Telemetry,
