@@ -5,6 +5,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+## 0.5.1 – 2026-11-12
+
+deepsplay behind a reverse proxy with HTTPS. No changes are needed for
+existing setups; `DEEPSPLAY_ORIGINS` keeps working.
+
 - Behind a reverse proxy with HTTPS, screens and the status page failed the
   WebSocket origin check unless `DEEPSPLAY_ORIGINS` listed the names.
   `DEEPSPLAY_TRUSTED_PROXIES` names the proxies (IP addresses or CIDR
