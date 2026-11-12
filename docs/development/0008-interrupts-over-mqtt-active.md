@@ -1,6 +1,6 @@
 # Interrupts over MQTT
 
-Status: proposed (2026-11-12)
+Status: in progress (2026-11-12)
 
 Interrupts can be started by messages on an MQTT broker, next to the HTTP
 trigger ([ADR 33](../adr/0033-interrupts-over-mqtt.md)). MQTT is optional:
@@ -16,7 +16,7 @@ Status values: `open`, `in progress`, `done`.
 
 | # | Part | Status |
 | --- | --- | --- |
-| 1 | Client library | open |
+| 1 | Client library | done |
 | 2 | Host configuration: `[mqtt]` and `mqtt_topic` | open |
 | 3 | Interrupts: start from parameters, source of a trigger | open |
 | 4 | Payload and topic handling | open |
@@ -39,12 +39,53 @@ need the library and can go in parallel. 4 builds on 3, 5 on 1, 2 and 4.
 
 ## 1. Client library
 
-Status: open
+Status: done
 
 Goal: pick the MQTT client and prove it does what ADR 33 needs, before
 anything depends on it.
 
-Candidates:
+Chosen: **`emqtt` 1.16.1**, built without QUIC.
+
+- `tortoise311` is ruled out: its handler gets only topic levels and
+  payload (`Tortoise311.Handler.execute/2` drops the `%Package.Publish{}`),
+  so the retain flag cannot be seen.
+- `emqtt`'s Hex package requires `quicer` (native, cmake, downloads
+  msquic), but its build script drops QUIC when `BUILD_WITHOUT_QUIC` is
+  set. `mix.exs` passes it with `system_env` and declares `quicer` with
+  `override: true, compile: false, app: false`: fetched, never compiled,
+  not in the release. `emqtt.app` then lists only `kernel`, `stdlib` and
+  `gun`.
+- Checked against a local `mosquitto` with a TLS listener (own CA, server
+  certificate for `localhost`) and a password file, on Elixir 1.20.2 / OTP
+  29.0.2, the versions of the image:
+  - TLS options `verify: :verify_peer`, `cacertfile` or `cacerts:
+    :public_key.cacerts_get()`, `server_name_indication`, and
+    `customize_hostname_check` with
+    `:public_key.pkix_verify_hostname_match_fun(:https)`. Wrong CA
+    (system CAs against a private one) fails with `unknown_ca`, a wrong
+    host name with `bad_certificate`, a wrong password with
+    `unauthorized_client`.
+  - `proto_ver: :v4`, `clean_start: true`, `subscribe(c, filter, qos: 1)`.
+  - Messages arrive as `{:publish, %{topic, payload, qos, retain, ...}}` at
+    the owner. A retained message on subscribe has `retain: true`, a live
+    one `retain: false`.
+  - `unsubscribe/2` and `subscribe/3` work on the live connection.
+  - Losing the broker: the client process exits with
+    `{:shutdown, :ssl_closed}` (the owner traps exits or monitors).
+    `connect/1` with the broker down returns `{:error, :econnrefused}`
+    at once. emqtt's own reconnect stays off; part 5 starts a new client
+    with its own delay.
+  - `MIX_ENV=prod mix release` builds without `quicer`.
+- emqtt logs every packet at `debug`. Part 5 sets its level to `info`
+  (`Logger.put_application_level(:emqtt, :info)`), or the dev log fills
+  up.
+- `mix deps.get` warns about `gun` 2.8.0 (GHSA-w4f7-4cxr-rv3c, HTTP
+  request/response splitting; OSV lists a fix in 2.16.0, which does not
+  exist on Hex, latest is 2.8.0). emqtt uses `gun` only for MQTT over
+  WebSocket, which deepsplay does not use.
+- Not yet checked: a full container image build (`docker build`).
+
+Candidates looked at:
 
 - `tortoise311` (~> 0.12.3, MQTT 3.1.1, pure Elixir, SmartRent fork of
   `tortoise`).

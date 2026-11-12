@@ -63,6 +63,12 @@ defmodule Deepsplay.MixProject do
       {:toml_elixir, "~> 3.3"},
       # HTTP client of the upstream proxy (ADR 8).
       {:req, "~> 0.7"},
+      # MQTT client for interrupts over MQTT (ADR 33). Built without QUIC:
+      # emqtt's build script drops quicer with BUILD_WITHOUT_QUIC, but its
+      # Hex package still requires it, so quicer (native code, cmake) is
+      # fetched and never compiled or started.
+      {:emqtt, "~> 1.16", system_env: [{"BUILD_WITHOUT_QUIC", "1"}]},
+      {:quicer, "0.2.15", override: true, compile: false, app: false},
       # Watches local directories in development (ADR 12).
       {:file_system, "~> 1.0", only: [:dev, :test]}
     ]
