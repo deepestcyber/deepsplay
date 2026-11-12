@@ -26,6 +26,7 @@ defmodule DeepsplayWeb.StatusLive do
   alias Deepsplay.UpstreamProxy.Cache
   alias Deepsplay.UpstreamProxy.Stats
   alias DeepsplayWeb.Interrupts
+  alias DeepsplayWeb.Mqtt
   alias DeepsplayWeb.Presence
 
   @upstream_interval 5_000
@@ -37,6 +38,7 @@ defmodule DeepsplayWeb.StatusLive do
       Phoenix.PubSub.subscribe(Deepsplay.PubSub, Presence.topic())
       :timer.send_interval(@upstream_interval, :upstreams)
       Watcher.subscribe()
+      Mqtt.subscribe()
     end
 
     {:ok, socket |> assign(page_title: "Status") |> load()}
@@ -51,6 +53,7 @@ defmodule DeepsplayWeb.StatusLive do
   def handle_info(:upstreams, socket), do: {:noreply, assign_upstreams(socket)}
 
   def handle_info({:host_config_changed}, socket), do: {:noreply, load(socket)}
+  def handle_info({:mqtt_changed}, socket), do: {:noreply, load(socket)}
 
   defp load(socket) do
     configs = configs()
@@ -60,6 +63,7 @@ defmodule DeepsplayWeb.StatusLive do
       reload: Watcher.info(),
       configs: configs,
       interrupts: interrupts(configs),
+      mqtt: mqtt(),
       screens: screens(),
       errors: Status.recent_errors()
     )
@@ -174,6 +178,30 @@ defmodule DeepsplayWeb.StatusLive do
       {:error, _errors} ->
         []
     end
+  end
+
+  # The MQTT connection (ADR 33) with the configurations of each filter.
+  defp mqtt do
+    with %{} = info <- Mqtt.info(),
+         {:ok, host_config} <- Store.get() do
+      users =
+        for {name, %{mqtt_topic: filter}} <- host_config.configs, filter != nil, reduce: %{} do
+          users -> Map.update(users, filter, [name], &Enum.sort([name | &1]))
+        end
+
+      filters =
+        users
+        |> Enum.sort()
+        |> Enum.map(fn {filter, names} ->
+          %{filter: filter, configs: names, subscribed: filter in info.filters}
+        end)
+
+      Map.put(info, :filters, filters)
+    else
+      _none -> nil
+    end
+  catch
+    :exit, _not_running -> nil
   end
 
   # Interrupts of the current revisions with their last trigger (ADR 32).
@@ -314,6 +342,41 @@ defmodule DeepsplayWeb.StatusLive do
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section :if={@mqtt} id="status-mqtt" class="text-sm">
+        <h2 class="text-lg font-semibold">MQTT</h2>
+        <div class="mt-3 rounded-lg border border-base-300 p-4">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <span class="font-mono">
+              {if @mqtt.tls, do: "mqtts", else: "mqtt"}://{@mqtt.broker}
+            </span>
+            <span class={[
+              "mqtt-state text-xs",
+              @mqtt.state == :connected && "text-green-600",
+              @mqtt.state == :connecting && "text-base-content/60",
+              @mqtt.state == :waiting && "text-amber-500"
+            ]}>
+              {mqtt_state(@mqtt.state)} since {time(@mqtt.since)}
+            </span>
+          </div>
+          <p :if={!@mqtt.tls} class="mt-1 text-xs text-amber-500">
+            Plain MQTT: user name and password travel unencrypted.
+          </p>
+          <p :if={@mqtt.last_error} class="mqtt-error mt-1 text-xs text-red-500">
+            {@mqtt.last_error}
+          </p>
+          <ul class="mt-2 space-y-1 text-xs">
+            <li :for={row <- @mqtt.filters} class="mqtt-filter">
+              <span class="font-mono">{row.filter}</span>
+              <span class="text-base-content/60">· {Enum.join(row.configs, ", ")}</span>
+              <span :if={!row.subscribed} class="text-base-content/50">· not subscribed</span>
+            </li>
+            <li :if={@mqtt.filters == []} class="text-base-content/60">
+              No configuration has an <span class="font-mono">mqtt_topic</span>.
+            </li>
+          </ul>
         </div>
       </section>
 
@@ -621,6 +684,10 @@ defmodule DeepsplayWeb.StatusLive do
   defp count(n, _one, many), do: "#{n} #{many}"
 
   defp bytes(size), do: ByteSize.format(size)
+
+  defp mqtt_state(:connected), do: "connected"
+  defp mqtt_state(:connecting), do: "connecting"
+  defp mqtt_state(:waiting), do: "waiting to reconnect"
 
   defp time(nil), do: "–"
 

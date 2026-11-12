@@ -21,7 +21,7 @@ Status values: `open`, `in progress`, `done`.
 | 3 | Interrupts: start from parameters, source of a trigger | done |
 | 4 | Payload and topic handling | done |
 | 5 | Connection, subscriptions and reloading | done |
-| 6 | Status page and catalog | open |
+| 6 | Status page and catalog | done |
 | 7 | Docs | open |
 
 Decisions taken in discussion (2026-11-12), recorded in ADR 33:
@@ -294,7 +294,7 @@ Built:
 
 ## 6. Status page and catalog
 
-Status: open
+Status: done
 
 - Status page: an MQTT section when `[mqtt]` is configured: broker, state
   with time, last error, subscribed filters. The last trigger of each
@@ -304,6 +304,28 @@ Status: open
   are) next to the trigger URL, and a `mosquitto_pub` example with a JSON
   payload from the page's variants or parameters.
 - LiveView tests for both, as in dev-0007 part 6.
+
+Built:
+
+- `DeepsplayWeb.Mqtt` broadcasts `{:mqtt_changed}` (topic `"mqtt"`,
+  `Mqtt.subscribe/0`) whenever what `info/0` returns changes; its
+  callbacks now go through one `handle/2` that compares before and after.
+- Status page, section `#status-mqtt` (only with `[mqtt]`): the broker as
+  `mqtts://host:port` or `mqtt://…`, the state ("connected", "connecting",
+  "waiting to reconnect") with its time, the last error, a warning for
+  plain MQTT, and each filter with the configurations using it and
+  whether it is subscribed. Updates live.
+- Catalog: per interrupt of a configuration with `mqtt_topic`, the topic
+  (`.interrupt-topic`) and a `mosquitto_pub` line (`.interrupt-mqtt`):
+  `--cafile` for `ca_file`, `--capath /etc/ssl/certs` for the system CAs,
+  `-u <user> -P "$PASSWORD"`, and as payload the first variant of the
+  interrupt's page as JSON, or `{}`. Single quotes in the payload are
+  escaped for the shell.
+- `test/deepsplay_web/live/mqtt_pages_test.exs`: 3 tests, using the global
+  connection against a closed port (status page with error and filters,
+  catalog with and without a filter).
+- Not checked in a browser yet; the dev server needs a restart to start
+  the connection process.
 
 ## 7. Docs
 

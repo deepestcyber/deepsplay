@@ -35,6 +35,7 @@ defmodule DeepsplayWeb.Mqtt do
   alias DeepsplayWeb.InterruptMessage
 
   @max_delay 60_000
+  @topic "mqtt"
 
   @typedoc """
   The broker as the connection needs it: `Deepsplay.HostConfig.Mqtt` with
@@ -82,6 +83,10 @@ defmodule DeepsplayWeb.Mqtt do
           }
           | nil
   def info(server \\ __MODULE__), do: GenServer.call(server, :info)
+
+  @doc "Subscribes to `{:mqtt_changed}`, sent when `info/0` changes."
+  @spec subscribe() :: :ok | {:error, term()}
+  def subscribe, do: Phoenix.PubSub.subscribe(Deepsplay.PubSub, @topic)
 
   @doc """
   Compares the host configuration with the connection now, instead of
@@ -190,39 +195,26 @@ defmodule DeepsplayWeb.Mqtt do
   end
 
   @impl true
-  def handle_continue(:reconcile, state), do: {:noreply, reconcile(state)}
+  def handle_continue(:reconcile, state), do: {:noreply, changed(state, reconcile(state))}
 
   @impl true
-  def handle_call(:info, _from, %{spec: nil} = state), do: {:reply, nil, state}
-
-  def handle_call(:info, _from, state) do
-    info = %{
-      broker: "#{state.spec.host}:#{state.spec.port}",
-      tls: state.spec.tls,
-      state: state.state,
-      since: state.since,
-      last_error: state.last_error,
-      filters: Enum.sort(state.subscribed)
-    }
-
-    {:reply, info, state}
-  end
-
-  def handle_call(:refresh, _from, state), do: {:reply, :ok, reconcile(state)}
+  def handle_call(:info, _from, state), do: {:reply, info_of(state), state}
+  def handle_call(:refresh, _from, state), do: {:reply, :ok, changed(state, reconcile(state))}
 
   @impl true
-  def handle_info({:host_config_changed}, state), do: {:noreply, reconcile(state)}
+  def handle_info(message, state), do: {:noreply, changed(state, handle(message, state))}
 
-  def handle_info(:retry, state), do: {:noreply, reconcile(%{state | timer: nil})}
+  defp handle({:host_config_changed}, state), do: reconcile(state)
+  defp handle(:retry, state), do: reconcile(%{state | timer: nil})
 
-  def handle_info({:publish, %{topic: topic, payload: payload} = message}, state) do
+  defp handle({:publish, %{topic: topic, payload: payload} = message}, state) do
     retain = Map.get(message, :retain, false)
     Task.start(fn -> InterruptMessage.dispatch(topic, payload, retain) end)
-    {:noreply, state}
+    state
   end
 
   # The result of a task talking to the broker.
-  def handle_info({ref, result}, %{task: {ref, client, job}} = state) do
+  defp handle({ref, result}, %{task: {ref, client, job}} = state) do
     Process.demonitor(ref, [:flush])
     state = %{state | task: nil}
 
@@ -231,27 +223,40 @@ defmodule DeepsplayWeb.Mqtt do
         do: finished(job, result, state),
         else: state
 
-    {:noreply, if(state.dirty, do: reconcile(%{state | dirty: false}), else: state)}
+    if state.dirty, do: reconcile(%{state | dirty: false}), else: state
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, reason}, %{task: {ref, client, _job}} = state) do
+  defp handle({:DOWN, ref, :process, _pid, reason}, %{task: {ref, client, _job}} = state) do
     state = %{state | task: nil}
-
-    state =
-      if client == state.client,
-        do: lost(state, "#{inspect(reason)}"),
-        else: state
-
-    {:noreply, state}
+    if client == state.client, do: lost(state, "#{inspect(reason)}"), else: state
   end
 
-  def handle_info({:EXIT, client, reason}, %{client: client} = state) do
-    {:noreply, lost(%{state | client: nil}, describe_exit(reason))}
-  end
+  defp handle({:EXIT, client, reason}, %{client: client} = state),
+    do: lost(%{state | client: nil}, describe_exit(reason))
 
   # Old clients, finished tasks.
-  def handle_info({:EXIT, _pid, _reason}, state), do: {:noreply, state}
-  def handle_info(_other, state), do: {:noreply, state}
+  defp handle(_other, state), do: state
+
+  defp info_of(%{spec: nil}), do: nil
+
+  defp info_of(state) do
+    %{
+      broker: "#{state.spec.host}:#{state.spec.port}",
+      tls: state.spec.tls,
+      state: state.state,
+      since: state.since,
+      last_error: state.last_error,
+      filters: Enum.sort(state.subscribed)
+    }
+  end
+
+  # Tells the status page when what `info/0` returns has changed.
+  defp changed(old, new) do
+    if info_of(old) != info_of(new),
+      do: Phoenix.PubSub.broadcast(Deepsplay.PubSub, @topic, {:mqtt_changed})
+
+    new
+  end
 
   @impl true
   def terminate(_reason, state) do

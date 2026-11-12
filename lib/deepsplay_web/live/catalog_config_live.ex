@@ -59,7 +59,18 @@ defmodule DeepsplayWeb.CatalogConfigLive do
         {:error, {:host_config, errors}} -> {:host_config, errors}
       end
 
-    socket = assign(socket, result: result, last_triggers: Interrupts.last(socket.assigns.name))
+    broker =
+      case Store.get() do
+        {:ok, host_config} -> host_config.mqtt
+        {:error, _errors} -> nil
+      end
+
+    socket =
+      assign(socket,
+        result: result,
+        last_triggers: Interrupts.last(socket.assigns.name),
+        broker: broker
+      )
 
     # Keep the selection while its page still exists.
     case {result, socket.assigns.selected} do
@@ -215,6 +226,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
             size_form={@size_form}
             sizes={@sizes}
             last_triggers={@last_triggers}
+            broker={@broker}
           />
         <% :none -> %>
           <p id="catalog-no-revision" class="text-base-content/60">
@@ -251,6 +263,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
   attr :size_form, :any, required: true
   attr :sizes, :list, required: true
   attr :last_triggers, :map, default: %{}
+  attr :broker, :any, default: nil
 
   defp catalog(assigns) do
     ~H"""
@@ -530,6 +543,12 @@ defmodule DeepsplayWeb.CatalogConfigLive do
           · up to {PageParams.format_duration(interrupt.duration)} · priority {interrupt.priority}
         </p>
         <pre class="interrupt-curl mt-2 overflow-x-auto rounded bg-base-200 p-2 text-xs">{curl(@catalog.config.name, interrupt.name)}</pre>
+        <%= if @broker && @catalog.config.mqtt_topic do %>
+          <p class="mt-2 text-xs text-base-content/60">
+            Over MQTT: <span class="interrupt-topic font-mono">{topic(@catalog.config.mqtt_topic, interrupt.name)}</span>, with the page's parameters as a JSON object
+          </p>
+          <pre class="interrupt-mqtt mt-1 overflow-x-auto rounded bg-base-200 p-2 text-xs">{mosquitto_pub(@broker, @catalog.config.mqtt_topic, interrupt.name, payload(@catalog, interrupt))}</pre>
+        <% end %>
       </div>
     </section>
 
@@ -987,6 +1006,43 @@ defmodule DeepsplayWeb.CatalogConfigLive do
   defp curl(name, interrupt) do
     url = DeepsplayWeb.Endpoint.url() <> Interrupts.path(name, interrupt)
     ~s(curl -X POST -H "Authorization: Bearer $TOKEN" "#{url}")
+  end
+
+  # The topic of an interrupt: the filter with its last level replaced by
+  # the name; other "+" levels stay for the reader to fill in (ADR 33).
+  defp topic(filter, interrupt) do
+    filter |> String.split("/") |> List.replace_at(-1, interrupt) |> Enum.join("/")
+  end
+
+  # An example payload: the first variant of the interrupt's page as JSON,
+  # or an empty object.
+  defp payload(catalog, interrupt) do
+    with %{doc: %{variants: [%{query: query} | _more]}} when is_binary(query) <-
+           Enum.find(catalog.pages, &(&1.path == interrupt.path)) do
+      query |> URI.decode_query() |> Jason.encode!()
+    else
+      _no_variant -> "{}"
+    end
+  end
+
+  # A publish example without the password.
+  defp mosquitto_pub(broker, filter, interrupt, payload) do
+    tls =
+      cond do
+        not broker.tls -> []
+        broker.ca_file -> ["--cafile #{broker.ca_file}"]
+        true -> ["--capath /etc/ssl/certs"]
+      end
+
+    user = if broker.username, do: [~s(-u #{broker.username} -P "$PASSWORD")], else: []
+
+    Enum.join(
+      ["mosquitto_pub -h #{broker.host} -p #{broker.port}"] ++
+        tls ++
+        user ++
+        [~s(-t "#{topic(filter, interrupt)}" -m '#{String.replace(payload, "'", "'\\''")}')],
+      " "
+    )
   end
 
   defp last_trigger(nil), do: "not triggered since the start"
