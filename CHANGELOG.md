@@ -8,8 +8,9 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - Behind a reverse proxy with HTTPS, screens and the status page failed the
   WebSocket origin check unless `DEEPSPLAY_ORIGINS` listed the names.
   `DEEPSPLAY_TRUSTED_PROXIES` names the proxies (IP addresses or CIDR
-  ranges) whose `X-Forwarded-Proto` deepsplay trusts; other clients' headers
-  are ignored, host and port never come from headers (ADR 34,
+  ranges) whose `X-Forwarded-Proto` and `X-Forwarded-For` deepsplay trusts,
+  so the status page also shows the screens' own addresses; other clients'
+  headers are ignored, host and port never come from headers (ADR 34,
   [deployment.md](docs/deployment.md#behind-a-reverse-proxy)).
 
 ## 0.5.0 – 2026-11-12

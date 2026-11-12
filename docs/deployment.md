@@ -17,7 +17,7 @@ the GitHub Container Registry (ADR 13):
 | Secrets (optional) | file at `DEEPSPLAY_SECRETS` (read-only mount, mode 0600), or `DEEPSPLAY_SECRET_<NAME>` variables | ADR 8 |
 | Port | 4000 (`PORT`) | plain HTTP; put a reverse proxy in front for HTTPS |
 | Allowed origins (optional) | `DEEPSPLAY_ORIGINS` | default: the request's own host, so screens can use an IP or any name |
-| Trusted reverse proxies (optional) | `DEEPSPLAY_TRUSTED_PROXIES` | IP addresses or CIDR ranges whose `X-Forwarded-Proto` is trusted; see [Behind a reverse proxy](#behind-a-reverse-proxy) |
+| Trusted reverse proxies (optional) | `DEEPSPLAY_TRUSTED_PROXIES` | IP addresses or CIDR ranges whose `X-Forwarded-Proto` and `X-Forwarded-For` are trusted; see [Behind a reverse proxy](#behind-a-reverse-proxy) |
 
 The container runs as user `deepsplay` (uid 10001). Files mounted into it must
 be readable by that user; the secrets file can stay mode 0600 if it is owned by
@@ -114,27 +114,28 @@ checks the browser's origin against the request: same scheme, host and
 port. Behind the proxy, the browser uses `https://display.example.org`
 while deepsplay sees `http://display.example.org:4000`, and the check fails.
 Tell deepsplay the proxy's address, so it takes the scheme from the proxy's
-`X-Forwarded-Proto` header (ADR 34):
+`X-Forwarded-Proto` header and the screen's address from `X-Forwarded-For`
+(ADR 34):
 
 ```sh
 DEEPSPLAY_TRUSTED_PROXIES=10.0.0.2          # or ranges: 172.16.0.0/12,fd00::/8
 ```
 
 - Name the proxy, not the screens' network: every address in the list may
-  set the scheme. Screens that reach port 4000 directly keep working.
-- Only `X-Forwarded-Proto` is used, and the port becomes 443 (or 80). Host
-  and port are never taken from headers, and the proxy must pass the
-  original `Host` on, which Caddy does by default. For nginx:
-  `proxy_set_header Host $host;` and
-  `proxy_set_header X-Forwarded-Proto $scheme;`.
+  set the scheme and the client address. Screens that reach port 4000
+  directly keep working.
+- The port becomes 443 (or 80). Host and port are never taken from headers,
+  and the proxy must pass the original `Host` on, which Caddy does by
+  default. For nginx: `proxy_set_header Host $host;`,
+  `proxy_set_header X-Forwarded-Proto $scheme;` and
+  `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`.
+- With several proxies in a row, list all of them.
 - In a container, the proxy's address is the one deepsplay sees, e.g. the
   Docker network's gateway or the proxy container's address.
 - HTTPS on another port than 443: set
   `DEEPSPLAY_ORIGINS=//display.example.org` instead, which compares the host
   only.
 - An invalid value stops deepsplay at start.
-- The status page shows the proxy's address for screens that come through
-  it.
 
 ## Docker Compose (any host, including Raspberry Pi OS)
 

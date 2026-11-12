@@ -92,6 +92,33 @@ defmodule DeepsplayWeb.StatusLiveTest do
     assert has_element?(status, "#status-screens", "No screen is connected")
   end
 
+  test "a screen behind a trusted proxy shows its own address", ctx do
+    {:ok, _sha} = Revisions.refresh(ctx.config)
+    Phoenix.PubSub.subscribe(Deepsplay.PubSub, Presence.topic())
+
+    previous = DeepsplayWeb.TrustedProxies.ranges()
+    on_exit(fn -> :persistent_term.put({DeepsplayWeb.TrustedProxies, :proxies}, previous) end)
+    DeepsplayWeb.TrustedProxies.setup!("10.0.0.2")
+
+    {:ok, status, _html} = live(ctx.conn, ~p"/status")
+
+    for {peer, label} <- [{{10, 0, 0, 2}, "proxied"}, {{10, 0, 0, 3}, "direct"}] do
+      conn =
+        put_private(build_conn(), :live_view_connect_info, %{
+          peer_data: %{address: peer, port: 50_000, ssl_cert: nil},
+          x_headers: [{"x-forwarded-for", "192.168.1.20"}]
+        })
+
+      {:ok, _screen, _html} = live(conn, ~p"/?screen=#{label}")
+      await_diff(fn diff -> joined?(diff, &(&1.label == label)) end)
+    end
+
+    assert has_element?(status, "#status-screens tr", "proxied")
+    assert has_element?(status, "#status-screens tr", "192.168.1.20")
+    assert has_element?(status, "#status-screens tr", "10.0.0.3")
+    refute has_element?(status, "#status-screens tr", "10.0.0.2")
+  end
+
   # Presence diffs from screens of earlier tests can still arrive; wait for
   # the one this test caused. The status page received it too, before any
   # later render.

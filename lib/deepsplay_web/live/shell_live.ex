@@ -37,6 +37,7 @@ defmodule DeepsplayWeb.ShellLive do
   alias DeepsplayWeb.Interrupts
   alias DeepsplayWeb.Presence
   alias DeepsplayWeb.ScreenPlan
+  alias DeepsplayWeb.TrustedProxies
 
   @impl true
   def mount(params, _session, socket) do
@@ -124,10 +125,23 @@ defmodule DeepsplayWeb.ShellLive do
   defp default_name(%{assigns: %{config: config}}), do: config.name
   defp default_name(_socket), do: nil
 
+  # The screen's address, behind a trusted proxy from X-Forwarded-For
+  # (ADR 34). The peer data comes from the connection, not from the request
+  # that the endpoint rewrites.
   defp peer_ip(socket) do
     case get_connect_info(socket, :peer_data) do
-      %{address: address} -> address |> :inet.ntoa() |> to_string()
-      _other -> nil
+      %{address: address} ->
+        forwarded_for =
+          for {"x-forwarded-for", value} <- get_connect_info(socket, :x_headers) || [],
+              do: value
+
+        address
+        |> TrustedProxies.client_ip(forwarded_for)
+        |> :inet.ntoa()
+        |> to_string()
+
+      _other ->
+        nil
     end
   end
 

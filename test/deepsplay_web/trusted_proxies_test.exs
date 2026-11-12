@@ -65,6 +65,15 @@ defmodule DeepsplayWeb.TrustedProxiesTest do
       assert TrustedProxies.rewrite(conn, []) == conn
     end
 
+    test "takes the client address only from a trusted proxy" do
+      headers = [{"x-forwarded-for", "192.168.1.20"}]
+
+      assert TrustedProxies.rewrite(forwarded(headers), @proxy).remote_ip == {192, 168, 1, 20}
+
+      conn = forwarded(headers, {10, 0, 0, 3})
+      assert TrustedProxies.rewrite(conn, @proxy) == conn
+    end
+
     test "never takes the host" do
       conn =
         forwarded([{"x-forwarded-proto", "https"}, {"x-forwarded-host", "evil.example"}])
@@ -89,6 +98,49 @@ defmodule DeepsplayWeb.TrustedProxiesTest do
         |> Map.update!(:req_headers, &[{"x-forwarded-proto", "http"} | &1])
 
       assert TrustedProxies.rewrite(conn, @proxy) == conn
+    end
+  end
+
+  describe "client_ip/3" do
+    @chain [{{10, 0, 0, 2}, 32}, {{172, 16, 0, 0}, 12}]
+
+    test "skips trusted proxies from the right" do
+      assert TrustedProxies.client_ip(
+               {10, 0, 0, 2},
+               ["1.2.3.4, 192.168.1.20, 172.16.0.5"],
+               @chain
+             ) ==
+               {192, 168, 1, 20}
+
+      # Several header lines count as one list.
+      assert TrustedProxies.client_ip({10, 0, 0, 2}, ["192.168.1.20", "172.16.0.5"], @chain) ==
+               {192, 168, 1, 20}
+    end
+
+    test "all trusted: the leftmost" do
+      assert TrustedProxies.client_ip({10, 0, 0, 2}, ["172.16.0.9, 172.16.0.5"], @chain) ==
+               {172, 16, 0, 9}
+    end
+
+    test "an invalid entry stops at the last good address" do
+      assert TrustedProxies.client_ip({10, 0, 0, 2}, ["1.2.3.4, unknown, 172.16.0.5"], @chain) ==
+               {172, 16, 0, 5}
+
+      assert TrustedProxies.client_ip({10, 0, 0, 2}, ["1.2.3.4:5678"], @chain) == {10, 0, 0, 2}
+    end
+
+    test "IPv6 and IPv4-mapped addresses" do
+      mapped_proxy = {0, 0, 0, 0, 0, 0xFFFF, 0x0A00, 0x0002}
+
+      assert TrustedProxies.client_ip(mapped_proxy, ["2001:db8::1"], @chain) ==
+               {0x2001, 0xDB8, 0, 0, 0, 0, 0, 1}
+
+      assert TrustedProxies.client_ip(mapped_proxy, ["::ffff:192.168.1.20"], @chain) ==
+               {192, 168, 1, 20}
+
+      # Untrusted peers come back as plain IPv4 too.
+      assert TrustedProxies.client_ip({0, 0, 0, 0, 0, 0xFFFF, 0xC0A8, 0x0114}, [], @chain) ==
+               {192, 168, 1, 20}
     end
   end
 
@@ -134,7 +186,8 @@ defmodule DeepsplayWeb.TrustedProxiesTest do
 
       # Test requests come from 127.0.0.1.
       TrustedProxies.setup!("127.0.0.1")
-      assert %{scheme: :https, port: 443} = get(conn, ~p"/status")
+      conn = put_req_header(conn, "x-forwarded-for", "192.168.1.20")
+      assert %{scheme: :https, port: 443, remote_ip: {192, 168, 1, 20}} = get(conn, ~p"/status")
     end
   end
 end

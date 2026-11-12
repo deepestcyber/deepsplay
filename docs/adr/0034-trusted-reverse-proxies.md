@@ -51,17 +51,24 @@ For a request whose peer address is in the list:
 
 - `X-Forwarded-Proto` (`http` or `https`) sets the scheme, and the port
   becomes the scheme's default port (443, 80);
-- a missing, repeated or invalid header leaves the request unchanged;
+- a missing, repeated or invalid header leaves the scheme unchanged;
+- `X-Forwarded-For` gives the client address: read from the right, trusted
+  proxies are skipped and the first address that is not trusted is the
+  client. Entries further left were written by the client itself and are
+  ignored. An invalid entry stops the search at the last good address; if
+  all entries are trusted, the leftmost is taken. The address becomes the
+  request's `remote_ip`, and the status page shows it for screens;
 - host and port are never taken from a header (`X-Forwarded-Host`,
-  `X-Forwarded-Port`), and the client address (`X-Forwarded-For`) is not
-  used either.
+  `X-Forwarded-Port`).
 
 IPv4 peers on the dual-stack listener arrive as IPv4-mapped IPv6 addresses
 and match IPv4 entries.
 
 The rewrite runs at the start of `DeepsplayWeb.Endpoint.call/2`, not as a
 plug: Phoenix dispatches sockets before the endpoint's plugs, and the origin
-check needs the rewritten request.
+check needs the rewritten request. The LiveView socket's peer data comes
+from the connection, not the request, so screens get their address from the
+socket's `x-` headers with the same rule.
 
 ## Consequences
 
@@ -74,5 +81,8 @@ check needs the rewritten request.
   check; `DEEPSPLAY_ORIGINS` remains the way for that case.
 - Trusting a whole network trusts every client in it. The list should name
   the proxy, not the screens' network.
-- Screens behind the proxy still show the proxy's address on the status
-  page, since `X-Forwarded-For` is not used.
+- Screens behind the proxy show their own address on the status page.
+- Caddy replaces `X-Forwarded-For` with the address it sees; nginx with
+  `$proxy_add_x_forwarded_for` appends to the client's list, which the
+  right-to-left rule handles. A chain of proxies works when all of them are
+  in the list.

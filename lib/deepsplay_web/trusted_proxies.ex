@@ -1,12 +1,12 @@
 defmodule DeepsplayWeb.TrustedProxies do
   @moduledoc """
   Takes the scheme of a request from `X-Forwarded-Proto`, with the scheme's
-  default port, but only when the request comes from a trusted reverse proxy
-  (ADR 34).
+  default port, and the client address from `X-Forwarded-For`, but only when
+  the request comes from a trusted reverse proxy (ADR 34).
 
   The proxies are set with `DEEPSPLAY_TRUSTED_PROXIES`: IP addresses or CIDR
   ranges, separated by commas. Without it, no header is trusted and requests
-  keep the scheme and port they arrived with.
+  keep the scheme, port and address they arrived with.
 
   The host and port are never taken from a header: proxies such as Caddy pass
   the `Host` header on unchanged, but pass a client's `X-Forwarded-Port` on
@@ -126,9 +126,52 @@ defmodule DeepsplayWeb.TrustedProxies do
   end
 
   @doc """
-  Sets the scheme from `X-Forwarded-Proto` (`http` or `https`) and the port
-  to the scheme's default port if the request comes from a trusted proxy. A
-  missing, repeated or invalid header leaves the request as it is.
+  The client address for a connection from `peer` with the given
+  `X-Forwarded-For` header values.
+
+  Only a trusted `peer` is believed. The list is read from the right, the
+  entries the nearest proxies added: trusted proxies are skipped, the first
+  address that is not trusted is the client. Entries further left were
+  written by the client itself and are ignored. An invalid entry stops the
+  search at the last good address; if all are trusted, the leftmost wins.
+
+      iex> ranges = [{{10, 0, 0, 2}, 32}]
+      iex> DeepsplayWeb.TrustedProxies.client_ip({10, 0, 0, 2}, ["6.6.6.6, 192.168.1.20"], ranges)
+      {192, 168, 1, 20}
+      iex> DeepsplayWeb.TrustedProxies.client_ip({10, 0, 0, 3}, ["192.168.1.20"], ranges)
+      {10, 0, 0, 3}
+      iex> DeepsplayWeb.TrustedProxies.client_ip({10, 0, 0, 2}, [], ranges)
+      {10, 0, 0, 2}
+  """
+  @spec client_ip(:inet.ip_address(), [String.t()], [range()]) :: :inet.ip_address()
+  def client_ip(peer, forwarded_for, ranges \\ ranges()) do
+    peer = normalize(peer)
+
+    if trusted?(peer, ranges) do
+      forwarded_for
+      |> Enum.flat_map(&String.split(&1, ","))
+      |> Enum.map(&String.trim/1)
+      |> Enum.reverse()
+      |> Enum.reduce_while(peer, fn entry, last ->
+        case :inet.parse_strict_address(String.to_charlist(entry)) do
+          {:ok, ip} ->
+            ip = normalize(ip)
+            if trusted?(ip, ranges), do: {:cont, ip}, else: {:halt, ip}
+
+          {:error, _reason} ->
+            {:halt, last}
+        end
+      end)
+    else
+      peer
+    end
+  end
+
+  @doc """
+  Rewrites a request that comes from a trusted proxy: the scheme from
+  `X-Forwarded-Proto` (`http` or `https`) with the scheme's default port, and
+  `remote_ip` from `X-Forwarded-For` (`client_ip/3`). A missing, repeated or
+  invalid `X-Forwarded-Proto` leaves scheme and port as they are.
   """
   @spec rewrite(Plug.Conn.t(), [range()]) :: Plug.Conn.t()
   def rewrite(conn, ranges \\ ranges())
@@ -136,11 +179,16 @@ defmodule DeepsplayWeb.TrustedProxies do
   def rewrite(conn, []), do: conn
 
   def rewrite(%Plug.Conn{} = conn, ranges) do
-    with true <- trusted?(conn.remote_ip, ranges),
-         {:ok, scheme} <- forwarded_scheme(conn) do
-      %{conn | scheme: scheme, port: if(scheme == :https, do: 443, else: 80)}
+    if trusted?(conn.remote_ip, ranges) do
+      forwarded_for = Plug.Conn.get_req_header(conn, "x-forwarded-for")
+      conn = %{conn | remote_ip: client_ip(conn.remote_ip, forwarded_for, ranges)}
+
+      case forwarded_scheme(conn) do
+        {:ok, scheme} -> %{conn | scheme: scheme, port: if(scheme == :https, do: 443, else: 80)}
+        :error -> conn
+      end
     else
-      _other -> conn
+      conn
     end
   end
 
