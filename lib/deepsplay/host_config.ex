@@ -28,7 +28,8 @@ defmodule Deepsplay.HostConfig do
     repo_upstreams: true,
     repo_upstream_hosts: [],
     state_dir: nil,
-    shared_state: true
+    shared_state: true,
+    kiosk_mode: true
   ]
 
   @type t :: %__MODULE__{
@@ -41,6 +42,7 @@ defmodule Deepsplay.HostConfig do
           repo_upstream_hosts: [String.t()],
           state_dir: String.t(),
           shared_state: boolean(),
+          kiosk_mode: boolean(),
           configs: %{String.t() => Config.t()},
           upstreams: %{String.t() => Upstream.t()},
           mqtt: Mqtt.t() | nil
@@ -59,7 +61,8 @@ defmodule Deepsplay.HostConfig do
     {"repo_upstreams", :repo_upstreams, :boolean, default: true},
     {"repo_upstream_hosts", :repo_upstream_hosts, &__MODULE__.cast_host_patterns/1, default: []},
     {"state_dir", :state_dir, :string, default: nil},
-    {"shared_state", :shared_state, :boolean, default: true}
+    {"shared_state", :shared_state, :boolean, default: true},
+    {"kiosk_mode", :kiosk_mode, :boolean, default: true}
   ]
 
   @doc """
@@ -149,6 +152,7 @@ defmodule Deepsplay.HostConfig do
            # cleanup leaves it alone.
            state_dir: Path.expand(server.state_dir || Path.join(server.cache_dir, ".state")),
            shared_state: server.shared_state,
+           kiosk_mode: server.kiosk_mode,
            configs: Map.new(configs, &{&1.name, with_server_defaults(&1, server)}),
            upstreams: upstreams,
            mqtt: mqtt

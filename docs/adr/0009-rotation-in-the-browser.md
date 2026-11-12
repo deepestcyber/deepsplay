@@ -15,6 +15,9 @@ display time early with `Deepsplay.done()`.
 Amended by [32](0032-interrupts.md): interrupts triggered over HTTP are pushed
 to screens and shown at once.
 
+Amended by [35](0035-kiosk-mode-switch.md): with `kiosk_mode = false` the
+pointer shows and the visible page takes pointer input.
+
 ## Context
 
 A screen cycles through the pages of a revision. Screens must keep working when

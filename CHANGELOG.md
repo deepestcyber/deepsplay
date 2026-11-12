@@ -5,6 +5,10 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- `kiosk_mode = false` in `[server]` shows the pointer on screens and lets
+  the visible page take mouse input, for development. The default, `true`,
+  hides it as before (ADR 35).
+
 ## 0.5.1 – 2026-11-12
 
 deepsplay behind a reverse proxy with HTTPS. No changes are needed for

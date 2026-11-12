@@ -36,6 +36,11 @@ defmodule DeepsplayWeb.ShellLiveTest do
 
       assert has_element?(view, "#fallback-unknown-config", "nowhere")
     end
+
+    test "screens are in kiosk mode by default", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      assert has_element?(view, "#screen.cursor-none")
+    end
   end
 
   describe "when the host configuration changes" do
@@ -68,6 +73,16 @@ defmodule DeepsplayWeb.ShellLiveTest do
       {:ok, view, _html} = live(conn, ~p"/c/kitchen")
 
       change(&update_in(&1.configs["lobby"], fn config -> %{config | description: "new"} end))
+      assert has_element?(view, "#fallback-config", "kitchen")
+      refute_redirected(view, "/c/kitchen")
+    end
+
+    test "kiosk mode switched off shows the pointer, without a reload", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/c/kitchen")
+      assert has_element?(view, "#screen.cursor-none")
+
+      change(&%{&1 | kiosk_mode: false})
+      refute has_element?(view, "#screen.cursor-none")
       assert has_element?(view, "#fallback-config", "kitchen")
       refute_redirected(view, "/c/kitchen")
     end

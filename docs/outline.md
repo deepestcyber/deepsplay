@@ -83,6 +83,7 @@ upstream_cache_size = "200MB"   # upstream answers, in memory and on disk
 repo_upstreams      = true      # manifests may declare upstreams without secrets
 repo_upstream_hosts = []        # ... for these hosts only, e.g. ["*.dwd.de"]; empty: any
 shared_state        = true      # shared state for pages (ADR 21)
+kiosk_mode          = true      # hide the pointer; false for development (ADR 35)
 state_dir           = "/var/lib/display/state"   # default: <cache_dir>/.state
 
 [[config]]
@@ -171,7 +172,7 @@ A screen opens `/` or `/c/<name>` in a browser in kiosk mode. The page it receiv
 - **Pinned page.** `/?page=<path>` or `/c/<name>?page=<path>` shows one file of the revision without rotating (ADR 11). The path is relative to `pages/`; any deliverable file can be pinned, not only listed pages. A new revision reloads the pinned page.
 - **Live update.** When the poller publishes a new revision, every LiveView of that configuration receives the new plan and applies it at the next page change.
 - **Reconnect.** LiveView reconnects by itself after a server restart or a network break and then receives the current plan. Until then the screen continues with the plan it has.
-- **No pointer.** The shell sets `cursor: none`, and the iframes take no pointer input, so the pointer is hidden on every page. Pages get no mouse or touch input. Hiding the pointer in the operating system as well covers the moment before the shell loads.
+- **No pointer.** The shell sets `cursor: none`, and the iframes take no pointer input, so the pointer is hidden on every page. Pages get no mouse or touch input. Hiding the pointer in the operating system as well covers the moment before the shell loads. For development, `kiosk_mode = false` in `[server]` shows the pointer and lets the visible page take mouse input (ADR 35).
 
 ### Status page
 

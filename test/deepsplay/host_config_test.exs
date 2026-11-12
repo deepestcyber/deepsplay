@@ -303,6 +303,24 @@ defmodule Deepsplay.HostConfigTest do
              )
     end
 
+    test "kiosk mode is on unless switched off" do
+      assert {:ok, %{kiosk_mode: true}} = parse(minimal())
+
+      toml =
+        String.replace(
+          minimal(),
+          ~s(default_config = "lobby"),
+          ~s(default_config = "lobby"\nkiosk_mode = false)
+        )
+
+      assert {:ok, %{kiosk_mode: false}} = parse(toml)
+
+      assert {:error, errors} =
+               parse(String.replace(toml, "kiosk_mode = false", ~s(kiosk_mode = "no")))
+
+      assert Enum.any?(errors, &(&1 =~ "kiosk_mode"))
+    end
+
     test "shared state settings" do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.state_dir == "/cache/.state"

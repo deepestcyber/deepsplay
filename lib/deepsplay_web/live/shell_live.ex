@@ -44,6 +44,8 @@ defmodule DeepsplayWeb.ShellLive do
     requested = Map.get(params, "name", :default)
     if connected?(socket), do: Watcher.subscribe()
 
+    socket = assign(socket, kiosk_mode: kiosk_mode())
+
     socket =
       case Store.lookup(requested) do
         {:ok, config} ->
@@ -122,6 +124,14 @@ defmodule DeepsplayWeb.ShellLive do
 
   defp presence_state(%{assigns: %{state: state}}), do: %{state: state, sha: nil}
 
+  # Without a usable host configuration, screens stay in kiosk mode.
+  defp kiosk_mode do
+    case Store.get() do
+      {:ok, host_config} -> host_config.kiosk_mode
+      _error -> true
+    end
+  end
+
   defp default_name(%{assigns: %{config: config}}), do: config.name
   defp default_name(_socket), do: nil
 
@@ -165,6 +175,8 @@ defmodule DeepsplayWeb.ShellLive do
   # A changed host configuration: reload if what this screen shows depends
   # on the change (a new revision is announced separately).
   def handle_info({:host_config_changed}, socket) do
+    socket = assign(socket, kiosk_mode: kiosk_mode())
+
     if Store.lookup(socket.assigns.requested) == socket.assigns.lookup,
       do: {:noreply, socket},
       else: {:noreply, push_navigate(socket, to: socket.assigns.path)}
@@ -244,7 +256,7 @@ defmodule DeepsplayWeb.ShellLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.screen>
+    <Layouts.screen kiosk_mode={@kiosk_mode}>
       <%= case @state do %>
         <% :playing -> %>
           <.rotation plan={@plan} />
@@ -401,7 +413,9 @@ defmodule DeepsplayWeb.ShellLive do
         },
 
         // Frames take no pointer input: the mouse always stays over the shell,
-        // whose cursor: none then hides the pointer on every page.
+        // whose cursor: none then hides the pointer on every page. Without
+        // kiosk mode, the screen layout gives the visible frame pointer input
+        // (ADR 35).
         createFrame() {
           const frame = document.createElement("iframe")
           frame.className =

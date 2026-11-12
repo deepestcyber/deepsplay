@@ -6,6 +6,7 @@ cache_dir      = "/var/lib/deepsplay/cache"   # on the container's volume
 default_config = "lobby"                      # shown on /
 poll_interval  = "30s"
 keep_revisions = 3
+# kiosk_mode   = false   # show the pointer on screens, for development (ADR 35)
 
 [[config]]
 name = "lobby"

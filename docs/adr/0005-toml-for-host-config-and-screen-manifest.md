@@ -21,6 +21,9 @@ can be switched off with `enabled = false`.
 Amended by [33](0033-interrupts-over-mqtt.md): the host configuration can
 have an `[mqtt]` section and a configuration an `mqtt_topic`.
 
+Amended by [35](0035-kiosk-mode-switch.md): `kiosk_mode` in `[server]`
+switches off hiding the pointer, for development.
+
 ## Context
 
 deepsplay reads two kinds of configuration: the host configuration (server

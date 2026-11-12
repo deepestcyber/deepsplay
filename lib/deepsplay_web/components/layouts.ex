@@ -65,11 +65,25 @@ defmodule DeepsplayWeb.Layouts do
       </Layouts.screen>
 
   """
+  attr :kiosk_mode, :boolean,
+    default: true,
+    doc: """
+    hides the pointer and keeps it away from the pages; without, for
+    development, the pointer shows and the visible page takes mouse input
+    (the hidden frame of the rotation stays click-through)
+    """
+
   slot :inner_block, required: true
 
   def screen(assigns) do
     ~H"""
-    <main class="h-dvh w-dvw overflow-hidden cursor-none bg-zinc-950 text-zinc-100">
+    <main
+      id="screen"
+      class={[
+        "h-dvh w-dvw overflow-hidden bg-zinc-950 text-zinc-100",
+        if(@kiosk_mode, do: "cursor-none", else: "[&_iframe.opacity-100]:pointer-events-auto")
+      ]}
+    >
       {render_slot(@inner_block)}
     </main>
     """
