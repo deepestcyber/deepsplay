@@ -18,7 +18,7 @@ Status values: `open`, `in progress`, `done`.
 | --- | --- | --- |
 | 1 | Client library | done |
 | 2 | Host configuration: `[mqtt]` and `mqtt_topic` | done |
-| 3 | Interrupts: start from parameters, source of a trigger | open |
+| 3 | Interrupts: start from parameters, source of a trigger | done |
 | 4 | Payload and topic handling | open |
 | 5 | Connection, subscriptions and reloading | open |
 | 6 | Status page and catalog | open |
@@ -153,7 +153,7 @@ Built:
 
 ## 3. Interrupts: start from parameters, source of a trigger
 
-Status: open
+Status: done
 
 - `DeepsplayWeb.Interrupts.start/3` takes the raw query string today.
   Split it: `start(config, name, params, source)` with `params` a map of
@@ -168,6 +168,24 @@ Status: open
   sources.
 - Tests: existing controller tests unchanged; new unit tests for `start/4`
   with `:mqtt` and the recorded source.
+
+Built:
+
+- `Interrupts.start(config, name, params, source)`: `params` is
+  `{:ok, [{name, value}]}` (pairs in the order given, as before) or
+  `{:error, {:invalid, reasons}}`. Passing an error in keeps the order of
+  checks of the HTTP route: an unknown interrupt is a `404` even with a
+  broken query, and part 4 can record a broken payload the same way.
+- `Interrupts.parse_query/1` is public; the controller calls it and passes
+  the result on.
+- The last-trigger entry has `source` (`:http`, `:mqtt`) and `reasons` (for
+  a `422`, empty otherwise). `stop/2` records `:http`.
+- `describe/1` for MQTT: "MQTT <time>, started on 2 screens", "…, ignored,
+  started within 2 seconds", "…, invalid parameters: <reasons>". HTTP
+  lines are unchanged.
+- `test/deepsplay_web/interrupts_test.exs`: 8 tests (start with `:mqtt`,
+  shared rate limit, recorded reasons, undeclared parameters, unknown
+  before unreadable, `parse_query/1`, `describe/1`).
 
 ## 4. Payload and topic handling
 

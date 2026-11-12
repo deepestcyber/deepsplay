@@ -4,9 +4,13 @@ defmodule DeepsplayWeb.Interrupts do
   current manifest, builds the page URL, sends the event to the screens of
   the configuration and forgets it.
 
+  Triggers come over HTTP (`DeepsplayWeb.InterruptController`) or MQTT
+  (ADR 33); `start/4` takes the parameters already read from either, and the
+  source for the record.
+
   Only the last answer for each interrupt is kept (for the status page) and
-  when it was last started (for the rate limit), in an ETS table owned by
-  this process. A restart forgets both.
+  when it was last started (for the rate limit, shared by both sources), in
+  an ETS table owned by this process. A restart forgets both.
 
   Screens subscribe with `subscribe/1` and receive
   `{:interrupt, %{name, url, priority, duration}}` or
@@ -33,6 +37,15 @@ defmodule DeepsplayWeb.Interrupts do
           | {:error, :too_many}
           | {:error, {:invalid, [String.t()]}}
 
+  @typedoc "Where a trigger came from."
+  @type source :: :http | :mqtt
+
+  @typedoc """
+  The parameters of a trigger as name-value pairs, in the order given, or
+  why they could not be read.
+  """
+  @type params :: {:ok, [{String.t(), String.t()}]} | {:error, {:invalid, [String.t()]}}
+
   @doc false
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
@@ -42,12 +55,13 @@ defmodule DeepsplayWeb.Interrupts do
 
   @doc """
   Starts the interrupt `name` of `config` on the screens connected now, with
-  the parameters in `query` (the raw query string, or `nil`).
+  `params` (see `parse_query/1`). An unknown interrupt is reported before
+  parameters that could not be read. `source` is kept in the record.
   """
-  @spec start(Config.t(), String.t(), String.t() | nil) :: answer()
-  def start(%Config{} = config, name, query) do
+  @spec start(Config.t(), String.t(), params(), source()) :: answer()
+  def start(%Config{} = config, name, params, source) do
     with {:ok, current, interrupt} <- find(config, name),
-         {:ok, given} <- parse_query(query),
+         {:ok, given} <- params,
          :ok <- check(config, current, interrupt, given),
          :ok <- claim(config.name, name) do
       url = url(config, current, interrupt, given)
@@ -62,7 +76,7 @@ defmodule DeepsplayWeb.Interrupts do
       Phoenix.PubSub.broadcast(@pubsub, topic(config.name), {:interrupt, payload})
       {:ok, %{screens: screens(config.name), duration: interrupt.duration}}
     end
-    |> record(config.name, name, :start)
+    |> record(config.name, name, :start, source)
   end
 
   @doc "Ends the interrupt `name` of `config` on the screens showing it."
@@ -72,12 +86,14 @@ defmodule DeepsplayWeb.Interrupts do
       Phoenix.PubSub.broadcast(@pubsub, topic(config.name), {:interrupt_end, %{name: name}})
       {:ok, %{screens: screens(config.name), duration: interrupt.duration}}
     end
-    |> record(config.name, name, :stop)
+    |> record(config.name, name, :stop, :http)
   end
 
   @doc """
   The last answer for each interrupt of the configuration `name` since the
-  start: `%{interrupt => %{at, action, status, screens}}`.
+  start: `%{interrupt => %{at, action, source, status, screens, reasons}}`.
+  `status` is the HTTP status of the answer, also for MQTT, where nobody
+  gets it; `reasons` explains a `422`.
   """
   @spec last(String.t()) :: %{String.t() => map()}
   def last(name) do
@@ -88,15 +104,34 @@ defmodule DeepsplayWeb.Interrupts do
 
   @doc """
   One line about a trigger from `last/1`, e.g.
-  `"POST 2027-03-04 10:00:00 UTC, 202 to 2 screens"`.
+  `"POST 2027-03-04 10:00:00 UTC, 202 to 2 screens"` or
+  `"MQTT 2027-03-04 10:00:00 UTC, started on 2 screens"`. MQTT publishers
+  get no answer, so the outcome is worded, with the reasons of invalid
+  parameters.
   """
   @spec describe(map()) :: String.t()
+  def describe(%{at: at, source: :mqtt} = entry) do
+    outcome =
+      case entry do
+        %{status: 202, screens: screens} -> "started on #{count_screens(screens)}"
+        %{status: 429} -> "ignored, started within 2 seconds"
+        %{status: 422, reasons: reasons} -> "invalid parameters: " <> Enum.join(reasons, "; ")
+      end
+
+    "MQTT #{time(at)}, #{outcome}"
+  end
+
   def describe(%{at: at, action: action, status: status, screens: screens}) do
     method = if action == :start, do: "POST", else: "DELETE"
-    time = at |> DateTime.truncate(:second) |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
-    to = if screens, do: " to #{screens} screen#{if screens == 1, do: "", else: "s"}", else: ""
-    "#{method} #{time}, #{status}#{to}"
+    to = if screens, do: " to #{count_screens(screens)}", else: ""
+    "#{method} #{time(at)}, #{status}#{to}"
   end
+
+  defp time(at),
+    do: at |> DateTime.truncate(:second) |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+  defp count_screens(1), do: "1 screen"
+  defp count_screens(n), do: "#{n} screens"
 
   @doc "The path that triggers the interrupt `interrupt` of the configuration `name`."
   @spec path(String.t(), String.t()) :: String.t()
@@ -129,13 +164,18 @@ defmodule DeepsplayWeb.Interrupts do
     end
   end
 
-  defp parse_query(nil), do: {:ok, []}
-  defp parse_query(""), do: {:ok, []}
+  @doc """
+  Reads the parameters of an HTTP trigger from its raw query string (or
+  `nil`), for `start/4`: at most 2 KB, each name once.
+  """
+  @spec parse_query(String.t() | nil) :: params()
+  def parse_query(nil), do: {:ok, []}
+  def parse_query(""), do: {:ok, []}
 
-  defp parse_query(query) when byte_size(query) > @max_query,
+  def parse_query(query) when byte_size(query) > @max_query,
     do: {:error, {:invalid, ["the query is larger than #{div(@max_query, 1024)} KB"]}}
 
-  defp parse_query(query) do
+  def parse_query(query) do
     given = query |> URI.query_decoder() |> Enum.to_list()
 
     case given |> Enum.frequencies_by(&elem(&1, 0)) |> Enum.filter(fn {_, n} -> n > 1 end) do
@@ -190,17 +230,25 @@ defmodule DeepsplayWeb.Interrupts do
     do:
       GenServer.call(__MODULE__, {:claim, config_name, name, System.monotonic_time(:millisecond)})
 
-  defp record({:error, :not_found} = answer, _config_name, _name, _action), do: answer
+  defp record({:error, :not_found} = answer, _config_name, _name, _action, _source), do: answer
 
-  defp record(answer, config_name, name, action) do
-    {status, screens} =
+  defp record(answer, config_name, name, action, source) do
+    {status, screens, reasons} =
       case answer do
-        {:ok, %{screens: screens}} -> {202, screens}
-        {:error, :too_many} -> {429, nil}
-        {:error, {:invalid, _reasons}} -> {422, nil}
+        {:ok, %{screens: screens}} -> {202, screens, []}
+        {:error, :too_many} -> {429, nil, []}
+        {:error, {:invalid, reasons}} -> {422, nil, reasons}
       end
 
-    entry = %{at: DateTime.utc_now(), action: action, status: status, screens: screens}
+    entry = %{
+      at: DateTime.utc_now(),
+      action: action,
+      source: source,
+      status: status,
+      screens: screens,
+      reasons: reasons
+    }
+
     :ets.insert(@table, {{:last, config_name, name}, entry})
     Deepsplay.Status.notify(config_name)
     answer

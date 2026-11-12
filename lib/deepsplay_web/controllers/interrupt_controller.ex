@@ -26,7 +26,8 @@ defmodule DeepsplayWeb.InterruptController do
 
   def start(conn, %{"interrupt" => name}) do
     with {:ok, config} <- authorize(conn) do
-      conn |> answer(Interrupts.start(config, name, conn.query_string))
+      params = Interrupts.parse_query(conn.query_string)
+      conn |> answer(Interrupts.start(config, name, params, :http))
     end
   end
 
