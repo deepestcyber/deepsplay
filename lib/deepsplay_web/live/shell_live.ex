@@ -323,8 +323,14 @@ defmodule DeepsplayWeb.ShellLive do
       // override, or the rotation with the interrupted page. Nothing about
       // interrupts survives a reload.
       //
+      // Random rotation (ADR 37) leaves out the entries picked within the
+      // last no_repeat_entries picks and the files picked within the last
+      // no_repeat_pages picks, as far as something is left. What was picked
+      // is remembered by entry and file across plans, not across reloads.
+      //
       // Plan: {sha, mode: "sequential" | "random" | "pinned", apply,
-      //        pages: [{url, duration, weight, when}],
+      //        no_repeat_entries, no_repeat_pages,
+      //        pages: [{url, entry, file, duration, weight, when}],
       //        overrides: [{url, when, priority, duration_params}], empty}
       import {
         acceptsInterrupt,
@@ -337,6 +343,8 @@ defmodule DeepsplayWeb.ShellLive do
         secondPrecise,
         msToNextCheck,
         overrideOpened,
+        pickRandom,
+        remember,
       } from "@/js/schedule"
 
       const LOAD_TIMEOUT = 10000
@@ -354,6 +362,7 @@ defmodule DeepsplayWeb.ShellLive do
           this.plan = null
           this.planKey = null
           this.pending = null
+          this.recent = [] // random picks, newest first (ADR 37)
           this.dismissed = new Map()
           this.activeKeys = new Set() // overrides active at the last check
           this.interrupt = null // {name, url, priority, duration}
@@ -705,8 +714,8 @@ defmodule DeepsplayWeb.ShellLive do
         },
 
         // Picks the next page index among the active pages: in order, or
-        // weighted at random without repeating the current page when there is
-        // more than one. null when no page is active.
+        // weighted at random without recent repeats (ADR 37). null when no
+        // page is active.
         pick() {
           const pages = this.plan.pages
           const candidates = this.plan.mode === "pinned" ? [0] : this.activeNow()
@@ -720,14 +729,10 @@ defmodule DeepsplayWeb.ShellLive do
             return candidates[0]
           }
 
-          const choices = candidates.filter(i => candidates.length === 1 || i !== this.index)
-          const total = choices.reduce((sum, i) => sum + pages[i].weight, 0)
-          let r = Math.random() * total
-          for (const i of choices) {
-            r -= pages[i].weight
-            if (r < 0) return i
-          }
-          return choices[choices.length - 1]
+          const {no_repeat_entries: entries, no_repeat_pages: files} = this.plan
+          const next = pickRandom(pages, candidates, this.recent, entries, files)
+          this.recent = remember(this.recent, pages[next], entries, files)
+          return next
         },
 
         // Loads a URL into the hidden frame and crossfades once it has

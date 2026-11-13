@@ -27,6 +27,9 @@ switches off hiding the pointer, for development.
 Amended by [36](0036-development-overlay.md): `dev_overlay` in `[server]`
 shows an overlay with the display time and links on screens.
 
+Amended by [37](0037-random-rotation-without-recent-repeats.md):
+`no_repeat_entries` and `no_repeat_pages` at the top of a manifest.
+
 ## Context
 
 deepsplay reads two kinds of configuration: the host configuration (server

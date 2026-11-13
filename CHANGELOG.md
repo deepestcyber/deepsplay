@@ -5,6 +5,11 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- Random rotation can wait longer before repeating: `no_repeat_entries`
+  (default 1, as before) sets how many picks an entry waits before it can
+  come back, `no_repeat_pages` (default 0, off) the same for a file,
+  whatever its parameters. With too few active entries the rules give way
+  (ADR 37).
 - A logo, used as the favicon: "lcd" in the letters of the Deep Data Dump
   logo (`docs/design/`).
 - The status page and the catalog link to each other and to the display

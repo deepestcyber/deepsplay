@@ -20,9 +20,13 @@ defmodule DeepsplayWeb.ScreenPlan do
           sha: String.t(),
           mode: String.t(),
           apply: String.t(),
+          no_repeat_entries: non_neg_integer(),
+          no_repeat_pages: non_neg_integer(),
           pages: [
             %{
               url: String.t(),
+              entry: String.t(),
+              file: String.t(),
               duration: pos_integer() | nil,
               weight: float(),
               when: [map()] | nil
@@ -50,12 +54,16 @@ defmodule DeepsplayWeb.ScreenPlan do
       sha: sha,
       mode: Atom.to_string(screen.rotation),
       apply: apply_mode(opts),
+      no_repeat_entries: screen.no_repeat_entries,
+      no_repeat_pages: screen.no_repeat_pages,
       pages:
         screen.pages
         |> Enum.zip(added)
         |> Enum.map(fn {page, page_added} ->
           %{
             url: page_url(name, sha, page.path, PageParams.merge_query(page.query, page_added)),
+            entry: if(page.query, do: page.path <> "?" <> page.query, else: page.path),
+            file: page.path,
             duration: page.duration,
             weight: page.weight,
             when: TimeWindow.to_plan(page.when)
@@ -111,7 +119,18 @@ defmodule DeepsplayWeb.ScreenPlan do
       sha: sha,
       mode: "pinned",
       apply: apply_mode(opts),
-      pages: [%{url: page_url(name, sha, path, query), duration: nil, weight: 1.0, when: nil}],
+      no_repeat_entries: 0,
+      no_repeat_pages: 0,
+      pages: [
+        %{
+          url: page_url(name, sha, path, query),
+          entry: if(query, do: path <> "?" <> query, else: path),
+          file: path,
+          duration: nil,
+          weight: 1.0,
+          when: nil
+        }
+      ],
       overrides: [],
       empty: nil
     }

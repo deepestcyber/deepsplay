@@ -78,15 +78,21 @@ defmodule DeepsplayWeb.ShellRotationTest do
              "sha" => sha,
              "mode" => "random",
              "apply" => "next",
+             "no_repeat_entries" => 1,
+             "no_repeat_pages" => 0,
              "pages" => [
                %{
                  "url" => "/c/lobby/r/#{sha}/welcome.html",
+                 "entry" => "welcome.html",
+                 "file" => "welcome.html",
                  "duration" => 30_000,
                  "weight" => 2.0,
                  "when" => nil
                },
                %{
                  "url" => "/c/lobby/r/#{sha}/news/index.html",
+                 "entry" => "news/index.html",
+                 "file" => "news/index.html",
                  "duration" => 10_000,
                  "weight" => 1.0,
                  "when" => nil
@@ -129,9 +135,13 @@ defmodule DeepsplayWeb.ShellRotationTest do
              "sha" => sha,
              "mode" => "pinned",
              "apply" => "next",
+             "no_repeat_entries" => 0,
+             "no_repeat_pages" => 0,
              "pages" => [
                %{
                  "url" => "/c/lobby/r/#{sha}/extra.html",
+                 "entry" => "extra.html",
+                 "file" => "extra.html",
                  "duration" => nil,
                  "weight" => 1.0,
                  "when" => nil

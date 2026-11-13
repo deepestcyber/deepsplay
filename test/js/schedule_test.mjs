@@ -150,6 +150,65 @@ check("msToNextCheck", () => {
   assert.equal(S.msToNextCheck(date, true), 750)
 })
 
+// Random rotation without recent repeats (ADR 37). `seq` feeds fixed random
+// numbers, so the weighted pick is predictable.
+const seq = (...values) => () => values.shift() ?? 0
+const pool = [
+  { entry: "a.html", file: "a.html", weight: 1 },
+  { entry: "b.html?x=1", file: "b.html", weight: 1 },
+  { entry: "b.html?x=2", file: "b.html", weight: 1 },
+  { entry: "c.html", file: "c.html", weight: 1 },
+]
+const all = [0, 1, 2, 3]
+const picked = (...indices) => indices.map(i => ({ entry: pool[i].entry, file: pool[i].file }))
+const reachable = (candidates, recent, entries, files) => {
+  const found = new Set()
+  for (let k = 0; k < 40; k++) found.add(S.pickRandom(pool, candidates, recent, entries, files, () => k / 40))
+  return [...found].sort()
+}
+
+check("pickRandom: default leaves out only the last entry", () => {
+  assert.deepEqual(reachable(all, picked(1), 1, 0), [0, 2, 3])
+  assert.deepEqual(reachable(all, [], 1, 0), [0, 1, 2, 3])
+})
+
+check("pickRandom: no_repeat_entries counts the last picks", () => {
+  assert.deepEqual(reachable(all, picked(0, 1, 3), 3, 0), [2])
+  // 0 allows the same entry again.
+  assert.deepEqual(reachable(all, picked(0), 0, 0), [0, 1, 2, 3])
+})
+
+check("pickRandom: no_repeat_pages leaves out the same file with other parameters", () => {
+  assert.deepEqual(reachable(all, picked(1), 1, 1), [0, 3])
+  assert.deepEqual(reachable(all, picked(1, 0), 1, 2), [3])
+})
+
+check("pickRandom: too few candidates: files give way first, oldest picks first", () => {
+  // Entries 0 and 3 are active; 3 was picked before 0, so it comes back.
+  assert.deepEqual(reachable([0, 3], picked(0, 3), 2, 0), [3])
+  assert.deepEqual(reachable([0, 3], picked(3, 0), 5, 5), [0])
+  // A single candidate is picked even right after itself.
+  assert.deepEqual(reachable([2], picked(2), 3, 3), [2])
+  // b.html was just shown and only its two entries are active: the other
+  // entry is shown before the same one again.
+  assert.deepEqual(reachable([1, 2], picked(1), 1, 1), [2])
+  assert.deepEqual(reachable([0, 1, 2], picked(1, 0, 2), 2, 3), [2])
+})
+
+check("pickRandom: weights among what is left, null without candidates", () => {
+  const weighted = [pool[0], { ...pool[3], weight: 3 }]
+  assert.equal(S.pickRandom(weighted, [0, 1], [], 1, 0, seq(0.2)), 0)
+  assert.equal(S.pickRandom(weighted, [0, 1], [], 1, 0, seq(0.3)), 1)
+  assert.equal(S.pickRandom(pool, [], [], 1, 0), null)
+})
+
+check("remember keeps as many picks as count", () => {
+  let recent = []
+  for (const i of [0, 1, 2, 3]) recent = S.remember(recent, pool[i], 2, 3)
+  assert.deepEqual(recent, picked(3, 2, 1))
+  assert.deepEqual(S.remember(recent, pool[0], 0, 0), [])
+})
+
 if (failures > 0) {
   console.error(`${failures} failure(s)`)
   process.exit(1)

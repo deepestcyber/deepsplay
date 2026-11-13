@@ -21,6 +21,10 @@ pointer shows and the visible page takes pointer input.
 Amended by [36](0036-development-overlay.md): with `dev_overlay = true` the
 shell shows an overlay with the display time and links above the pages.
 
+Amended by [37](0037-random-rotation-without-recent-repeats.md): random
+rotation can keep entries, and files, from coming back within a number of
+picks (`no_repeat_entries`, `no_repeat_pages`).
+
 ## Context
 
 A screen cycles through the pages of a revision. Screens must keep working when

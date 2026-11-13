@@ -39,6 +39,8 @@ defmodule Deepsplay.Screen do
   defstruct title: nil,
             description: nil,
             rotation: :sequential,
+            no_repeat_entries: 1,
+            no_repeat_pages: 0,
             pages: [],
             params: %{},
             upstreams: %{},
@@ -53,6 +55,8 @@ defmodule Deepsplay.Screen do
           title: String.t() | nil,
           description: String.t() | nil,
           rotation: :sequential | :random,
+          no_repeat_entries: non_neg_integer(),
+          no_repeat_pages: non_neg_integer(),
           pages: [Page.t()],
           params: %{String.t() => String.t()},
           upstreams: %{String.t() => Upstream.t()},
@@ -72,6 +76,10 @@ defmodule Deepsplay.Screen do
     {"description", :description, :description, default: nil},
     {"rotation", :rotation, {:enum, ["sequential", "random"]}, default: "sequential"},
     {"duration", :duration, :duration, default: @default_duration},
+    # Random rotation (ADR 37): how many picks an entry, or a page file,
+    # waits before it can be picked again.
+    {"no_repeat_entries", :no_repeat_entries, :non_neg_integer, default: 1},
+    {"no_repeat_pages", :no_repeat_pages, :non_neg_integer, default: 0},
     {"when_empty", :when_empty, &__MODULE__.cast_when_empty/1, default: :black}
   ]
 
@@ -390,6 +398,8 @@ defmodule Deepsplay.Screen do
            title: top.title,
            description: top.description,
            rotation: rotation(top.rotation),
+           no_repeat_entries: top.no_repeat_entries,
+           no_repeat_pages: top.no_repeat_pages,
            pages: Enum.map(pages, with_duration),
            params: params,
            upstreams: declared,

@@ -47,6 +47,8 @@ title       = "Lobby"
 description = "Daytime rotation for the lobby screens."   # optional
 rotation    = "sequential"     # or "random"
 duration    = "20s"            # display time of pages without their own; default 15s
+no_repeat_entries = 3          # random rotation only: picks before an entry repeats; default 1
+no_repeat_pages   = 1          # random rotation only: picks before a file repeats; default 0
 
 [params]                       # default parameters for pages that declare them
 theme = "dark"
@@ -61,8 +63,15 @@ weight      = 2.0              # random rotation only: shown more often
 description = "Large cells, readable from the door"   # optional: why this entry
 ```
 
-- `rotation = "random"` picks the next page weighted by `weight` (default 1.0)
-  and never shows the same page twice in a row.
+- `rotation = "random"` picks the next page weighted by `weight` (default 1.0).
+  An entry picked within the last `no_repeat_entries` picks (default 1: not
+  twice in a row) is left out, and so is any entry of a file picked within
+  the last `no_repeat_pages` picks (default 0: off), whatever its query. An
+  entry is its path with its query; entries found by `glob` count each on
+  their own.
+- When too few entries are active for these rules, they give way: first
+  the one for files, then the one for entries, the oldest pick first. A
+  single active entry is shown again.
 - Durations are whole numbers with `ms`, `s`, `m` or `h`.
 - A page that calls an upstream (see below) lists it: `uses = ["weather"]`.
 - `description` (optional, at most 500 characters) says what a rotation or

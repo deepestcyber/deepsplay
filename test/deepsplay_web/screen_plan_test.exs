@@ -10,6 +10,8 @@ defmodule DeepsplayWeb.ScreenPlanTest do
   test "rotation/3 turns the manifest into a plan" do
     screen = %Screen{
       rotation: :random,
+      no_repeat_entries: 2,
+      no_repeat_pages: 1,
       pages: [
         %Page{path: "welcome/index.html", duration: 30_000, weight: 3.0},
         %Page{path: "news.html", query: "duration=5s", duration: 5_000}
@@ -20,15 +22,21 @@ defmodule DeepsplayWeb.ScreenPlanTest do
              sha: "abc",
              mode: "random",
              apply: "next",
+             no_repeat_entries: 2,
+             no_repeat_pages: 1,
              pages: [
                %{
                  url: "/c/lobby/r/abc/welcome/index.html",
+                 entry: "welcome/index.html",
+                 file: "welcome/index.html",
                  duration: 30_000,
                  weight: 3.0,
                  when: nil
                },
                %{
                  url: "/c/lobby/r/abc/news.html?duration=5s",
+                 entry: "news.html?duration=5s",
+                 file: "news.html",
                  duration: 5_000,
                  weight: 1.0,
                  when: nil
@@ -44,7 +52,18 @@ defmodule DeepsplayWeb.ScreenPlanTest do
              sha: "abc",
              mode: "pinned",
              apply: "next",
-             pages: [%{url: "/c/lobby/r/abc/a.html", duration: nil, weight: 1.0, when: nil}],
+             no_repeat_entries: 0,
+             no_repeat_pages: 0,
+             pages: [
+               %{
+                 url: "/c/lobby/r/abc/a.html",
+                 entry: "a.html",
+                 file: "a.html",
+                 duration: nil,
+                 weight: 1.0,
+                 when: nil
+               }
+             ],
              overrides: [],
              empty: nil
            }

@@ -122,12 +122,14 @@ The root of a configuration is the repository, or its `subdir`. Below it:
   README.md, .gitignore, …  never delivered
 ```
 
-Only files in `pages/` are delivered; hidden files and directories (names starting with `.`) inside it are not. A manifest lists pages by their path relative to `pages/`, and how they rotate: `sequential` (default) shows them in listed order, `random` picks the next page weighted by `weight` (default 1.0) and never shows the same page twice in a row when there is more than one. Weights are ignored in sequential rotation. Further rotation rules, such as time windows, are still open.
+Only files in `pages/` are delivered; hidden files and directories (names starting with `.`) inside it are not. A manifest lists pages by their path relative to `pages/`, and how they rotate: `sequential` (default) shows them in listed order, `random` picks the next page weighted by `weight` (default 1.0) and leaves out the entries picked within the last `no_repeat_entries` picks (default 1) and the files picked within the last `no_repeat_pages` picks (default 0), as far as enough entries are active (ADR 37). Weights are ignored in sequential rotation. Further rotation rules, such as time windows, are still open.
 
 ```toml
 title    = "Lobby"
 rotation = "random"                # "sequential" (default) or "random"
 duration = "30s"                   # optional default display time; without it 15s
+no_repeat_entries = 3              # optional, random rotation only: picks before an entry repeats; default 1
+no_repeat_pages   = 1              # optional, random rotation only: picks before a file repeats; default 0
 
 [params]                           # optional default parameters for pages that declare them
 theme = "neon"
@@ -146,7 +148,7 @@ Validation runs on every new revision, before it is published:
 
 - The manifest parses, is smaller than a size limit, and contains at least one page.
 - `pages/` exists, and every `path` names a regular, non-hidden file in it. A query string on a path is passed on to the page; only the file part is checked.
-- `rotation` is `sequential` or `random`; every `weight` is a number greater than 0; every `duration` (of the manifest or a page) is a valid duration. A page without `duration` uses the manifest's, or 15 seconds.
+- `rotation` is `sequential` or `random`; every `weight` is a number greater than 0; `no_repeat_entries` and `no_repeat_pages` are non-negative integers; every `duration` (of the manifest or a page) is a valid duration. A page without `duration` uses the manifest's, or 15 seconds.
 - Every `uses` entry is an upstream the configuration is allowed to use. Otherwise the revision is rejected, not served with a broken page.
 - A `[backend]` table runs a backend for configurations that allow it, and is ignored with a warning otherwise (see Extension points for sidecars, ADR 26).
 

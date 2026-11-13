@@ -1,5 +1,6 @@
 // Time windows for the screen rotation (ADR 25, 30): which pages are active, which
-// override is shown, and for how long. Pure functions, used by the rotation
+// override is shown, and for how long; and the random pick of the next page
+// without recent repeats (ADR 37). Pure functions, used by the rotation
 // hook in the shell and tested in Node (test/js/schedule_test.mjs).
 //
 // Windows come from the server (Deepsplay.TimeWindow.to_plan/1):
@@ -171,4 +172,43 @@ export function secondPrecise(windows) {
 export function msToNextCheck(date, seconds) {
   if (seconds) return 1000 - date.getMilliseconds()
   return 60000 - (date.getSeconds() * 1000 + date.getMilliseconds())
+}
+
+// Random rotation (ADR 37): picks the next page index among `candidates`
+// (indices into `pages`), weighted by `weight`. `recent` lists what was
+// picked last, newest first: [{entry, file}]. An entry picked within the
+// last `entries` picks, or a page whose file was picked within the last
+// `files` picks, is left out. When that leaves nothing, the rule for files
+// gives way first, then the one for entries, each releasing its oldest pick
+// first, until something is left; at the end every candidate can be picked.
+// `random` returns a number in [0, 1).
+export function pickRandom(pages, candidates, recent, entries, files, random = Math.random) {
+  if (candidates.length === 0) return null
+  const e0 = Math.min(entries, recent.length)
+  const steps = []
+  for (let f = Math.min(files, recent.length); f >= 0; f--) steps.push([e0, f])
+  for (let e = e0 - 1; e >= 0; e--) steps.push([e, 0])
+
+  let choices = candidates
+  for (const [e, f] of steps) {
+    const blockedEntries = new Set(recent.slice(0, e).map(r => r.entry))
+    const blockedFiles = new Set(recent.slice(0, f).map(r => r.file))
+    const left = candidates.filter(i => !blockedEntries.has(pages[i].entry) && !blockedFiles.has(pages[i].file))
+    if (left.length > 0) {
+      choices = left
+      break
+    }
+  }
+  const total = choices.reduce((sum, i) => sum + pages[i].weight, 0)
+  let r = random() * total
+  for (const i of choices) {
+    r -= pages[i].weight
+    if (r < 0) return i
+  }
+  return choices[choices.length - 1]
+}
+
+// Adds a pick to the front of `recent`, keeping only as many as count.
+export function remember(recent, page, entries, files) {
+  return [{entry: page.entry, file: page.file}, ...recent].slice(0, Math.max(entries, files))
 }

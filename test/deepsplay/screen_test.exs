@@ -86,9 +86,27 @@ defmodule Deepsplay.ScreenTest do
     test "applies defaults", %{tmp_dir: root} do
       write(root, %{"screen.toml" => @one_page, "pages/a.html" => "a"})
 
-      assert {:ok, %Screen{title: nil, rotation: :sequential, pages: [page]}} = Screen.load(root)
+      assert {:ok,
+              %Screen{
+                title: nil,
+                rotation: :sequential,
+                no_repeat_entries: 1,
+                no_repeat_pages: 0,
+                pages: [page]
+              }} = Screen.load(root)
+
       assert page.weight == 1.0
       assert page.uses == []
+    end
+
+    test "reads how long entries and pages wait before they repeat", %{tmp_dir: root} do
+      write(root, %{
+        "screen.toml" =>
+          "rotation = \"random\"\nno_repeat_entries = 3\nno_repeat_pages = 0\n" <> @one_page,
+        "pages/a.html" => "a"
+      })
+
+      assert {:ok, %Screen{no_repeat_entries: 3, no_repeat_pages: 0}} = Screen.load(root)
     end
 
     test "passes a query string in a page path on, checking only the file", %{tmp_dir: root} do
@@ -199,6 +217,8 @@ defmodule Deepsplay.ScreenTest do
         "screen.toml" => """
         rotation = "shuffle"
         colour   = "red"
+        no_repeat_entries = -1
+        no_repeat_pages   = 1.5
 
         [[page]]
         path     = "a.html"
@@ -213,6 +233,8 @@ defmodule Deepsplay.ScreenTest do
 
       assert ~s(screen.rotation must be one of: "sequential", "random") in errors
       assert ~s(screen: unknown key "colour") in errors
+      assert "screen.no_repeat_entries must be a non-negative integer" in errors
+      assert "screen.no_repeat_pages must be a non-negative integer" in errors
       assert Enum.any?(errors, &(&1 =~ "page #1.duration must be a duration"))
       assert "page #1.weight must be a number greater than 0" in errors
       assert ~s(page #1: unknown key "wieght") in errors
