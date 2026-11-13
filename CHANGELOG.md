@@ -5,6 +5,14 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+## 0.6.0 – 2026-11-13
+
+Random rotation without quick repeats, and tools for developing pages. No
+changes are needed for existing setups: random rotations behave as before
+unless the manifest sets the new fields, and kiosk mode and the overlay
+keep their display defaults. Screens load the new shell on their own when
+they reconnect after the update.
+
 - Random rotation can wait longer before repeating: `no_repeat_entries`
   (default 1, as before) sets how many picks an entry waits before it can
   come back, `no_repeat_pages` (default 0, off) the same for a file,
@@ -19,8 +27,8 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
   corner of every screen, drawn by the shell above the pages: the display
   time of the current page counting up (with its limit), its mode and path
   linking to the page, links to the catalog and the status page, and a
-  skip button (or the `S` key) that ends the page at once. It collapses to the clock and
-  the skip button (ADR 36).
+  skip button (or the `S` key) that ends the page at once. It collapses to
+  the clock and the skip button (ADR 36).
 - `kiosk_mode = false` in `[server]` shows the pointer on screens and lets
   the visible page take mouse input, for development. The default, `true`,
   hides it as before (ADR 35).
