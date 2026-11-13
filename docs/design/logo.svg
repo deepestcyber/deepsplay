@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="deepsplay">
+  <!-- deepsplay logo and favicon: "lcd" from the letters of the font genotype
+       (Fenotype). The l is raised so that its foot and the bowl of the d end
+       on one line; the c sits above it, as far from that line as the l is
+       from the d, centred between the stems. Colours from the deep cyber
+       banner, as in the Deep Data Dump logo. See README.md. -->
+  <rect id="tile" width="64" height="64" rx="14" fill="#00084a"/>
+  <path id="letter-l" transform="translate(6.000 42.480) scale(0.02412 -0.02412)" fill="#6171ff" d="M826 0Q841 0 857 7Q891 21 902 57L974 286Q977 296 977 305Q977 343 935 343H278Q256 343 256 360Q256 365 258 371L384 771Q386 777 386 783Q386 800 365 800H251Q221 797 213 771L5 114Q0 98 0 76Q0 0 84 0Z"/>
+  <path id="letter-c" transform="translate(22.690 29.793) scale(0.02412 -0.02412)" fill="#fcfcfc" d="M264 571Q150 571 114 457L5 114Q0 98 0 76Q0 0 84 0H826Q884 0 902 57L974 286Q977 296 977 306Q977 343 935 343H278Q256 343 256 360Q256 365 258 371L285 457Q294 486 323 486H1008Q1037 486 1046 514L1055 543Q1057 549 1057 553Q1057 571 1035 571Z"/>
+  <path id="letter-d" transform="translate(30.722 47.979) scale(0.02412 -0.02412)" fill="#6a97ff" d="M115 457 7 114Q0 92 0 74Q0 0 85 0H771Q885 0 921 114L1129 771Q1131 777 1131 782Q1131 800 1109 800H938Q909 800 900 771L846 600Q837 571 809 571H266Q151 571 115 457ZM287 457Q296 486 324 486H781Q803 484 803 467Q803 463 801 457L774 371Q765 343 736 343H279Q258 343 258 361Q258 365 260 371Z"/>
+</svg>

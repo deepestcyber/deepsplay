@@ -5,6 +5,8 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- A logo, used as the favicon: "lcd" in the letters of the Deep Data Dump
+  logo (`docs/design/`).
 - The status page and the catalog link to each other and to the display
   (`/`, the default configuration) at the top right, and both show the
   running version.
