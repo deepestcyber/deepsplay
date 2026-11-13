@@ -94,6 +94,7 @@ defmodule DeepsplayWeb.ShellLiveTest do
 
       change(&%{&1 | dev_overlay: true})
       assert has_element?(view, "#dev-overlay #dev-overlay-clock")
+      assert has_element?(view, "#dev-overlay #dev-overlay-skip")
       assert has_element?(view, ~s(#dev-overlay-catalog[href="/catalog/kitchen"]))
       assert has_element?(view, ~s(#dev-overlay-status[href="/status"]))
       refute_redirected(view, "/c/kitchen")

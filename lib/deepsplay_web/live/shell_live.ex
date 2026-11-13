@@ -372,6 +372,8 @@ defmodule DeepsplayWeb.ShellLive do
           this.announced = null // what the dev overlay was told last (ADR 36)
           this.onAsk = () => this.announced && this.dispatchShown(this.announced)
           window.addEventListener("deepsplay:ask", this.onAsk)
+          this.onSkip = () => this.skip()
+          window.addEventListener("deepsplay:skip", this.onSkip)
           this.loading = false
           this.shownAt = 0
           this.doneTimer = null
@@ -395,6 +397,7 @@ defmodule DeepsplayWeb.ShellLive do
           clearTimeout(this.interruptTimer)
           window.removeEventListener("message", this.onMessage)
           window.removeEventListener("deepsplay:ask", this.onAsk)
+          window.removeEventListener("deepsplay:skip", this.onSkip)
         },
 
         // Tells the development overlay (ADR 36) what the screen shows now:
@@ -437,6 +440,16 @@ defmodule DeepsplayWeb.ShellLive do
             this.doneTimer = null
             this.done()
           }, wait)
+        },
+
+        // The skip button of the development overlay (ADR 36): ends what is
+        // shown at once, as Deepsplay.done() would, without waiting for
+        // MIN_SHOWN. A pinned page has nothing to move on to.
+        skip() {
+          if (!this.plan || this.plan.mode === "pinned") return
+          clearTimeout(this.doneTimer)
+          this.doneTimer = null
+          this.done()
         },
 
         // Moves on from a page that is done: the next page (the same one
@@ -801,8 +814,9 @@ defmodule DeepsplayWeb.ShellLive do
 
   # The development overlay (ADR 36): bottom left, over the pages, put there
   # by the shell. The rotation tells it what is shown (deepsplay:shown); it
-  # counts the display time up and links to the page, the catalog and the
-  # status page. Collapsed, only the clock stays.
+  # counts the display time up, links to the page, the catalog and the status
+  # page, and skips the page (deepsplay:skip). Collapsed, only the clock and
+  # the skip button stay.
   defp dev_overlay(assigns) do
     ~H"""
     <div
@@ -822,6 +836,15 @@ defmodule DeepsplayWeb.ShellLive do
         <.icon name="hero-chevron-right-mini" class="dev-overlay-expand hidden size-4" />
       </button>
       <span id="dev-overlay-clock" class="tabular-nums" title="Display time of the page">–:––</span>
+      <button
+        type="button"
+        id="dev-overlay-skip"
+        class="cursor-pointer text-zinc-400 transition-colors hover:text-zinc-100 disabled:cursor-default disabled:opacity-30 disabled:hover:text-zinc-400"
+        title="Skip: end this page now (S)"
+        aria-label="Skip the page"
+      >
+        <.icon name="hero-forward-mini" class="size-4" />
+      </button>
       <span id="dev-overlay-details" class="flex min-w-0 items-center gap-3">
         <span id="dev-overlay-mode" class="text-xs text-amber-300"></span>
         <a
@@ -852,7 +875,17 @@ defmodule DeepsplayWeb.ShellLive do
       // Display time: counts up from when the page appeared, with the page's
       // limit if it has one ("0:12 / 0:30"). Collapsing is remembered per
       // browser.
+      //
+      // The S key skips, like the button, also while a page has the focus:
+      // the overlay listens in each page of our own origin as it appears.
+      // Keys with modifiers, keys typed into a field and keys a page has
+      // handled itself (preventDefault) are left alone.
       const KEY = "deepsplay.devOverlay.collapsed"
+      const SKIP_KEY = "s"
+
+      // Not instanceof: elements of a page belong to the frame's window.
+      const typing = target =>
+        Boolean(target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName))
 
       const clock = ms => {
         const s = Math.max(0, Math.floor(ms / 1000))
@@ -876,6 +909,15 @@ defmodule DeepsplayWeb.ShellLive do
           this.pageEl = this.el.querySelector("#dev-overlay-page")
           this.toggle = this.el.querySelector("#dev-overlay-toggle")
           this.toggle.addEventListener("click", () => this.setCollapsed(!this.collapsed))
+          this.skipEl = this.el.querySelector("#dev-overlay-skip")
+          this.skipEl.addEventListener("click", () => this.skip())
+          this.onKey = event => {
+            if (event.defaultPrevented || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return
+            if (event.key.toLowerCase() !== SKIP_KEY || typing(event.target)) return
+            event.preventDefault()
+            this.skip()
+          }
+          window.addEventListener("keydown", this.onKey)
           let collapsed = false
           try {
             collapsed = localStorage.getItem(KEY) === "1"
@@ -885,6 +927,7 @@ defmodule DeepsplayWeb.ShellLive do
           this.onShown = event => {
             this.shown = event.detail
             this.update()
+            this.listenInPages()
           }
           window.addEventListener("deepsplay:shown", this.onShown)
           this.timer = setInterval(() => this.tick(), 250)
@@ -894,6 +937,27 @@ defmodule DeepsplayWeb.ShellLive do
         destroyed() {
           clearInterval(this.timer)
           window.removeEventListener("deepsplay:shown", this.onShown)
+          window.removeEventListener("keydown", this.onKey)
+          for (const frame of document.querySelectorAll("#screen-rotation iframe")) {
+            try {
+              frame.contentWindow.removeEventListener("keydown", this.onKey)
+            } catch (_error) {}
+          }
+        },
+
+        skip() {
+          if (!this.skipEl.disabled) window.dispatchEvent(new Event("deepsplay:skip"))
+        },
+
+        // A page loaded into a frame gets a new window; adding the same
+        // listener again to a window that has it changes nothing. Pages of
+        // another origin cannot be reached.
+        listenInPages() {
+          for (const frame of document.querySelectorAll("#screen-rotation iframe")) {
+            try {
+              frame.contentWindow.addEventListener("keydown", this.onKey)
+            } catch (_error) {}
+          }
         },
 
         setCollapsed(collapsed, remember = true) {
@@ -916,6 +980,7 @@ defmodule DeepsplayWeb.ShellLive do
           this.pageEl.textContent = url ? pagePath(url) : "nothing shown"
           if (url) this.pageEl.href = url
           else this.pageEl.removeAttribute("href")
+          this.skipEl.disabled = mode === "pinned"
           this.tick()
         },
 

@@ -18,8 +18,9 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 - `dev_overlay = true` in `[server]` shows an overlay in the bottom left
   corner of every screen, drawn by the shell above the pages: the display
   time of the current page counting up (with its limit), its mode and path
-  linking to the page, and links to the catalog and the status page. It
-  collapses to the clock (ADR 36).
+  linking to the page, links to the catalog and the status page, and a
+  skip button (or the `S` key) that ends the page at once. It collapses to the clock and
+  the skip button (ADR 36).
 - `kiosk_mode = false` in `[server]` shows the pointer on screens and lets
   the visible page take mouse input, for development. The default, `true`,
   hides it as before (ADR 35).
