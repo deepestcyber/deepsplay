@@ -44,7 +44,7 @@ defmodule DeepsplayWeb.ShellLive do
     requested = Map.get(params, "name", :default)
     if connected?(socket), do: Watcher.subscribe()
 
-    socket = assign(socket, kiosk_mode: kiosk_mode())
+    socket = assign(socket, screen_settings())
 
     socket =
       case Store.lookup(requested) do
@@ -124,11 +124,15 @@ defmodule DeepsplayWeb.ShellLive do
 
   defp presence_state(%{assigns: %{state: state}}), do: %{state: state, sha: nil}
 
-  # Without a usable host configuration, screens stay in kiosk mode.
-  defp kiosk_mode do
+  # Kiosk mode (ADR 35) and the development overlay (ADR 36). Without a
+  # usable host configuration, screens stay in kiosk mode, without overlay.
+  defp screen_settings do
     case Store.get() do
-      {:ok, host_config} -> host_config.kiosk_mode
-      _error -> true
+      {:ok, host_config} ->
+        [kiosk_mode: host_config.kiosk_mode, dev_overlay: host_config.dev_overlay]
+
+      _error ->
+        [kiosk_mode: true, dev_overlay: false]
     end
   end
 
@@ -175,7 +179,7 @@ defmodule DeepsplayWeb.ShellLive do
   # A changed host configuration: reload if what this screen shows depends
   # on the change (a new revision is announced separately).
   def handle_info({:host_config_changed}, socket) do
-    socket = assign(socket, kiosk_mode: kiosk_mode())
+    socket = assign(socket, screen_settings())
 
     if Store.lookup(socket.assigns.requested) == socket.assigns.lookup,
       do: {:noreply, socket},
@@ -271,6 +275,7 @@ defmodule DeepsplayWeb.ShellLive do
         <% :host_config -> %>
           <.host_config_error errors={@errors} />
       <% end %>
+      <.dev_overlay :if={@dev_overlay} config={assigns[:config]} />
     </Layouts.screen>
     """
   end
@@ -353,6 +358,11 @@ defmodule DeepsplayWeb.ShellLive do
           this.activeKeys = new Set() // overrides active at the last check
           this.interrupt = null // {name, url, priority, duration}
           this.interruptTimer = null
+          this.interruptEndsAt = 0
+          this.shownUrl = ""
+          this.announced = null // what the dev overlay was told last (ADR 36)
+          this.onAsk = () => this.announced && this.dispatchShown(this.announced)
+          window.addEventListener("deepsplay:ask", this.onAsk)
           this.loading = false
           this.shownAt = 0
           this.doneTimer = null
@@ -375,6 +385,34 @@ defmodule DeepsplayWeb.ShellLive do
           clearTimeout(this.doneTimer)
           clearTimeout(this.interruptTimer)
           window.removeEventListener("message", this.onMessage)
+          window.removeEventListener("deepsplay:ask", this.onAsk)
+        },
+
+        // Tells the development overlay (ADR 36) what the screen shows now:
+        // {url, mode, name, limit, since}. `limit` is the display time in ms
+        // from `since` (a page's duration, the rest of an override's window
+        // or of an interrupt), or null. The overlay asks with deepsplay:ask
+        // when it mounts later.
+        announce() {
+          let mode = this.mode
+          let limit = null
+          let name = null
+          const now = new Date()
+          if (this.mode === "rotation") {
+            if (this.plan.mode === "pinned") mode = "pinned"
+            else limit = this.plan.pages[this.index]?.duration ?? null
+          } else if (this.mode === "override") {
+            limit = remainingMs((this.plan.overrides || [])[this.overrideIndex]?.when, now)
+          } else if (this.mode === "interrupt") {
+            name = this.interrupt.name
+            limit = Math.max(0, this.interruptEndsAt - now.getTime())
+          }
+          this.announced = {url: this.shownUrl, mode, name, limit, since: now.getTime()}
+          this.dispatchShown(this.announced)
+        },
+
+        dispatchShown(detail) {
+          window.dispatchEvent(new CustomEvent("deepsplay:shown", {detail}))
         },
 
         // Deepsplay.done() from a page (ADR 31). Only the visible page of our
@@ -572,6 +610,7 @@ defmodule DeepsplayWeb.ShellLive do
           this.overrideIndex = -1
           this.interrupt = interrupt
           this.interruptTimer = setTimeout(() => this.endInterrupt(), interrupt.duration)
+          this.interruptEndsAt = now.getTime() + interrupt.duration
           this.display(interrupt.url, () => {})
         },
 
@@ -622,7 +661,10 @@ defmodule DeepsplayWeb.ShellLive do
           const next = this.pick()
           if (next === null) return this.showEmpty()
           // A single active page stays on screen without reloading.
-          if (!force && next === this.index && this.mode === "rotation") return this.schedule(this.plan.pages[next])
+          if (!force && next === this.index && this.mode === "rotation") {
+            this.schedule(this.plan.pages[next])
+            return this.announce()
+          }
           this.showPage(next)
         },
 
@@ -653,6 +695,8 @@ defmodule DeepsplayWeb.ShellLive do
           const old = this.frames[this.active]
           old.classList.replace("opacity-100", "opacity-0")
           this.pushEvent("page", {url: ""})
+          this.shownUrl = ""
+          this.announce()
           clearTimeout(this.clearTimer)
           this.clearTimer = setTimeout(() => {
             old.onload = null
@@ -721,6 +765,8 @@ defmodule DeepsplayWeb.ShellLive do
             }, FADE)
 
             shown()
+            this.shownUrl = url
+            this.announce()
           }
 
           frame.onload = () => {
@@ -740,6 +786,139 @@ defmodule DeepsplayWeb.ShellLive do
           clearTimeout(this.timer)
           if (this.plan.mode === "pinned") return
           this.timer = setTimeout(() => this.showNext(), page.duration)
+        },
+      }
+    </script>
+    """
+  end
+
+  attr :config, Deepsplay.HostConfig.Config, default: nil
+
+  # The development overlay (ADR 36): bottom left, over the pages, put there
+  # by the shell. The rotation tells it what is shown (deepsplay:shown); it
+  # counts the display time up and links to the page, the catalog and the
+  # status page. Collapsed, only the clock stays.
+  defp dev_overlay(assigns) do
+    ~H"""
+    <div
+      id="dev-overlay"
+      phx-hook=".DevOverlay"
+      phx-update="ignore"
+      class="fixed bottom-3 left-3 z-50 flex max-w-[calc(100vw-1.5rem)] cursor-auto items-center gap-3 rounded-lg bg-zinc-900/85 px-3 py-1.5 font-mono text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 backdrop-blur select-none"
+    >
+      <button
+        type="button"
+        id="dev-overlay-toggle"
+        class="cursor-pointer text-zinc-400 transition-colors hover:text-zinc-100"
+        aria-label="Collapse the overlay"
+        aria-expanded="true"
+      >
+        <.icon name="hero-chevron-left-mini" class="dev-overlay-collapse size-4" />
+        <.icon name="hero-chevron-right-mini" class="dev-overlay-expand hidden size-4" />
+      </button>
+      <span id="dev-overlay-clock" class="tabular-nums" title="Display time of the page">–:––</span>
+      <span id="dev-overlay-details" class="flex min-w-0 items-center gap-3">
+        <span id="dev-overlay-mode" class="text-xs text-amber-300"></span>
+        <a
+          id="dev-overlay-page"
+          class="truncate text-zinc-300 underline-offset-2 hover:text-white hover:underline"
+          title="Open the page on its own"
+        ></a>
+        <span class="flex shrink-0 items-center gap-2 border-l border-white/15 pl-3 text-zinc-400">
+          <a
+            :if={@config}
+            id="dev-overlay-catalog"
+            href={~p"/catalog/#{@config.name}"}
+            class="transition-colors hover:text-white"
+          >
+            catalog
+          </a>
+          <a
+            id="dev-overlay-status"
+            href={~p"/status"}
+            class="transition-colors hover:text-white"
+          >
+            status
+          </a>
+        </span>
+      </span>
+    </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".DevOverlay">
+      // Display time: counts up from when the page appeared, with the page's
+      // limit if it has one ("0:12 / 0:30"). Collapsing is remembered per
+      // browser.
+      const KEY = "deepsplay.devOverlay.collapsed"
+
+      const clock = ms => {
+        const s = Math.max(0, Math.floor(ms / 1000))
+        const h = Math.floor(s / 3600)
+        const m = Math.floor((s % 3600) / 60)
+        const ss = String(s % 60).padStart(2, "0")
+        return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`
+      }
+
+      // /c/<name>/r/<sha>/<path> → <path>
+      const pagePath = url => {
+        const rest = url.split("/r/")[1]
+        return rest ? rest.split("/").slice(1).join("/") : url
+      }
+
+      export default {
+        mounted() {
+          this.shown = null
+          this.clockEl = this.el.querySelector("#dev-overlay-clock")
+          this.modeEl = this.el.querySelector("#dev-overlay-mode")
+          this.pageEl = this.el.querySelector("#dev-overlay-page")
+          this.toggle = this.el.querySelector("#dev-overlay-toggle")
+          this.toggle.addEventListener("click", () => this.setCollapsed(!this.collapsed))
+          let collapsed = false
+          try {
+            collapsed = localStorage.getItem(KEY) === "1"
+          } catch (_error) {}
+          this.setCollapsed(collapsed, false)
+
+          this.onShown = event => {
+            this.shown = event.detail
+            this.update()
+          }
+          window.addEventListener("deepsplay:shown", this.onShown)
+          this.timer = setInterval(() => this.tick(), 250)
+          window.dispatchEvent(new Event("deepsplay:ask"))
+        },
+
+        destroyed() {
+          clearInterval(this.timer)
+          window.removeEventListener("deepsplay:shown", this.onShown)
+        },
+
+        setCollapsed(collapsed, remember = true) {
+          this.collapsed = collapsed
+          this.el.querySelector("#dev-overlay-details").classList.toggle("hidden", collapsed)
+          this.el.querySelector(".dev-overlay-collapse").classList.toggle("hidden", collapsed)
+          this.el.querySelector(".dev-overlay-expand").classList.toggle("hidden", !collapsed)
+          this.toggle.setAttribute("aria-expanded", String(!collapsed))
+          this.toggle.setAttribute("aria-label", collapsed ? "Expand the overlay" : "Collapse the overlay")
+          if (remember) {
+            try {
+              localStorage.setItem(KEY, collapsed ? "1" : "0")
+            } catch (_error) {}
+          }
+        },
+
+        update() {
+          const {url, mode, name} = this.shown
+          this.modeEl.textContent = mode === "interrupt" ? `interrupt ${name}` : mode === "rotation" ? "" : mode
+          this.pageEl.textContent = url ? pagePath(url) : "nothing shown"
+          if (url) this.pageEl.href = url
+          else this.pageEl.removeAttribute("href")
+          this.tick()
+        },
+
+        tick() {
+          if (!this.shown) return
+          const {since, limit} = this.shown
+          const elapsed = clock(Date.now() - since)
+          this.clockEl.textContent = limit == null ? elapsed : `${elapsed} / ${clock(limit)}`
         },
       }
     </script>

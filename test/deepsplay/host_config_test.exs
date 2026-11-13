@@ -321,6 +321,19 @@ defmodule Deepsplay.HostConfigTest do
       assert Enum.any?(errors, &(&1 =~ "kiosk_mode"))
     end
 
+    test "the development overlay is off unless switched on" do
+      assert {:ok, %{dev_overlay: false}} = parse(minimal())
+
+      toml =
+        String.replace(
+          minimal(),
+          ~s(default_config = "lobby"),
+          ~s(default_config = "lobby"\ndev_overlay = true)
+        )
+
+      assert {:ok, %{dev_overlay: true}} = parse(toml)
+    end
+
     test "shared state settings" do
       assert {:ok, host_config} = parse(minimal())
       assert host_config.state_dir == "/cache/.state"

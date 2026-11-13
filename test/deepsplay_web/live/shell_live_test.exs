@@ -40,6 +40,7 @@ defmodule DeepsplayWeb.ShellLiveTest do
     test "screens are in kiosk mode by default", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
       assert has_element?(view, "#screen.cursor-none")
+      refute has_element?(view, "#dev-overlay")
     end
   end
 
@@ -85,6 +86,27 @@ defmodule DeepsplayWeb.ShellLiveTest do
       refute has_element?(view, "#screen.cursor-none")
       assert has_element?(view, "#fallback-config", "kitchen")
       refute_redirected(view, "/c/kitchen")
+    end
+
+    test "the development overlay appears without a reload, with its links", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/c/kitchen")
+      refute has_element?(view, "#dev-overlay")
+
+      change(&%{&1 | dev_overlay: true})
+      assert has_element?(view, "#dev-overlay #dev-overlay-clock")
+      assert has_element?(view, ~s(#dev-overlay-catalog[href="/catalog/kitchen"]))
+      assert has_element?(view, ~s(#dev-overlay-status[href="/status"]))
+      refute_redirected(view, "/c/kitchen")
+    end
+
+    test "the development overlay of an unknown configuration links to the status only", %{
+      conn: conn
+    } do
+      change(&%{&1 | dev_overlay: true})
+      {:ok, view, _html} = live(conn, ~p"/c/nowhere")
+
+      assert has_element?(view, "#dev-overlay-status")
+      refute has_element?(view, "#dev-overlay-catalog")
     end
 
     test "reloads a screen of a configuration that appears", %{

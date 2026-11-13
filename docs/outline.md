@@ -84,6 +84,7 @@ repo_upstreams      = true      # manifests may declare upstreams without secret
 repo_upstream_hosts = []        # ... for these hosts only, e.g. ["*.dwd.de"]; empty: any
 shared_state        = true      # shared state for pages (ADR 21)
 kiosk_mode          = true      # hide the pointer; false for development (ADR 35)
+dev_overlay         = false     # display time and links over the pages (ADR 36)
 state_dir           = "/var/lib/display/state"   # default: <cache_dir>/.state
 
 [[config]]
@@ -173,6 +174,7 @@ A screen opens `/` or `/c/<name>` in a browser in kiosk mode. The page it receiv
 - **Live update.** When the poller publishes a new revision, every LiveView of that configuration receives the new plan and applies it at the next page change.
 - **Reconnect.** LiveView reconnects by itself after a server restart or a network break and then receives the current plan. Until then the screen continues with the plan it has.
 - **No pointer.** The shell sets `cursor: none`, and the iframes take no pointer input, so the pointer is hidden on every page. Pages get no mouse or touch input. Hiding the pointer in the operating system as well covers the moment before the shell loads. For development, `kiosk_mode = false` in `[server]` shows the pointer and lets the visible page take mouse input (ADR 35).
+- **Development overlay.** With `dev_overlay = true` in `[server]`, the shell shows a small overlay in the bottom left corner above the pages: how long the current page has been shown and how long it stays, its mode and path (linking to the page), and links to the catalog and the status page. It collapses to the clock (ADR 36).
 
 ### Status page
 

@@ -7,6 +7,7 @@ default_config = "lobby"                      # shown on /
 poll_interval  = "30s"
 keep_revisions = 3
 # kiosk_mode   = false   # show the pointer on screens, for development (ADR 35)
+# dev_overlay  = true    # display time and links over the pages, for development (ADR 36)
 
 [[config]]
 name = "lobby"

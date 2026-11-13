@@ -18,6 +18,9 @@ to screens and shown at once.
 Amended by [35](0035-kiosk-mode-switch.md): with `kiosk_mode = false` the
 pointer shows and the visible page takes pointer input.
 
+Amended by [36](0036-development-overlay.md): with `dev_overlay = true` the
+shell shows an overlay with the display time and links above the pages.
+
 ## Context
 
 A screen cycles through the pages of a revision. Screens must keep working when

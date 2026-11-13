@@ -24,6 +24,9 @@ have an `[mqtt]` section and a configuration an `mqtt_topic`.
 Amended by [35](0035-kiosk-mode-switch.md): `kiosk_mode` in `[server]`
 switches off hiding the pointer, for development.
 
+Amended by [36](0036-development-overlay.md): `dev_overlay` in `[server]`
+shows an overlay with the display time and links on screens.
+
 ## Context
 
 deepsplay reads two kinds of configuration: the host configuration (server
