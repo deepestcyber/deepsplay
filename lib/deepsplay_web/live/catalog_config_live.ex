@@ -210,9 +210,7 @@ defmodule DeepsplayWeb.CatalogConfigLive do
           <.link navigate={~p"/catalog"} class="text-base-content/50 hover:underline">Catalog</.link>
           <span class="text-base-content/30">/</span> {@name}
         </h1>
-        <.link navigate={~p"/status"} class="text-sm text-base-content/60 hover:underline">
-          Status
-        </.link>
+        <Layouts.page_nav current={:catalog} />
       </div>
 
       <%= case @result do %>

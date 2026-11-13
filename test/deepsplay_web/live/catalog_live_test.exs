@@ -105,6 +105,25 @@ defmodule DeepsplayWeb.CatalogLiveTest do
     ctx
   end
 
+  test "status, catalog pages link to each other and to the display, with the version", %{
+    conn: conn
+  } do
+    version = Application.spec(:deepsplay, :vsn) |> to_string()
+
+    for {path, current} <- [
+          {~p"/catalog", :catalog},
+          {~p"/catalog/lobby", :catalog},
+          {~p"/status", :status}
+        ] do
+      {:ok, view, _html} = live(conn, path)
+
+      assert has_element?(view, ~s(#page-nav-display[href="/"]))
+      assert has_element?(view, "#page-nav-version", "deepsplay #{version}")
+      assert has_element?(view, ~s(#page-nav-status[href="/status"])) == (current == :catalog)
+      assert has_element?(view, ~s(#page-nav-catalog[href="/catalog"])) == (current == :status)
+    end
+  end
+
   test "the overview lists configurations", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/catalog")
 

@@ -5,6 +5,9 @@ releases are tagged `vX.Y.Z` (see [docs/deployment.md](docs/deployment.md)).
 
 ## Unreleased
 
+- The status page and the catalog link to each other and to the display
+  (`/`, the default configuration) at the top right, and both show the
+  running version.
 - `dev_overlay = true` in `[server]` shows an overlay in the bottom left
   corner of every screen, drawn by the shell above the pages: the display
   time of the current page counting up (with its limit), its mode and path

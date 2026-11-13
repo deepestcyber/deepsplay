@@ -231,14 +231,7 @@ defmodule DeepsplayWeb.StatusLive do
     <Layouts.app flash={@flash}>
       <div class="flex items-baseline justify-between gap-4">
         <h1 class="text-2xl font-semibold tracking-tight">Status</h1>
-        <div class="flex items-baseline gap-4">
-          <.link navigate={~p"/catalog"} id="status-catalog-link" class="text-sm hover:underline">
-            Catalog
-          </.link>
-          <p id="status-version" class="font-mono text-sm text-base-content/60">
-            deepsplay {version()}
-          </p>
-        </div>
+        <Layouts.page_nav current={:status} />
       </div>
 
       <section :if={match?({:error, _}, @host_config)} id="status-host-config-error">
@@ -666,8 +659,6 @@ defmodule DeepsplayWeb.StatusLive do
   defp warnings({:ok, current}), do: current.screen.warnings ++ current.param_warnings
   defp warnings({:error, errors}), do: errors
   defp warnings(:none), do: []
-
-  defp version, do: Application.spec(:deepsplay, :vsn) |> to_string()
 
   defp short(nil), do: ""
   defp short(sha), do: String.slice(sha, 0, 12)

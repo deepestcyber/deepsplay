@@ -139,7 +139,7 @@ defmodule DeepsplayWeb.StatusLiveTest do
     {:ok, view, _html} = live(conn, ~p"/status")
 
     version = Application.spec(:deepsplay, :vsn) |> to_string()
-    assert has_element?(view, "#status-version", "deepsplay #{version}")
+    assert has_element?(view, "#page-nav-version", "deepsplay #{version}")
   end
 
   test "shows an unusable host configuration", %{conn: conn} do

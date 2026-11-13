@@ -90,6 +90,44 @@ defmodule DeepsplayWeb.Layouts do
   end
 
   @doc """
+  Links between the pages for people (display, catalog, status) and the
+  running version, at the top right of the status and catalog pages. The
+  link to the current page is left out.
+
+  ## Examples
+
+      <Layouts.page_nav current={:status} />
+  """
+  attr :current, :atom, values: [:status, :catalog], required: true
+
+  def page_nav(assigns) do
+    ~H"""
+    <nav id="page-nav" class="flex items-baseline gap-4 text-sm">
+      <a id="page-nav-display" href={~p"/"} class="hover:underline">Display</a>
+      <.link
+        :if={@current != :catalog}
+        id="page-nav-catalog"
+        navigate={~p"/catalog"}
+        class="hover:underline"
+      >
+        Catalog
+      </.link>
+      <.link
+        :if={@current != :status}
+        id="page-nav-status"
+        navigate={~p"/status"}
+        class="hover:underline"
+      >
+        Status
+      </.link>
+      <span id="page-nav-version" class="font-mono text-base-content/60">
+        deepsplay {Application.spec(:deepsplay, :vsn)}
+      </span>
+    </nav>
+    """
+  end
+
+  @doc """
   Shows the flash group with standard titles and content.
 
   ## Examples
